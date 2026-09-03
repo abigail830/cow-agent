@@ -86,6 +86,7 @@ class Settings(BaseSettings):
 
     # Fernet key for encrypting MCP credentials at rest in the database
     mcp_secrets_key: str | None = Field(default=None, validation_alias="MCP_SECRETS_KEY")
+    mcp_http_request_timeout: int = Field(default=60, validation_alias="MCP_HTTP_REQUEST_TIMEOUT")
 
     # Chat attachments (platform-wide, all agents)
     attachment_max_files_per_message: int = Field(

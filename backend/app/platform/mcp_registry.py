@@ -7,6 +7,7 @@ from agent_framework import MCPStdioTool, MCPStreamableHTTPTool
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.db.models import AgentMcpServer, McpServer
 from app.platform.allowed_tools import mcp_remote_tools_for_server
 from app.platform.mcp_config import resolve_runtime_config_safe
@@ -72,6 +73,7 @@ class McpRegistry:
             if not url:
                 logger.warning("MCP server %s missing url", row.name)
                 return None
+            request_timeout = get_settings().mcp_http_request_timeout
             headers = config.get("headers")
             if headers:
                 static_headers = dict(headers)
@@ -80,6 +82,7 @@ class McpRegistry:
                     url=url,
                     description=description,
                     allowed_tools=mcp_allowed,
+                    request_timeout=request_timeout,
                     header_provider=lambda _kwargs, h=static_headers: dict(h),
                 )
             return MCPStreamableHTTPTool(
@@ -87,6 +90,7 @@ class McpRegistry:
                 url=url,
                 description=description,
                 allowed_tools=mcp_allowed,
+                request_timeout=request_timeout,
             )
 
         native = _build_native_db_tools(tool_name, config.get("env") or {}, mcp_allowed)

@@ -17,6 +17,7 @@ from app.memory.long_term import try_handle_memory_command
 from app.memory.maf_mapping import maf_message_to_rows
 from app.memory.memory_config import MemoryConfig, parse_memory_config
 from app.platform.agent_factory import AgentFactory
+from app.platform.mcp_connect import disconnect_bundle, iter_mcp_connect_keepalive
 from app.platform.platform_instructions import RUN_CANCELLED_USER_TEXT
 from app.platform.session_store import SessionStore
 from app.platform.user_message_input import build_user_run_input, link_attachments_metadata
@@ -446,7 +447,10 @@ class ChatRunService:
                 turn_start_sequence=user_row.sequence,
                 session_store=self._sessions,
             )
-            async with bundle as agent:
+            async for keepalive in iter_mcp_connect_keepalive(bundle):
+                yield keepalive
+            agent = bundle.agent
+            try:
                 stream = agent.run(run_input, session=session, stream=True)
                 async for update in stream:
                     if run.stop_event.is_set():
@@ -481,6 +485,8 @@ class ChatRunService:
                     return
 
                 final = await stream.get_final_response()
+            finally:
+                await disconnect_bundle(bundle)
 
             # Unlock client UI before DB/session persistence (can take seconds on tool-heavy turns).
             yield {
