@@ -20,6 +20,12 @@ from app.tools.proposal import (
     remove_fee_rows_from_proposal_draft,
     render_preview,
 )
+from app.tools.content_studio import (
+    publish_artifact_tool,
+    sandbox_read_file_tool,
+    sandbox_run_command_tool,
+    sandbox_write_file_tool,
+)
 from app.tools.slide import render_html_ppt_tool, render_slidev_tool
 from app.tools.viz import list_sql_results, suggest_visualization
 from app.yl_worker2.tools import YL_WORKER2_TOOLS
@@ -29,6 +35,10 @@ BUILTIN_TOOLS = {
     "render_plantuml": render_plantuml_tool,
     "render_slidev": render_slidev_tool,
     "render_html_ppt": render_html_ppt_tool,
+    "sandbox_run_command": sandbox_run_command_tool,
+    "sandbox_read_file": sandbox_read_file_tool,
+    "sandbox_write_file": sandbox_write_file_tool,
+    "publish_artifact": publish_artifact_tool,
     "list_sql_results": list_sql_results,
     "suggest_visualization": suggest_visualization,
     "list_templates": list_templates,

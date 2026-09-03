@@ -63,8 +63,8 @@ def prepare_html_ppt_preview_html(html: bytes, *, base_href: str) -> bytes:
 
 SLIDE_PREVIEW_CSP = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://unpkg.com; "
-    "script-src-elem 'self' 'unsafe-inline' 'unsafe-eval' blob: https://unpkg.com; "
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://unpkg.com https://cdn.jsdelivr.net; "
+    "script-src-elem 'self' 'unsafe-inline' 'unsafe-eval' blob: https://unpkg.com https://cdn.jsdelivr.net; "
     "style-src 'self' 'unsafe-inline' https:; "
     "img-src * data: blob:; "
     "font-src 'self' data: https:; "

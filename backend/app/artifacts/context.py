@@ -37,10 +37,18 @@ _run_artifact_state: ContextVar[RunArtifactState | None] = ContextVar(
 )
 
 
-def init_run_artifact_state(*, chat_id: uuid.UUID | None = None) -> RunArtifactState:
+def init_run_artifact_state(
+    *,
+    chat_id: uuid.UUID | None = None,
+    e2b_namespace: str | None = None,
+) -> RunArtifactState:
     ctx = RunArtifactState(chat_id=chat_id)
     _run_artifact_state.set(ctx)
-    set_e2b_session_key(str(chat_id) if chat_id is not None else None)
+    if chat_id is not None:
+        key = f"{e2b_namespace}:{chat_id}" if e2b_namespace else str(chat_id)
+        set_e2b_session_key(key)
+    else:
+        set_e2b_session_key(None)
     return ctx
 
 

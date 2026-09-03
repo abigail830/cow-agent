@@ -1,0 +1,10 @@
+# MCP servers for content-studio. Auth via backend/.env — never commit keys.
+servers:
+  hybrid-search:
+    url: ${HYBRID_SEARCH_MCP_URL}
+    headers:
+      Authorization: Bearer ${HYBRID_SEARCH_MCP_API_KEY}
+  zhipu-web-search:
+    url: ${ZHIPU_WEB_SEARCH_MCP_URL}
+    headers:
+      Authorization: ${ZHIPU_API_KEY}

@@ -44,6 +44,7 @@ def test_prepare_html_ppt_preview_html_skips_router_fix() -> None:
     assert "history.replaceState" not in out
 
 
-def test_slide_preview_csp_allows_lucide_cdn() -> None:
+def test_slide_preview_csp_allows_reveal_cdn() -> None:
     assert "https://unpkg.com" in SLIDE_PREVIEW_CSP
+    assert "https://cdn.jsdelivr.net" in SLIDE_PREVIEW_CSP
     assert "script-src-elem" in SLIDE_PREVIEW_CSP

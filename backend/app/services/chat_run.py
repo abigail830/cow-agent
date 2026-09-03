@@ -56,6 +56,7 @@ _TOOL_ROW_TYPES = frozenset({"tool_call", "tool_result", "mcp_call", "mcp_result
 _PROPOSAL_AGENT_SLUG = "proposal-composer"
 _DIAGRAM_AGENT_SLUG = "napkin-architect"
 _SLIDE_AGENT_SLUG = "slide-studio"
+_CONTENT_STUDIO_AGENT_SLUG = "content-studio"
 _YL_WORKER2_AGENT_SLUG = "yl-worker2"
 
 
@@ -185,12 +186,18 @@ class ChatRunService:
             return
         init_run_diagram_state(chat_id=chat.id)
 
-    async def _prepare_slide_context(self, chat: Chat) -> None:
+    async def _prepare_artifact_context(self, chat: Chat) -> None:
         agent = await self._db.get(AgentModel, chat.agent_id)
-        if not agent or agent.slug != _SLIDE_AGENT_SLUG:
+        if not agent:
             reset_run_artifact_state()
             return
-        init_run_artifact_state(chat_id=chat.id)
+        if agent.slug == _SLIDE_AGENT_SLUG:
+            init_run_artifact_state(chat_id=chat.id, e2b_namespace="slidev")
+            return
+        if agent.slug == _CONTENT_STUDIO_AGENT_SLUG:
+            init_run_artifact_state(chat_id=chat.id, e2b_namespace="content-studio")
+            return
+        reset_run_artifact_state()
 
     async def _prepare_fulfillment_forms_context(self, chat: Chat) -> None:
         agent = await self._db.get(AgentModel, chat.agent_id)
@@ -292,7 +299,7 @@ class ChatRunService:
         await self._prepare_proposal_context(chat)
         await self._prepare_fulfillment_forms_context(chat)
         await self._prepare_diagram_context(chat)
-        await self._prepare_slide_context(chat)
+        await self._prepare_artifact_context(chat)
         attachments = await self._resolve_attachments(chat, attachment_ids or [])
         if not content.strip() and not attachments:
             raise ValueError("Message content or attachments required")
@@ -369,7 +376,7 @@ class ChatRunService:
         await self._prepare_proposal_context(chat)
         await self._prepare_fulfillment_forms_context(chat)
         await self._prepare_diagram_context(chat)
-        await self._prepare_slide_context(chat)
+        await self._prepare_artifact_context(chat)
         attachments = await self._resolve_attachments(chat, attachment_ids or [])
         if not content.strip() and not attachments:
             raise ValueError("Message content or attachments required")

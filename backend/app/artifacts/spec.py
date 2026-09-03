@@ -12,8 +12,9 @@ ArtifactKind = Literal[
     "proposal_word",
     "diagram_svg",
     "slide_deck",
+    "content_document",
 ]
-ArtifactFormat = Literal["markdown", "docx", "svg", "slidev", "html", "pdf"]
+ArtifactFormat = Literal["markdown", "docx", "svg", "slidev", "html", "pdf", "pptx"]
 
 
 class ArtifactSpec(BaseModel):

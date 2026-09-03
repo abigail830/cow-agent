@@ -46,12 +46,22 @@ SLIDE_TOOL_NAMES = frozenset(
     }
 )
 
+CONTENT_STUDIO_TOOL_NAMES = frozenset(
+    {
+        "sandbox_run_command",
+        "sandbox_read_file",
+        "sandbox_write_file",
+        "publish_artifact",
+    }
+)
+
 # Re-export for agent_factory
 __all__ = [
     "PROPOSAL_TOOL_NAMES",
     "VIZ_TOOL_NAMES",
     "DIAGRAM_TOOL_NAMES",
     "SLIDE_TOOL_NAMES",
+    "CONTENT_STUDIO_TOOL_NAMES",
     "YL_WORKER2_TOOL_NAMES",
     "resolve_builtin_tools",
 ]

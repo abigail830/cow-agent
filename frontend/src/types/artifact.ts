@@ -4,7 +4,8 @@ export type ArtifactKind =
   | 'proposal_word'
   | 'diagram_svg'
   | 'slide_deck'
-export type ArtifactFormat = 'markdown' | 'docx' | 'svg' | 'slidev' | 'html' | 'pdf'
+  | 'content_document'
+export type ArtifactFormat = 'markdown' | 'docx' | 'svg' | 'slidev' | 'html' | 'pdf' | 'pptx'
 
 export type ArtifactSpec = {
   kind: ArtifactKind

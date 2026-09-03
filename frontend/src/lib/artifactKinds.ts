@@ -8,6 +8,10 @@ export function isSlideDeckArtifact(spec: ArtifactSpec): boolean {
   return spec.kind === 'slide_deck'
 }
 
+export function isContentDocumentArtifact(spec: ArtifactSpec): boolean {
+  return spec.kind === 'content_document'
+}
+
 export function isProposalArtifact(spec: ArtifactSpec): boolean {
   return spec.kind.startsWith('proposal_')
 }

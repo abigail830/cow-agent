@@ -15,7 +15,10 @@ from app.db.seed import ensure_dev_seed
 from app.db.session import check_db_connection, get_async_session_factory, init_db_engine
 from app.platform.profile_loader import discover_agent_profiles
 from app.platform.model_registry import ModelProviderRegistry
+from app.platform.mcp_compat import apply_mcp_compat_patches
 from app.platform.utility_models import UtilityModelRegistry
+
+apply_mcp_compat_patches()
 
 logger = logging.getLogger(__name__)
 IS_VERCEL = os.getenv("VERCEL") == "1"

@@ -1,0 +1,36 @@
+id: content-studio
+name: "Content Studio"
+description: "Knowledge Q&A (hybrid search + web) and content generation (Word, PowerPoint, HTML slides)."
+
+model_provider: azure_anthropic
+model: ${CLAUDE_AZURE_FOUNDRY_MODEL}
+
+prompt_file: system_prompt.md
+skills_dir: skills
+
+skills:
+  - kb-qa
+  - docx
+  - pptx
+  - html-slides
+
+mcp_servers:
+  - hybrid-search
+  - zhipu-web-search
+
+allowed_tools:
+  - hybrid-search_list_knowledge_bases
+  - hybrid-search_hybrid_search
+  - zhipu-web-search_web_search_prime
+  - sandbox_run_command
+  - sandbox_read_file
+  - sandbox_write_file
+  - publish_artifact
+
+hooks:
+  result_truncator:
+    max_observation_bytes: 80000
+
+memory:
+  working_set_turns: 20
+  cold_resume_max_turns: 12

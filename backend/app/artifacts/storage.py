@@ -14,13 +14,15 @@ from app.proposal.blob_client import blob_get, blob_put, blob_storage_enabled
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 CHAT_ARTIFACTS_ROOT = _BACKEND_ROOT / "data" / "chat-artifacts"
 
-ChatArtifactFormat = Literal["slidev", "html", "pdf", "markdown"]
+ChatArtifactFormat = Literal["slidev", "html", "pdf", "markdown", "docx", "pptx"]
 
 _MEDIA_TYPES: dict[str, str] = {
     "slidev": "text/markdown; charset=utf-8",
     "html": "text/html; charset=utf-8",
     "pdf": "application/pdf",
     "markdown": "text/markdown; charset=utf-8",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
 
 
@@ -113,6 +115,35 @@ def _guess_media_type(path: str, default: str = "application/octet-stream") -> s
     return guessed or default
 
 
+def save_content_file(
+    chat_id: uuid.UUID,
+    artifact_id: str,
+    *,
+    data: bytes,
+    filename: str,
+    file_format: ChatArtifactFormat,
+) -> None:
+    """Persist a binary deliverable (docx, pptx, etc.) for chat download."""
+    media_type = _MEDIA_TYPES.get(file_format, "application/octet-stream")
+    suffix = Path(filename).suffix.lower()
+    object_name = f"{artifact_id}{suffix}" if suffix else f"{artifact_id}/{filename.lstrip('/')}"
+    _put_bytes(chat_id, object_name, data, content_type=media_type)
+    _write_meta(
+        chat_id,
+        artifact_id,
+        {
+            "kind": "content_document",
+            "filename": filename,
+            "format": file_format,
+            "media_type": media_type,
+            "source_object": object_name,
+            "preview_index": None,
+            "preview_files": {},
+            "variants": {},
+        },
+    )
+
+
 def save_slide_deck(
     chat_id: uuid.UUID,
     artifact_id: str,
@@ -183,7 +214,7 @@ def chat_artifact_exists(chat_id: uuid.UUID, artifact_id: str) -> bool:
 def get_chat_artifact_format(chat_id: uuid.UUID, artifact_id: str) -> str:
     meta = _load_meta(chat_id, artifact_id)
     fmt = str(meta.get("format") or "slidev").strip().lower()
-    return fmt if fmt in {"slidev", "html", "pdf", "markdown"} else "slidev"
+    return fmt if fmt in {"slidev", "html", "pdf", "markdown", "docx", "pptx"} else "slidev"
 
 
 def load_chat_artifact_payload(

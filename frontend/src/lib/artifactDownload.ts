@@ -2,11 +2,14 @@ import type { ArtifactSpec } from '../types/artifact'
 import { downloadBinaryUrl } from './downloadBinaryUrl'
 import { isDiagramArtifact, isSlideDeckArtifact, resolveSlidePdfDownloadUrl, resolveSlidePdfFilename, resolvePngDownloadUrl, resolvePngFilename } from './diagramArtifact'
 
-function isProposalWord(spec: ArtifactSpec): boolean {
+function isDownloadableBinary(spec: ArtifactSpec): boolean {
   return (
     spec.kind === 'proposal_word' ||
+    spec.kind === 'content_document' ||
     spec.format === 'docx' ||
-    spec.filename.toLowerCase().endsWith('.docx')
+    spec.format === 'pptx' ||
+    spec.filename.toLowerCase().endsWith('.docx') ||
+    spec.filename.toLowerCase().endsWith('.pptx')
   )
 }
 
@@ -29,7 +32,7 @@ export async function downloadArtifactFile(
 
   if (url) {
     if (
-      isProposalWord(spec) ||
+      isDownloadableBinary(spec) ||
       variant === 'png' ||
       variant === 'pdf' ||
       isDiagramArtifact(spec) ||

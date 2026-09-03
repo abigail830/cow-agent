@@ -20,6 +20,7 @@ from app.platform.session_store import SessionStore
 from app.platform.skill_registry import SkillRegistry
 from app.platform.tool_registry import ToolRegistry
 from app.tools.builtin_groups import (
+    CONTENT_STUDIO_TOOL_NAMES,
     DIAGRAM_TOOL_NAMES,
     PROPOSAL_TOOL_NAMES,
     SLIDE_TOOL_NAMES,
@@ -116,12 +117,14 @@ class AgentFactory:
         proposal_tools = resolve_builtin_tools(allowed, PROPOSAL_TOOL_NAMES)
         diagram_tools = resolve_builtin_tools(allowed, DIAGRAM_TOOL_NAMES)
         slide_tools = resolve_builtin_tools(allowed, SLIDE_TOOL_NAMES)
+        content_studio_tools = resolve_builtin_tools(allowed, CONTENT_STUDIO_TOOL_NAMES)
         yl_worker2_tools = resolve_builtin_tools(allowed, YL_WORKER2_TOOL_NAMES)
         combined_tools = [
             *viz_tools,
             *proposal_tools,
             *diagram_tools,
             *slide_tools,
+            *content_studio_tools,
             *yl_worker2_tools,
             *list(function_tools or []),
             *mcp_tools,

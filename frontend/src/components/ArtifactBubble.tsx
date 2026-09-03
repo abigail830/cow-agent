@@ -1,8 +1,9 @@
 import type { ArtifactSpec } from '../types/artifact'
 import { DiagramArtifactCard } from './DiagramArtifactCard'
 import { SlideDeckArtifactCard } from './SlideDeckArtifactCard'
+import { ContentDocumentArtifactCard } from './ContentDocumentArtifactCard'
 import { MarkdownContent } from './MarkdownContent'
-import { isDiagramArtifact, isSlideDeckArtifact } from '../lib/artifactKinds'
+import { isContentDocumentArtifact, isDiagramArtifact, isSlideDeckArtifact } from '../lib/artifactKinds'
 
 type Props = {
   spec: ArtifactSpec
@@ -27,6 +28,10 @@ export function ArtifactBubble({ spec, expanded = false, createdAt, onExpand }: 
         onExpand={onExpand}
       />
     )
+  }
+
+  if (isContentDocumentArtifact(spec)) {
+    return <ContentDocumentArtifactCard spec={spec} />
   }
 
   const isDocument = spec.kind === 'proposal_document'
