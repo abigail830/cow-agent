@@ -1,0 +1,14 @@
+# Keys skipped by default — set these manually in Vercel (Dashboard or CLI).
+# One variable name per line; lines starting with # are ignored.
+
+AZURE_API_KEY
+UTILITY_MODEL_API_KEY
+CLAUDE_AZURE_API_KEY
+DATABASE_URL
+REDIS_URL
+MCP_SECRETS_KEY
+BLOB_READ_WRITE_TOKEN
+YL_DATABASE_URL
+SG_SP_DB_PASSWORD
+AU_SP_DB_PASSWORD
+PH_SP_DB_PASSWORD

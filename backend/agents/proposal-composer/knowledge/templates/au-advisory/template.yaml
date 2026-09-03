@@ -1,0 +1,100 @@
+template_id: au-advisory
+display_name: Australia Advisory
+catalog_filter:
+  jurisdiction: AU
+  bu: Incorp AU
+
+sections:
+  - id: introduction
+    kind: static_block
+    title: About Incorp
+    required: true
+    editable: false
+    source:
+      type: template_file
+      file: blocks/introduction-au-advisory.md
+
+  - id: solution_and_fees
+    kind: fee_section
+    title: Solution and professional fees
+    required: true
+    materializer: mdm_fee_tables
+    fee_layout:
+      group_by: package
+      table_style: frequency_columns
+      currency: AUD
+      column_widths:
+        frequency_columns:
+          service: "33.333%"
+          amount: "13.333%"
+      show_line_amount: true
+      service_columns:
+        service_name: true
+        description: false
+        scope_of_work: true
+    intro:
+      source:
+        type: template_file
+        file: blocks/fee-description-au-advisory.md
+      editable: true
+
+  - id: payment_options
+    kind: derived_section
+    title: Fee summary
+    required: false
+    default_enabled: false
+    derivation:
+      type: payment_options_from_fee_tables
+      source_section: solution_and_fees
+    agent_guidance: >
+      Enable shows a single Option A derived from fee table sums — no extra config needed.
+      For multiple options, patch 'overrides' on this draft node:
+      {option_id: {label, rows: {group_id: {monthly, quarterly, annual, once_off}}}}.
+      group_id = fee_section tables[].id (read draft to get actual ids).
+      monthly/quarterly/annual/once_off are floats (use 0.0, not null, for unused columns).
+      Omit rows on an option to keep the default fee-table sums for that option.
+    intro:
+      source:
+        type: template_file
+        file: blocks/payment-option-intro-au-advisory.md
+      editable: true
+
+  - id: credentials
+    kind: collection
+    title: Credentials
+    required: false
+    default_enabled: false
+    add_policy:
+      resolver: session_pick
+      kind: credential
+
+  - id: appendices
+    kind: collection
+    title: Appendices
+    required: false
+    default_enabled: false
+    collection:
+      child_kind: markdown_block
+    render:
+      block_as_chapter: true
+
+  - id: terms
+    kind: static_block
+    title: Terms and conditions
+    required: true
+    editable: false
+    source:
+      type: template_file
+      file: blocks/terms-au-advisory.md
+
+document_title:
+  prefix: INCORP ADVISORY PROPOSAL
+  name_from:
+    - client.company_name
+    - client.contract_name
+  fallback: INCORP ADVISORY PROPOSAL
+
+document_export:
+  word:
+    enabled: true
+    template_file: export/proposal.docx

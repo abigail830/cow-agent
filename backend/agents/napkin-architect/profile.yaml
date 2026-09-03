@@ -1,0 +1,17 @@
+id: napkin-architect
+name: "Z Napkin Architect"
+description: "Turns napkin sketches into renderable diagrams — PlantUML/C4 with in-chat SVG preview."
+
+model_provider: azure_openai
+model: ${AZURE_OPENAI_DEPLOYMENT}
+prompt_file: system_prompt.md
+skills_dir: skills
+
+mcp_servers: {}
+
+allowed_tools:
+  - render_plantuml
+
+memory:
+  working_set_turns: 20
+  cold_resume_max_turns: 12

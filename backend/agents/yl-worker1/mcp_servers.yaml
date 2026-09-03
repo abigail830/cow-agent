@@ -1,0 +1,7 @@
+# MCP servers for YL Worker 1. Per-agent env (YL_DATABASE_URL) in profile.yaml.
+servers:
+  postgres:
+    command: ${NPX_PATH:-npx}
+    args:
+      - -y
+      - mcp-postgres@latest

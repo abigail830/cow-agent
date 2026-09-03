@@ -1,0 +1,133 @@
+template_id: sg-incorp
+display_name: Singapore Incorp
+catalog_filter:
+  jurisdiction: SG
+  bu: Incorp SG
+
+placeholders:
+  executive_summary:
+    - token: "{{client.contract_name}}"
+      draft_path: /facts/client/contract_name
+    - token: "{{client.company_name}}"
+      draft_path: /facts/client/company_name
+  scope_of_service:
+    - token: "{{client.company_name}}"
+      draft_path: /facts/client/company_name
+    - token: "{{selected_packages_bullet_list}}"
+      draft_path: derived
+      empty: "— (select packages or services in Solution and pricing)"
+  fee_table:
+    - token: "{{client.company_name}}"
+      draft_path: /facts/client/company_name
+
+sections:
+  - id: about_incorp
+    kind: static_block
+    title: About Incorp
+    required: true
+    editable: false
+    source:
+      type: template_file
+      file: blocks/about-incorp-sg.md
+
+  - id: executive_summary
+    kind: markdown_block
+    title: Executive Summary
+    required: true
+    editable: true
+    source:
+      type: template_file
+      file: blocks/executive-summary-sg.md
+
+  - id: scope_of_service
+    kind: markdown_block
+    title: Scope of service
+    required: true
+    editable: true
+    source:
+      type: template_file
+      file: blocks/scope-of-service-sg.md
+
+  - id: solution_and_fees
+    kind: fee_section
+    title: Solution and professional services
+    required: true
+    materializer: mdm_fee_tables
+    fee_layout:
+      group_by: package
+      table_style: one_off_recurring
+      currency: SGD
+      tables_heading: Fees
+      column_widths:
+        one_off_recurring:
+          service: "60%"
+          one_off: "20%"
+          recurring: "20%"
+      service_columns:
+        service_name: true
+        description: false
+        scope_of_work: true
+      show_line_amount: true
+      footnotes: aggregate
+    intro:
+      source:
+        type: template_file
+        file: blocks/solution-pricing-intro-sg.md
+      editable: true
+  
+  - id: appendices
+    kind: collection
+    title: Appendices
+    required: false
+    default_enabled: false
+    collection:
+      child_kind: markdown_block
+    render:
+      block_as_chapter: true
+
+  - id: first_invoice
+    kind: derived_section
+    title: Estimated first invoice value
+    required: false
+    default_enabled: false
+    derivation:
+      type: first_invoice_from_fee_tables
+      source_section: solution_and_fees
+      tax:
+        rate: 0.09
+        label: GST
+        rate_display: 9%
+      exclude:
+        pattern: '(?i)(?<![a-z-])ad[\s-]?hoc(?![a-z])'
+        fields:
+          - preview_primary
+          - scope_of_work_display
+          - service_name
+          - description
+          - scope_of_work
+    agent_guidance: >
+      Enable to show a first-invoice summary from fee rows in solution_and_fees.
+      Excludes ad-hoc services (name/SOW/description). Uses display prices only:
+      one-off plus first recurring period (not annualised). Recalculates when fee
+      rows or prices change; do not patch the rendered table.
+
+  - id: terms
+    kind: static_block
+    title: Terms and conditions
+    required: true
+    editable: false
+    source:
+      type: template_file
+      file: blocks/terms-sg-incorp.md
+
+document_title:
+  prefix: FEE PROPOSAL
+  name_from:
+    - client.company_name
+    - client.contract_name
+  fallback: FEE PROPOSAL
+
+document_export:
+  word:
+    enabled: true
+    template_file: export/proposal.docx

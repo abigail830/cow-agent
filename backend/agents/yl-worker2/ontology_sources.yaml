@@ -1,0 +1,9 @@
+# 可查询数据源白名单（glob 模式）
+version: 1
+include_tables:
+  - yl_%
+  - warehouse_sku_inventory
+  - transport_cost
+exclude_tables: []
+default_limit: 100
+max_limit: 500

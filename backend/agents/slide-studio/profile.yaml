@@ -1,0 +1,29 @@
+id: slide-studio
+name: "Z Slide Studio"
+description: "Design presentations with Slidev or html-ppt — live preview and optional PDF export."
+
+model_provider: azure_openai
+model: ${AZURE_OPENAI_DEPLOYMENT}
+# model_provider: azure_anthropic
+# model: ${CLAUDE_AZURE_FOUNDRY_MODEL}
+prompt_file: system_prompt.md
+skills_dir: skills
+
+# A/B compare engines — enable exactly one skill, then restart backend + sync profiles:
+skills:
+  # - slidev
+  - html-ppt
+
+mcp_servers: {}
+
+allowed_tools:
+  - render_slidev
+  - render_html_ppt
+
+hooks:
+  result_truncator:
+    max_observation_bytes: 100000
+
+memory:
+  working_set_turns: 20
+  cold_resume_max_turns: 12

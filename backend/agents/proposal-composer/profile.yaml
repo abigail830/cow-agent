@@ -1,0 +1,41 @@
+id: proposal-composer
+name: "Proposal Chef"
+description: "Cross-jurisdiction proposal drafting with MDM catalog, templates, and deterministic pricing."
+
+# model_provider: azure_openai
+# model: ${AZURE_OPENAI_DEPLOYMENT}
+model_provider: azure_anthropic
+model: ${CLAUDE_AZURE_FOUNDRY_MODEL}
+prompt_file: system_prompt.md
+skills_dir: skills
+
+mcp_servers: {}
+
+allowed_tools:
+  - list_templates
+  - read_knowledge
+  - list_mdm_packages
+  - get_mdm_package_services
+  - search_mdm_services
+  - list_mdm_packages_for_services
+  - initialize_proposal_draft
+  - get_proposal_draft
+  - patch_proposal_draft
+  - add_package_to_proposal_draft
+  - add_services_to_proposal_draft
+  - remove_fee_rows_from_proposal_draft
+  - enable_proposal_draft_section
+  - render_preview
+  - generate_document
+  - generate_word_document
+
+hooks:
+  proposal_persist: {}
+  sql_validator:
+    max_rows: 500
+  result_truncator:
+    max_observation_bytes: 50000
+
+memory:
+  working_set_turns: 20
+  cold_resume_max_turns: 12

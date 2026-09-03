@@ -1,0 +1,23 @@
+{
+  "redirects": [
+    {
+      "source": "/api/:path*/preview/",
+      "destination": "/api/:path*/preview",
+      "statusCode": 307
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://agent-team-backend.vercel.app/api/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://agent-team-backend.vercel.app/health"
+    },
+    {
+      "source": "/((?!api/|health).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

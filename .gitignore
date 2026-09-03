@@ -1,5 +1,13 @@
+# Environment & secrets
 .env
+.env.*
+!.env.example
 backend/.env
+backend/.env.local
+frontend/.env
+frontend/.env.local
+
+# Python
 .venv/
 venv/
 __pycache__/
@@ -13,22 +21,37 @@ build/
 .coverage
 htmlcov/
 
-.cursor/
-_deploy/
+# Node
 node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
 
+# Runtime / local dev
 backend/.venv/
 backend/.run/
 backend/data/proposal-artifacts/
+backend/data/chat-artifacts/
 backend/data/chat-attachments/
+backend/data/slide-build-cache/
 frontend/.run/
 
-frontend/node_modules/
-frontend/dist/
-frontend/.env
-frontend/.env.local
-
-.DS_Store
+# IDE & OS
+.cursor/
 .idea/
 .vscode/
+!.vscode/extensions.json
+.DS_Store
+**/.DS_Store
+
+# Legacy deploy mirror (removed)
+_deploy/
+
+# Logs
 *.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*

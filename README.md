@@ -210,7 +210,9 @@ python scripts/sync_vercel_env.py --from .env --include-sensitive --mark-sensiti
 | `CORS_ORIGINS` | 前端 Vercel 域名，如 `https://xxx.vercel.app` |
 | `AUTH_COOKIE_SECURE` | `true` |
 
-## 前后端如何连接（Vercel 双仓库）
+## 前后端如何连接（Vercel 单仓库）
+
+源码在 **单一 monorepo**（`cow-agent`）。Vercel 上创建两个项目，分别设置 Root Directory 为 `backend` / `frontend`，即可从同一仓库独立部署。
 
 本地：前端请求 `/api/v1`，Vite proxy 转到 `127.0.0.1:8000`。
 

@@ -1,0 +1,86 @@
+template_id: harneys-bvi
+display_name: Harneys BVI Corporate Services
+catalog_filter:
+  jurisdiction: BVI
+  bu: Harneys
+
+# Placeholders: resolved by platform from draft facts + fee tables (see placeholders.* below).
+# Package solution prose: fee_section.package_briefs → blocks/package-briefs.yaml.
+placeholders:
+  introduction:
+    - token: "{{client.contract_name}}"
+      draft_path: /facts/client/contract_name
+    - token: "{{selected_packages_bullet_list}}"
+      draft_path: derived
+      hint: "Bullet list of selected package_name values, e.g. '- Incorporation\\n- Annual maintenance'"
+
+sections:
+  - id: introduction
+    kind: markdown_block
+    title: Introduction
+    required: true
+    editable: true
+    source:
+      type: template_file
+      file: blocks/introduction-bvi.md
+
+  - id: solution_and_fees
+    kind: fee_section
+    title: Solution and pricing
+    required: true
+    materializer: mdm_fee_tables
+    # Platform injects blocks/solutions/*.md before fee tables when packages are added.
+    package_briefs:
+      index: blocks/package-briefs.yaml
+    fee_layout:
+      group_by: department
+      table_style: simple
+      tables_heading: Fees
+      column_widths:
+        simple:
+          service: "75%"
+          amount: "25%"
+      service_columns:
+        service_name: false
+        description: true
+        scope_of_work: false
+      show_billing_frequency: true
+      show_line_amount: true
+      show_recurring: false
+      amount_column_label: "Fees (US$)"
+      footnotes: aggregate
+
+  - id: required_documents
+    kind: markdown_block
+    title: Required documents
+    required: false
+    default_enabled: true
+    editable: true
+    knowledge:
+      category: harneys
+      body_root: peripheral/required-docs/harneys
+      source_section: solution_and_fees
+      compose_skill_resource: references/required-docs-compose.md
+      catalog_skill_resource: references/required-docs-harneys-catalog.md
+
+  - id: appendices
+    kind: collection
+    title: Appendices
+    required: false
+    default_enabled: false
+    collection:
+      child_kind: markdown_block
+    render:
+      block_as_chapter: true
+
+document_title:
+  prefix: Proposal
+  name_from:
+    - client.company_name
+    - client.contract_name
+  fallback: Proposal
+
+document_export:
+  word:
+    enabled: true
+    template_file: export/proposal.docx

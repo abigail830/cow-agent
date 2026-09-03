@@ -1,0 +1,13 @@
+{
+  "name": "slidev-deck-template",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "slidev build slides.md --out dist --base ./"
+  },
+  "dependencies": {
+    "@slidev/cli": "^51.0.0",
+    "@slidev/theme-default": "^0.25.0",
+    "vue": "^3.5.0"
+  }
+}

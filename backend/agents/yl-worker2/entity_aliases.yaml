@@ -1,0 +1,49 @@
+# yl-worker2 实体别名（FDE 可维护）
+# 格式：一个 entity_id + aliases 列表
+# 可选 context.site_type（base|sales）：仅当多个仓共用同一短别名、需按基地/销售消歧时再加
+version: 2
+entities:
+  - entity_type: ProductSKU
+    entity_id: MOCK_YLP001
+    aliases: [小袋装原味牛奶片]
+
+  - entity_type: Warehouse
+    entity_id: MOCK_WH_S01
+    aliases: [合肥仓, 合肥, 安徽, 安徽合肥]
+  - entity_type: Warehouse
+    entity_id: MOCK_WH_S02
+    aliases: [天津销售仓, 天津销售]
+  - entity_type: Warehouse
+    entity_id: MOCK_WH_S03
+    aliases: [广州仓, 广州, 广东, 广东广州]
+  - entity_type: Warehouse
+    entity_id: MOCK_WH_S04
+    aliases: [郑州仓, 郑州, 河南, 河南郑州]
+  - entity_type: Warehouse
+    entity_id: MOCK_WH_S05
+    aliases: [成都仓, 成都, 四川, 四川成都]
+  - entity_type: Warehouse
+    entity_id: MOCK_WH_S06
+    aliases: [武汉销售, 湖北销售]
+  - entity_type: Warehouse
+    entity_id: MOCK_WH_S07
+    aliases: [呼市仓, 呼市, 内蒙, 内蒙古, 呼和浩特]
+  - entity_type: Warehouse
+    entity_id: MOCK_WH_S08
+    aliases: [济南仓, 济南, 山东, 山东济南]
+  - entity_type: Warehouse
+    entity_id: MOCK_WH_S09
+    aliases: [柳州仓, 柳州, 广西, 广西柳州]
+
+  - entity_type: Warehouse
+    entity_id: MOCK_WH_B01
+    aliases: [呼市基地, 内蒙基地, 内蒙古基地, 呼和浩特基地]
+  - entity_type: Warehouse
+    entity_id: MOCK_WH_B02
+    aliases: [天津基地]
+  - entity_type: Warehouse
+    entity_id: MOCK_WH_B03
+    aliases: [杜蒙基地,黑龙江,黑龙江基地]
+  - entity_type: Warehouse
+    entity_id: MOCK_WH_B04
+    aliases: [武汉基地,湖北基地]

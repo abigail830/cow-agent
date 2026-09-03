@@ -1,0 +1,65 @@
+# 列 → 主数据引用（follow_ref 用）；表关系变更只改此文件
+version: 1
+refs:
+  - column: product_code
+    target_table: yl_product
+    target_column: product_code
+    display_columns: [product_name, brand, pro_series]
+
+  - column: site_code
+    target_table: yl_warehouse
+    target_column: site_code
+    display_columns: [site_name, site_type, site_desc]
+    role: warehouse
+
+  - column: from_site_code
+    target_table: yl_warehouse
+    target_column: site_code
+    display_columns: [site_name, site_type]
+    role: source_warehouse
+
+  - column: to_site_code
+    target_table: yl_warehouse
+    target_column: site_code
+    display_columns: [site_name, site_type]
+    role: target_warehouse
+
+  - column: from_site_name
+    target_table: yl_warehouse
+    target_column: site_name
+    display_columns: [site_code, site_type]
+    role: source_warehouse
+
+  - column: to_site_name
+    target_table: yl_warehouse
+    target_column: site_name
+    display_columns: [site_code, site_type]
+    role: target_warehouse
+
+  - column: sku_code
+    target_table: yl_product
+    target_column: product_code
+    display_columns: [product_name, brand, pro_series]
+  
+  - column: warehouse_code
+    target_table: yl_warehouse
+    target_column: site_code
+    display_columns: [site_name, site_type, site_desc]
+    role: warehouse
+
+  - column: from_warehouse_code
+    target_table: yl_warehouse
+    target_column: site_code
+    display_columns: [site_name, site_type]
+    role: source_warehouse
+
+  - column: to_warehouse_code
+    target_table: yl_warehouse
+    target_column: site_code
+    display_columns: [site_name, site_type]
+    role: target_warehouse
+
+patterns:
+  - match: "^product_code$"
+    target_table: yl_product
+    target_column: product_code

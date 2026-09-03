@@ -1,0 +1,78 @@
+# Maps MDM package_id → solution brief materialized into fee_section.tables[].brief.
+# add_package_to_proposal_draft seeds brief on each fee_table; patch via
+# /document/sections/{i}/tables/{t}/brief/content.
+
+PKG001:
+  package_name: Incorporation
+  file: blocks/solutions/PKG001-incorporation.md
+  fee_table_title: "Incorporation fees"
+
+PKG002:
+  package_name: Annual maintenance
+  file: blocks/solutions/PKG002-annual-maintenance.md
+  fee_table_title: "Annual maintenance fees"
+
+PKG003:
+  package_name: Approval Manager
+  file: blocks/solutions/PKG003-approval-manager.md
+  fee_table_title: "Fees"
+
+PKG004:
+  package_name: AEOI Services (as required for Reporting Financial Institutions)
+  file: blocks/solutions/PKG004-aeoi-rfi.md
+  fee_table_title: "AEOI services fees"
+
+PKG005:
+  package_name: AEOI Services – CRS only (as required for FATCA Exempt Management Entities)
+  file: blocks/solutions/PKG005-aeoi-crs-only.md
+  fee_table_title: "AEOI services fees (CRS only)"
+
+PKG006:
+  package_name: AML Services- AML Officers
+  file: blocks/solutions/PKG006-aml-officers.md
+  fee_table_title: "AML officer fees"
+
+PKG007:
+  package_name: AML Policies and Procedures
+  file: blocks/solutions/PKG007-aml-policies.md
+  fee_table_title: "AML policies and procedures fees"
+
+PKG008:
+  package_name: AML/CFT/CPF and Sanctions Training
+  file: blocks/solutions/PKG008-aml-training.md
+  fee_table_title: "AML training fees"
+
+PKG009:
+  package_name: Independent AML Audit
+  file: blocks/solutions/PKG009-aml-audit.md
+  fee_table_title: "Independent AML audit fees"
+
+PKG010:
+  package_name: Digital Asset Services (AML Officer)
+  file: blocks/solutions/PKG010-digital-asset-aml-officer.md
+  fee_table_title: "Digital asset AML officer fees"
+
+PKG011:
+  package_name: Digital Asset Services (AML Policies and Procedures)
+  file: blocks/solutions/PKG011-digital-asset-aml-policies.md
+  fee_table_title: "Digital asset AML policies fees"
+
+PKG012:
+  package_name: Digital Asset Services (AML/CFT/ CPF Training)
+  file: blocks/solutions/_stub.md
+  fee_table_title: "Digital asset AML training fees"
+
+PKG013:
+  package_name: RTA Services
+  file: blocks/solutions/_stub.md
+  fee_table_title: "RTA services fees"
+
+PKG014:
+  package_name: CDD Services
+  file: blocks/solutions/_stub.md
+  fee_table_title: "CDD services fees"
+
+PKG015:
+  package_name: Screening Services
+  file: blocks/solutions/_stub.md
+  fee_table_title: "Screening services fees"
