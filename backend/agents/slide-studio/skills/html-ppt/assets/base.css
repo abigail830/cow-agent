@@ -43,7 +43,117 @@ a:hover{text-decoration:underline}
 code,kbd,pre,samp{font-family:var(--font-mono)}
 
 /* ================= SLIDE SYSTEM ================= */
-.deck{position:relative;width:100vw;height:100vh;overflow:hidden;background:var(--bg)}
+html,body{height:100%}
+html.in-iframe,html.in-iframe body{width:100%;height:100%;overflow:hidden}
+.deck{position:relative;overflow:hidden;background:var(--bg)}
+body.deck-host{
+  display:flex;align-items:center;justify-content:center;
+  min-height:100vh;height:100vh;margin:0;overflow:hidden;
+  background:#111218;
+}
+body.deck-host .deck{
+  width:min(100vw, calc(100vh * 16 / 9));
+  height:min(100vh, calc(100vw * 9 / 16));
+  aspect-ratio:16/9;
+  flex-shrink:0;
+}
+body.deck-host.in-iframe{
+  display:flex;align-items:center;justify-content:center;
+  width:100%;height:100%;min-height:100%;margin:0;
+  overflow:hidden;background:var(--bg);
+}
+body.deck-host.in-iframe #deck-stage{
+  position:relative;overflow:hidden;flex-shrink:0;
+}
+body.deck-host.in-iframe #deck-stage > .deck{
+  position:absolute;left:0;top:0;
+  width:1920px;height:1080px;max-width:none;max-height:none;
+  transform-origin:0 0;
+}
+body.deck-host.in-iframe .slide{
+  padding:56px 72px;
+}
+body.deck-host.in-iframe h1.title,body.deck-host.in-iframe .h1{font-size:44px;line-height:1.08;margin-bottom:12px}
+body.deck-host.in-iframe h2.title,body.deck-host.in-iframe .h2{font-size:32px;line-height:1.12;margin-bottom:10px}
+body.deck-host.in-iframe h3,body.deck-host.in-iframe .h3{font-size:24px}
+body.deck-host.in-iframe .lede{font-size:18px;max-width:100%}
+body.deck-host.in-iframe .card{padding:18px 22px}
+body.deck-host.in-iframe .grid{gap:18px}
+body.deck-host .slide{
+  justify-content:stretch;
+  align-items:stretch;
+  padding:clamp(24px,3vw,44px) clamp(32px,4vw,56px);
+}
+.slide-scale-viewport{
+  flex:1;min-height:0;width:100%;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;
+}
+.slide-scale-root{
+  box-sizing:border-box;width:100%;max-width:100%;
+  transform-origin:center center;
+}
+body.deck-host .slide-scale-viewport{
+  flex:1;min-height:0;width:100%;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;
+}
+body.deck-host .slide-scale-root{
+  box-sizing:border-box;width:100%;max-width:100%;
+  transform-origin:center center;
+}
+body.deck-host .slide.is-active{
+  display:flex;flex-direction:column;
+}
+/* Content slides: title band fixed at top; body fills remainder (not vertically centered). */
+body.deck-host .slide:not(.center):not(.inspire-cover):not(.inspire-section):not(.inspire-end){
+  justify-content:flex-start;
+  align-content:start;
+}
+body.deck-host .slide:has(> .slide-header){
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr);
+  grid-template-areas:"head" "main";
+  align-content:stretch;
+}
+body.deck-host .slide > .slide-header{
+  grid-area:head;
+  flex-shrink:0;
+  width:100%;
+  padding-bottom:clamp(10px,1.2vh,18px);
+  margin-bottom:clamp(8px,1vh,14px);
+  border-bottom:1px solid var(--border);
+}
+body.deck-host .slide > .slide-scale-viewport{grid-area:main;min-height:0;align-self:stretch}
+body.deck-host .slide:has(> .slide-header) > .slide-main{
+  grid-area:main;
+  min-height:0;
+  justify-content:center;
+  align-items:stretch;
+  padding-bottom:0;
+}
+body.deck-host .slide:has(> .slide-main) > .slide-main > .slide-scale-viewport{
+  flex:1;min-height:0;width:100%;
+  display:flex;align-items:center;justify-content:center;
+}
+body.deck-host h1.title,body.deck-host .h1{
+  font-size:clamp(28px,4.2vw,44px);line-height:1.08;margin-bottom:12px;
+}
+body.deck-host h2.title,body.deck-host .h2{
+  font-size:clamp(26px,3.4vw,40px);line-height:1.12;margin-bottom:10px;
+}
+body.deck-host h3,body.deck-host .h3{font-size:clamp(18px,2.4vw,26px)}
+body.deck-host .lede{font-size:clamp(16px,1.8vw,20px);max-width:100%}
+body.deck-host .kicker{font-size:clamp(12px,1.2vw,14px)}
+body.deck-host .slide-main .dim,
+body.deck-host .slide-main li,
+body.deck-host .slide-main p:not(.kicker):not(.eyebrow){
+  font-size:clamp(15px,1rem,18px);
+  line-height:1.55;
+}
+body.deck-host .card{padding:clamp(14px,1.8vw,22px) clamp(16px,2vw,24px)}
+body.deck-host .grid{gap:clamp(12px,1.6vw,20px)}
+body:not(.deck-host) .deck{width:100vw;height:100vh}
 .slide{
   position:absolute;inset:0;
   display:flex;flex-direction:column;justify-content:center;
@@ -84,6 +194,16 @@ h4,.h4{font-size:22px;line-height:1.3;font-weight:600;margin:0 0 8px}
 .g4{grid-template-columns:repeat(4,1fr)}
 .center{display:flex;align-items:center;justify-content:center;text-align:center}
 .fill{flex:1}
+/* Stage band between fixed chrome (logo/footer). Wrap title + main visual inside .slide. */
+.slide-main{
+  flex:1;min-height:0;width:100%;box-sizing:border-box;
+  display:flex;flex-direction:column;justify-content:center;
+  padding-bottom:56px;
+}
+.slide-header{flex-shrink:0;width:100%}
+.slide-takeaway{flex-shrink:0;width:100%;margin-top:auto}
+body.deck-host .slide-main{padding-bottom:64px}
+body.deck-host.in-iframe .slide-main{padding-bottom:72px}
 .sp-t{padding-top:24px}.sp-b{padding-bottom:24px}
 .mt-s{margin-top:8px}.mt-m{margin-top:18px}.mt-l{margin-top:32px}
 .mb-s{margin-bottom:8px}.mb-m{margin-bottom:18px}.mb-l{margin-bottom:32px}
@@ -114,6 +234,9 @@ h4,.h4{font-size:22px;line-height:1.3;font-weight:600;margin:0 0 8px}
 .slide-number::after{content:" / " attr(data-total)}
 .progress-bar{position:fixed;left:0;right:0;bottom:0;height:3px;background:transparent;z-index:20}
 .progress-bar > span{display:block;height:100%;width:0;background:var(--accent);transition:width .3s var(--ease)}
+/* Artifact / iframe preview: hide presenter progress (reads as a full-width blue bar at 100%). */
+body.deck-host .progress-bar,
+html.in-iframe .progress-bar{display:none!important}
 
 /* ================= PRESENTER / OVERVIEW ================= */
 .notes{display:none!important}
@@ -136,6 +259,20 @@ h4,.h4{font-size:22px;line-height:1.3;font-weight:600;margin:0 0 8px}
  * All presenter styles are self-contained in the popup HTML generated by runtime.js.
  * The audience window (this file) is NOT affected — it stays as normal deck view.
  * Only the .notes class below is needed to hide speaker notes from audience. */
+
+/* ================= ICONS (Lucide CDN — <i data-lucide="name">) ================= */
+.slide-icon-box{
+  width:40px;height:40px;border-radius:var(--radius-sm);
+  background:color-mix(in srgb,var(--accent) 10%,var(--surface-2));
+  color:var(--accent);
+  display:inline-flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-bottom:10px;
+}
+.slide-icon-box svg{width:22px;height:22px;display:block;stroke:currentColor}
+.slide-icon-box.sm{width:32px;height:32px;margin-bottom:8px}
+.slide-icon-box.sm svg{width:18px;height:18px}
+.slide-icon-inline{display:inline-flex;align-items:center;gap:10px}
+.slide-icon-inline .slide-icon-box{margin-bottom:0;vertical-align:middle}
 
 /* ================= UTILITY ================= */
 .hidden{display:none!important}

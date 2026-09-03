@@ -63,6 +63,17 @@ class Settings(BaseSettings):
     )
     claude_enable_thinking: bool = Field(default=False, validation_alias="CLAUDE_ENABLE_THINKING")
 
+    # SiliconFlow (OpenAI-compatible Chat Completions — https://api.siliconflow.cn/v1)
+    siliconflow_api_key: str | None = Field(default=None, validation_alias="SILICONFLOW_API_KEY")
+    siliconflow_base_url: str = Field(
+        default="https://api.siliconflow.cn/v1",
+        validation_alias="SILICONFLOW_BASE_URL",
+    )
+    siliconflow_default_model: str | None = Field(
+        default=None,
+        validation_alias="SILICONFLOW_DEFAULT_MODEL",
+    )
+
     database_url: str = Field(validation_alias="DATABASE_URL")
     redis_url: str = Field(validation_alias="REDIS_URL")
     yl_database_url: str | None = Field(default=None, validation_alias="YL_DATABASE_URL")

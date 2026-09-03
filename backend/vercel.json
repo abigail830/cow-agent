@@ -3,6 +3,7 @@
   "functions": {
     "app/main.py": {
       "maxDuration": 120,
+      "includeFiles": "agents/**",
       "excludeFiles": "{tests/**,__tests__/**,**/*.test.py,**/test_*.py,migrations/sql/**,scripts/**,data/**,.pytest_cache/**}"
     }
   }

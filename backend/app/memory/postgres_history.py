@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.repositories.messages import MessageRepository
 from app.memory.maf_mapping import maf_message_to_rows, to_maf_messages
 from app.memory.memory_config import MemoryConfig
+from app.memory.provider_history import sanitize_rows_for_provider
 from app.platform.session_store import SessionStore
 
 
@@ -18,6 +19,7 @@ class PostgresHistoryProvider(HistoryProvider):
         session_store: SessionStore,
         memory_config: MemoryConfig,
         pending_turn_start_sequence: int | None = None,
+        model_provider: str | None = None,
     ) -> None:
         super().__init__(
             "postgres-history",
@@ -30,6 +32,7 @@ class PostgresHistoryProvider(HistoryProvider):
         self._session_store = session_store
         self._memory_config = memory_config
         self._pending_turn_start_sequence = pending_turn_start_sequence
+        self._model_provider = model_provider
 
     async def get_messages(
         self, session_id: str | None, *, state: dict | None = None, **kwargs
@@ -42,6 +45,8 @@ class PostgresHistoryProvider(HistoryProvider):
             self._memory_config,
             exclude_from_sequence=self._pending_turn_start_sequence,
         )
+        if self._model_provider:
+            rows = sanitize_rows_for_provider(rows, provider=self._model_provider)
         return to_maf_messages(rows)
 
     async def save_messages(

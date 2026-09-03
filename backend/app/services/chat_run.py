@@ -6,7 +6,8 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from agent_framework import MiddlewareTermination
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import AgentModel, Chat, Message
@@ -124,6 +125,20 @@ class ChatRunService:
         await self._maybe_set_chat_title(chat, content, resolved)
         await self._db.commit()
         return row
+
+    async def _ensure_db_connection(self) -> None:
+        """Re-open the request session if Postgres closed it during a long agent run."""
+        try:
+            await self._db.execute(text("SELECT 1"))
+        except DBAPIError as exc:
+            message = str(exc).lower()
+            if "connection is closed" not in message and "interfaceerror" not in message:
+                raise
+            logger.warning("Refreshing stale DB connection before persist: %s", exc)
+            await self._db.rollback()
+            conn = await self._db.connection()
+            await conn.invalidate()
+            await self._db.execute(text("SELECT 1"))
 
     async def _finalize_cancel(
         self,
@@ -466,6 +481,7 @@ class ChatRunService:
                 "data": {"chat_id": str(chat_id), "run_id": str(run.run_id)},
             }
 
+            await self._ensure_db_connection()
             await self._finalize_success(
                 chat_id,
                 session,
@@ -495,6 +511,7 @@ class ChatRunService:
                 async for event in _emit_cancelled():
                     yield event
                 return
+            await self._ensure_db_connection()
             await self._finalize_failure(chat_id, exc, response=final, accumulator=accumulator)
             raise
         finally:
@@ -753,6 +770,17 @@ class _StreamTurnAccumulator:
         for content in getattr(update, "contents", None) or []:
             self._observe_content(content)
 
+    def _append_reasoning(self, chunk: str) -> None:
+        if not self._reasoning_buffer:
+            self._reasoning_buffer = chunk
+            return
+        if chunk.startswith(self._reasoning_buffer):
+            self._reasoning_buffer = chunk
+            return
+        if self._reasoning_buffer.startswith(chunk):
+            return
+        self._reasoning_buffer += chunk
+
     def _flush_reasoning(self) -> None:
         if not self._reasoning_buffer:
             return
@@ -794,9 +822,9 @@ class _StreamTurnAccumulator:
         content_type = getattr(content, "type", None)
 
         if content_type == "text_reasoning":
-            text = getattr(content, "text", None)
-            if text:
-                self._reasoning_buffer += text
+            text_chunk = getattr(content, "text", None)
+            if text_chunk:
+                self._append_reasoning(text_chunk)
             return
 
         if content_type in ("function_call", "function_result", "text"):
@@ -894,8 +922,27 @@ class _StreamTurnAccumulator:
             }
         )
 
+    def _dedupe_text_vs_reasoning(self) -> None:
+        """Drop assistant text that repeats streamed reasoning (model echo)."""
+        text = (self._text_buffer or "").strip()
+        if not text:
+            return
+        reasoning_parts = [
+            str(row.get("content") or "").strip()
+            for row in self._rows
+            if row.get("message_type") == "reasoning"
+        ]
+        if not reasoning_parts:
+            return
+        combined = "\n".join(p for p in reasoning_parts if p).strip()
+        if not combined:
+            return
+        if text == combined or combined in text or (len(text) > 80 and text in combined):
+            self._text_buffer = ""
+
     def finalize(self) -> None:
         self._flush_reasoning()
+        self._dedupe_text_vs_reasoning()
         self._flush_text()
 
     def enrich_tool_arguments_from_response(self, response: Any) -> None:

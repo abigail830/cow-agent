@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from agent_framework import Content, Message
 from agent_framework.anthropic import AnthropicClient
 
 FILES_API_BETA = "files-api-2025-04-14"
+
+# MAF session layer passes conversation_id for Azure/OpenAI-style threads; Anthropic Messages API rejects it.
+_ANTHROPIC_STRIPPED_OPTIONS = frozenset({"conversation_id"})
 
 
 def _hosted_file_to_anthropic_block(content: Content) -> dict[str, Any]:
@@ -25,6 +29,24 @@ def _hosted_file_to_anthropic_block(content: Content) -> dict[str, Any]:
 
 class PlatformAnthropicClient(AnthropicClient):
     """Extends MAF AnthropicClient to map hosted_file inputs for the Files API."""
+
+    def _prepare_options(
+        self,
+        messages: Sequence[Message],
+        options: Mapping[str, Any],
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        cleaned_options = {
+            key: value
+            for key, value in options.items()
+            if key not in _ANTHROPIC_STRIPPED_OPTIONS
+        }
+        cleaned_kwargs = {
+            key: value
+            for key, value in kwargs.items()
+            if key not in _ANTHROPIC_STRIPPED_OPTIONS
+        }
+        return super()._prepare_options(messages, cleaned_options, **cleaned_kwargs)
 
     def _prepare_message_for_anthropic(self, message: Message) -> dict[str, Any]:
         contents = message.contents or []

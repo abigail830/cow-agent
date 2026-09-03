@@ -11,7 +11,7 @@
 .arch .cells{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 .arch .cells.three{grid-template-columns:repeat(3,1fr)}
 .arch .cell{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;box-shadow:var(--shadow)}
-.arch .cell .ic{font-size:24px}
+.arch .cell .ic{margin:0 auto}
 .arch .cell h4{font-size:14px;margin:6px 0 2px}
 .arch .cell p{font-size:11px;color:var(--text-3);margin:0}
 .arch .tier.hl .cell{border-top:3px solid var(--accent)}
@@ -22,22 +22,22 @@
   <h2 class="h2">一套三层栈</h2>
   <div class="arch anim-stagger-list" data-anim-target>
     <div class="tier"><div class="tname">UI Layer</div>
-      <div class="cells"><div class="cell"><div class="ic">🧱</div><h4>Layouts</h4><p>30 个单页</p></div>
-        <div class="cell"><div class="ic">🎨</div><h4>Themes</h4><p>24 tokens 主题</p></div>
-        <div class="cell"><div class="ic">✨</div><h4>Animations</h4><p>25 个命名动效</p></div>
-        <div class="cell"><div class="ic">⌨️</div><h4>Runtime</h4><p>键盘导航</p></div>
+      <div class="cells"><div class="cell"><span class="slide-icon-box sm ic" aria-hidden="true"><i data-lucide="layout-grid"></i></span><h4>Layouts</h4><p>30 个单页</p></div>
+        <div class="cell"><span class="slide-icon-box sm ic" aria-hidden="true"><i data-lucide="palette"></i></span><h4>Themes</h4><p>24 tokens 主题</p></div>
+        <div class="cell"><span class="slide-icon-box sm ic" aria-hidden="true"><i data-lucide="zap"></i></span><h4>Animations</h4><p>25 个命名动效</p></div>
+        <div class="cell"><span class="slide-icon-box sm ic" aria-hidden="true"><i data-lucide="keyboard"></i></span><h4>Runtime</h4><p>键盘导航</p></div>
       </div>
     </div>
     <div class="tier hl"><div class="tname">Core · tokens</div>
-      <div class="cells three"><div class="cell"><div class="ic">🎯</div><h4>base.css</h4><p>排版 + 网格</p></div>
-        <div class="cell"><div class="ic">🔤</div><h4>fonts.css</h4><p>中英字体</p></div>
-        <div class="cell"><div class="ic">🪞</div><h4>:root vars</h4><p>语义颜色</p></div>
+      <div class="cells three"><div class="cell"><span class="slide-icon-box sm ic" aria-hidden="true"><i data-lucide="target"></i></span><h4>base.css</h4><p>排版 + 网格</p></div>
+        <div class="cell"><span class="slide-icon-box sm ic" aria-hidden="true"><i data-lucide="pen-line"></i></span><h4>fonts.css</h4><p>中英字体</p></div>
+        <div class="cell"><span class="slide-icon-box sm ic" aria-hidden="true"><i data-lucide="layers"></i></span><h4>:root vars</h4><p>语义颜色</p></div>
       </div>
     </div>
     <div class="tier"><div class="tname">Tooling</div>
-      <div class="cells three"><div class="cell"><div class="ic">🧪</div><h4>render.sh</h4><p>headless Chrome</p></div>
-        <div class="cell"><div class="ic">🆕</div><h4>new-deck.sh</h4><p>脚手架</p></div>
-        <div class="cell"><div class="ic">📦</div><h4>AgentSkill</h4><p>Claude 接入点</p></div>
+      <div class="cells three"><div class="cell"><span class="slide-icon-box sm ic" aria-hidden="true"><i data-lucide="flask"></i></span><h4>render.sh</h4><p>headless Chrome</p></div>
+        <div class="cell"><span class="slide-icon-box sm ic" aria-hidden="true"><i data-lucide="package"></i></span><h4>new-deck.sh</h4><p>脚手架</p></div>
+        <div class="cell"><span class="slide-icon-box sm ic" aria-hidden="true"><i data-lucide="sparkles"></i></span><h4>AgentSkill</h4><p>Claude 接入点</p></div>
       </div>
     </div>
   </div>

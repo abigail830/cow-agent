@@ -37,7 +37,8 @@ from app.services.fulfillment_forms_service import (
 )
 from app.proposal.export_service import ProposalExportError, generate_proposal_docx
 from app.artifacts.resolver import load_artifact_payload, load_preview_payload
-from app.artifacts.preview_html import SLIDE_PREVIEW_CSP, prepare_slide_preview_html
+from app.artifacts.storage import get_chat_artifact_format
+from app.artifacts.preview_html import SLIDE_PREVIEW_CSP, prepare_html_ppt_preview_html, prepare_slide_preview_html
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
@@ -253,7 +254,11 @@ async def preview_artifact(
     headers: dict[str, str] = {}
     if payload.media_type.startswith("text/html"):
         base_href = f"/api/v1/chats/{chat.id}/artifacts/{artifact_id}/preview/"
-        data = prepare_slide_preview_html(data, base_href=base_href)
+        deck_format = get_chat_artifact_format(chat.id, artifact_id)
+        if deck_format == "html":
+            data = prepare_html_ppt_preview_html(data, base_href=base_href)
+        else:
+            data = prepare_slide_preview_html(data, base_href=base_href)
         headers["Content-Security-Policy"] = SLIDE_PREVIEW_CSP
     return StreamingResponse(
         iter([data]),

@@ -10,6 +10,7 @@ from app.platform.attachment_adapters import (
 from app.platform.attachment_storage import (
     format_inline_provider_file_id,
     is_inline_provider_file_id,
+    load_inline_attachment,
     save_inline_attachment,
 )
 
@@ -72,3 +73,30 @@ def test_metadata_attachment_to_maf_content_inline_image(tmp_path, monkeypatch):
     content = metadata_attachment_to_maf_content(item, chat_id=chat_id)
     assert content is not None
     assert content.type == "data"
+
+
+def test_save_inline_attachment_uses_blob_when_enabled(monkeypatch):
+    from app.platform import attachment_storage
+
+    stored: dict[str, bytes] = {}
+
+    monkeypatch.setattr(attachment_storage, "blob_storage_enabled", lambda: True)
+
+    def fake_put(pathname: str, body: bytes, *, content_type: str) -> dict:
+        stored[pathname] = body
+        return {"pathname": pathname}
+
+    def fake_get(pathname: str) -> bytes | None:
+        return stored.get(pathname)
+
+    monkeypatch.setattr(attachment_storage, "blob_put", fake_put)
+    monkeypatch.setattr(attachment_storage, "blob_get", fake_get)
+
+    chat_id = uuid.uuid4()
+    attachment_id = uuid.uuid4()
+    payload = b"\x89PNG\r\n\x1a\n"
+    save_inline_attachment(chat_id, attachment_id, payload)
+
+    key = f"chat-attachments/{chat_id}/{attachment_id}"
+    assert stored[key] == payload
+    assert load_inline_attachment(chat_id, attachment_id) == payload

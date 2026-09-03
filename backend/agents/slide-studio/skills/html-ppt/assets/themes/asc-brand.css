@@ -1,0 +1,83 @@
+/* theme: asc-brand — Ascentium 午夜绿 + 活力橙 (references/themes.md § Ascentium brand) */
+:root {
+  --asc-midnight: #0f1514;
+  --asc-orange: #ff6600;
+  --asc-orange-chart: #ff6611;
+  --asc-cream: #f5f2ef;
+  --asc-highlight: #fff0e7;
+  --asc-light-blue: #bdd5ef;
+  --asc-slate: #4a4a4a;
+  --asc-body: #333333;
+  --asc-body-deep: #272c2c;
+  --asc-muted: #575b5b;
+  --asc-border: #e0e0e0;
+  --asc-border-table: #b7b9b9;
+  --bg: #ffffff;
+  --bg-soft: #f5f2ef;
+  --surface: #ffffff;
+  --surface-2: #f5f2ef;
+  --border: #e0e0e0;
+  --border-strong: rgba(15, 21, 20, 0.28);
+  --text-1: #0f1514;
+  --text-2: #333333;
+  --text-3: #575b5b;
+  --accent: #ff6600;
+  --accent-2: #0f1514;
+  --accent-3: #077069;
+  --good: #077069;
+  --warn: #ff6600;
+  --bad: #c0392b;
+  --grad: linear-gradient(135deg, #0f1514 0%, #077069 100%);
+  --grad-soft: linear-gradient(135deg, #fff0e7, #f5f2ef 55%, #ffffff);
+  --radius: 6px;
+  --radius-sm: 4px;
+  --radius-lg: 10px;
+  --shadow: 0 1px 3px rgba(15, 21, 20, 0.08), 0 4px 12px rgba(15, 21, 20, 0.05);
+  --shadow-lg: 0 4px 12px rgba(15, 21, 20, 0.1), 0 16px 40px rgba(15, 21, 20, 0.08);
+  --font-sans: 'Poppins', 'Noto Sans SC', 'Inter', 'Microsoft YaHei', sans-serif;
+  --font-display: 'Poppins', 'Noto Sans SC', 'Inter', sans-serif;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.card-ghost {
+  background: #ffffff;
+  border: 1px solid var(--asc-border);
+  box-shadow: none;
+}
+
+.divider-accent {
+  background: var(--accent-2);
+  height: 2px;
+  width: 64px;
+}
+
+.kicker {
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+h1.title,
+h2.title,
+.h1,
+.h2 {
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.pill-accent {
+  background: var(--asc-highlight);
+  color: var(--asc-orange-chart);
+  border: 1px solid rgba(255, 102, 0, 0.28);
+}
+
+.metric {
+  font-weight: 700;
+  color: var(--accent-2);
+  letter-spacing: -0.02em;
+}

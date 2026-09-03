@@ -8,6 +8,8 @@ To compose a new deck: open the file, copy the `<section class="slide">…</sect
 block (or multiple blocks) into your deck HTML, and replace the demo data.
 Shared CSS (base, theme, animations) is already wired by `deck.html`.
 
+**Icons:** layouts with pillars / KPIs / lists use Lucide: `<span class="slide-icon-box"><i data-lucide="rocket"></i></span>` (see [icons.md](icons.md)). Copy the icon markup — do not replace with emoji.
+
 ## Openers & transitions
 
 | file | purpose |

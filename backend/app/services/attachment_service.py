@@ -50,11 +50,26 @@ class AttachmentService:
                 mime_type=mime_type,
             )
         ):
-            return await self._upload_azure_inline_image(
+            return await self._upload_inline_image(
                 chat_id=chat_id,
                 filename=filename,
                 mime_type=mime_type,
                 data=data,
+                provider=ModelProvider.AZURE_OPENAI.value,
+            )
+
+        if agent.model_provider == ModelProvider.SILICONFLOW.value:
+            if not mime_type.startswith("image/"):
+                raise ValueError(
+                    "SiliconFlow agents only support image attachments (inline); "
+                    "PDF and other files are not supported yet."
+                )
+            return await self._upload_inline_image(
+                chat_id=chat_id,
+                filename=filename,
+                mime_type=mime_type,
+                data=data,
+                provider=ModelProvider.SILICONFLOW.value,
             )
 
         adapter = get_attachment_upload_adapter(agent.model_provider)
@@ -72,20 +87,21 @@ class AttachmentService:
         await self._db.refresh(row)
         return attachment_metadata(row)
 
-    async def _upload_azure_inline_image(
+    async def _upload_inline_image(
         self,
         chat_id: uuid.UUID,
         *,
         filename: str,
         mime_type: str,
         data: bytes,
+        provider: str,
     ) -> dict:
         attachment_id = uuid.uuid4()
         save_inline_attachment(chat_id, attachment_id, data)
         row = await self._attachments.insert(
             attachment_id=attachment_id,
             chat_id=chat_id,
-            provider=ModelProvider.AZURE_OPENAI.value,
+            provider=provider,
             provider_file_id=format_inline_provider_file_id(attachment_id),
             filename=filename,
             mime_type=mime_type,
@@ -94,6 +110,22 @@ class AttachmentService:
         await self._db.commit()
         await self._db.refresh(row)
         return attachment_metadata(row)
+
+    async def _upload_azure_inline_image(
+        self,
+        chat_id: uuid.UUID,
+        *,
+        filename: str,
+        mime_type: str,
+        data: bytes,
+    ) -> dict:
+        return await self._upload_inline_image(
+            chat_id,
+            filename=filename,
+            mime_type=mime_type,
+            data=data,
+            provider=ModelProvider.AZURE_OPENAI.value,
+        )
 
     async def resolve_for_message(
         self,

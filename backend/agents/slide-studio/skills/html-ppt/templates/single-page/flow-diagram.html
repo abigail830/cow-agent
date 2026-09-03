@@ -7,7 +7,7 @@
 <style>
 .flow{display:flex;align-items:center;gap:16px;margin-top:40px;max-width:1200px}
 .flow .node{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;text-align:center;box-shadow:var(--shadow);position:relative}
-.flow .node .ic{font-size:32px;margin-bottom:6px}
+.flow .node .slide-icon-box,.flow .node .ic{margin:0 auto 6px;display:flex}
 .flow .node h4{font-size:16px}
 .flow .node p{font-size:12px;color:var(--text-3);margin:0}
 .flow .arr{color:var(--text-3);font-size:28px;flex-shrink:0}
@@ -18,15 +18,15 @@
   <p class="kicker">Pipeline · 渲染管线</p>
   <h2 class="h2">从 Markdown 到 PNG，共 5 步</h2>
   <div class="flow anim-stagger-list" data-anim-target>
-    <div class="node"><div class="ic">📝</div><h4>Markdown</h4><p>你的内容源</p></div>
+    <div class="node"><span class="slide-icon-box ic" aria-hidden="true"><i data-lucide="file-text"></i></span><h4>Markdown</h4><p>你的内容源</p></div>
     <div class="arr">→</div>
-    <div class="node"><div class="ic">🧩</div><h4>Layouts</h4><p>选择页型</p></div>
+    <div class="node"><span class="slide-icon-box ic" aria-hidden="true"><i data-lucide="layout-grid"></i></span><h4>Layouts</h4><p>选择页型</p></div>
     <div class="arr">→</div>
-    <div class="node hl"><div class="ic">🎨</div><h4>Theme</h4><p>换装</p></div>
+    <div class="node hl"><span class="slide-icon-box ic" aria-hidden="true"><i data-lucide="palette"></i></span><h4>Theme</h4><p>换装</p></div>
     <div class="arr">→</div>
-    <div class="node"><div class="ic">🌐</div><h4>HTML</h4><p>运行时接管</p></div>
+    <div class="node"><span class="slide-icon-box ic" aria-hidden="true"><i data-lucide="globe"></i></span><h4>HTML</h4><p>运行时接管</p></div>
     <div class="arr">→</div>
-    <div class="node"><div class="ic">📸</div><h4>PNG</h4><p>headless Chrome</p></div>
+    <div class="node"><span class="slide-icon-box ic" aria-hidden="true"><i data-lucide="image"></i></span><h4>PNG</h4><p>headless Chrome</p></div>
   </div>
 </section></div>
 <script src="../../assets/runtime.js"></script>

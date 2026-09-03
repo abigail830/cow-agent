@@ -74,3 +74,34 @@ def test_blob_put_uses_token(monkeypatch):
     assert headers["x-vercel-blob-store-id"] == "teststore"
 
     get_settings.cache_clear()
+
+
+def test_blob_put_retries_on_503(monkeypatch):
+    monkeypatch.setenv(
+        "BLOB_READ_WRITE_TOKEN",
+        "vercel_blob_rw_teststore_testsecret",
+    )
+    monkeypatch.setenv("ARTIFACT_STORAGE", "vercel_blob")
+    monkeypatch.setenv("BLOB_ACCESS", "private")
+    monkeypatch.setenv("BLOB_STORE_ID", "teststore")
+    get_settings.cache_clear()
+
+    responses = [
+        MagicMock(status_code=503, text="Service Unavailable", reason_phrase="Service Unavailable"),
+        MagicMock(
+            status_code=200,
+            json=lambda: {"pathname": "demo.txt", "url": "https://example/demo.txt"},
+        ),
+    ]
+
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
+    mock_client.put.side_effect = responses
+    monkeypatch.setattr(blob_client.httpx, "Client", lambda **kwargs: mock_client)
+    monkeypatch.setattr(blob_client.time, "sleep", lambda _seconds: None)
+
+    result = blob_client.blob_put("demo.txt", b"hello", content_type="text/plain")
+    assert result["pathname"] == "demo.txt"
+    assert mock_client.put.call_count == 2
+
+    get_settings.cache_clear()

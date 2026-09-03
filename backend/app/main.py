@@ -99,12 +99,18 @@ def create_app() -> FastAPI:
             redis_ok = await check_redis_connection()
         except Exception:
             redis_ok = False
+        try:
+            disk_slugs = [p.slug for p in discover_agent_profiles()]
+        except Exception as exc:
+            disk_slugs = []
+            logger.warning("discover_agent_profiles failed in /health: %s", exc)
         return {
             "status": "ok" if db_ok else "degraded",
             "database": db_ok,
             "redis": redis_ok,
             "primary_deployment": settings.azure_openai_deployment,
             "utility_deployment": settings.utility_deployment(),
+            "agent_profiles_disk": disk_slugs,
         }
 
     app.include_router(api_router)

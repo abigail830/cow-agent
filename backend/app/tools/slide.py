@@ -17,6 +17,7 @@ from app.slide.artifact_builder import (
 from app.slide.build_executor import run_slidev_build
 from app.slide.build_jobs import submit_slide_build_job
 from app.slide.html_ppt import build_html_ppt_dist
+from app.slide.html_ppt_normalize import collect_html_ppt_warnings
 
 _LOG_TAIL_CHARS = 4000
 
@@ -128,8 +129,11 @@ def render_slidev_tool(
 @tool(
     name="render_html_ppt",
     description=(
-        "Publish a html-ppt deck from a complete index.html document and show it in chat. "
-        "Use after load_skill html-ppt. Asset links like ../../assets/ are rewritten to ./assets/. "
+        "Publish a html-ppt deck (16:9 executive slides) from a complete index.html document. "
+        "Use after load_skill html-ppt. Copy layouts from templates/single-page/ or full-decks/pitch-deck/ — "
+        "no custom square/tree layouts. Visible slides are for executives only; "
+        "presenter/meta text (本页沟通重点) goes in <div class=\"notes\"> only. "
+        "Default theme: corporate-clean or pitch-deck-vc; inspire-brand only if user asked. "
         "On error, fix the HTML and call again."
     ),
 )
@@ -182,4 +186,14 @@ def render_html_ppt_tool(
 
     payload = _queue_artifact(spec)
     payload.update(slide_tool_payload(spec))
+    warnings = collect_html_ppt_warnings(
+        source=normalized,
+        normalized=dist_files["index.html"].decode("utf-8"),
+    )
+    if warnings:
+        payload["warnings"] = warnings
+        payload["hint"] = (
+            "Fix warnings and call render_html_ppt again: use roadmap.html template, "
+            "split dense slides, remove 沟通建议/沟通重点 from visible HTML."
+        )
     return payload

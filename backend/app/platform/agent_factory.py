@@ -59,6 +59,8 @@ class AgentFactory:
         settings = get_settings()
         if provider == ModelProvider.AZURE_OPENAI:
             model_name = row.model_name or settings.azure_openai_deployment
+        elif provider == ModelProvider.SILICONFLOW:
+            model_name = row.model_name or settings.siliconflow_default_model or ""
         else:
             model_name = row.model_name or settings.claude_azure_foundry_model or ""
 
@@ -69,6 +71,7 @@ class AgentFactory:
             session_store=store,
             memory_config=memory_config,
             pending_turn_start_sequence=turn_start_sequence,
+            model_provider=provider.value,
         )
         _, compaction_provider = build_platform_compaction(memory_config)
         context_providers: list = [history]

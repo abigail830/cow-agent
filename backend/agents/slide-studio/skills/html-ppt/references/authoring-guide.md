@@ -65,6 +65,8 @@ For each outline item:
 4. Replace demo data with real data. Keep the class structure intact.
 5. Set `data-title="..."` (used by the Overview grid).
 6. Add `<div class="notes">…</div>` with speaker notes.
+7. **Add icons** on pillars / KPIs / key bullets: `read_skill_resource` →
+   `references/icons.md`. Use `<i data-lucide="name">` inside `.slide-icon-box`; never emoji.
 
 ## 6. Add animations sparingly
 

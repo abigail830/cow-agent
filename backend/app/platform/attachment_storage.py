@@ -1,14 +1,18 @@
-"""Local storage for Azure OpenAI image attachments (inline vision input)."""
+"""Storage for inline image attachments (Azure OpenAI / SiliconFlow vision input)."""
 
 from __future__ import annotations
 
+import os
 import uuid
 from pathlib import Path
+
+from app.proposal.blob_client import blob_get, blob_put, blob_storage_enabled
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 INLINE_ATTACHMENTS_ROOT = _BACKEND_ROOT / "data" / "chat-attachments"
 
 INLINE_PROVIDER_PREFIX = "inline:"
+_BLOB_PREFIX = "chat-attachments"
 
 
 def is_image_mime(mime_type: str) -> bool:
@@ -37,7 +41,28 @@ def inline_attachment_path(chat_id: uuid.UUID, attachment_id: uuid.UUID) -> Path
     return chat_dir / str(attachment_id)
 
 
+def _blob_object_name(chat_id: uuid.UUID, attachment_id: uuid.UUID) -> str:
+    return f"{_BLOB_PREFIX}/{chat_id}/{attachment_id}"
+
+
+def _require_writable_storage() -> None:
+    if os.getenv("VERCEL") == "1" and not blob_storage_enabled():
+        raise RuntimeError(
+            "Chat attachments on Vercel require BLOB_READ_WRITE_TOKEN "
+            "(set ARTIFACT_STORAGE=auto or vercel_blob)."
+        )
+
+
 def save_inline_attachment(chat_id: uuid.UUID, attachment_id: uuid.UUID, data: bytes) -> Path:
+    _require_writable_storage()
+    if blob_storage_enabled():
+        blob_put(
+            _blob_object_name(chat_id, attachment_id),
+            data,
+            content_type="application/octet-stream",
+        )
+        return inline_attachment_path(chat_id, attachment_id)
+
     path = inline_attachment_path(chat_id, attachment_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
@@ -45,6 +70,12 @@ def save_inline_attachment(chat_id: uuid.UUID, attachment_id: uuid.UUID, data: b
 
 
 def load_inline_attachment(chat_id: uuid.UUID, attachment_id: uuid.UUID) -> bytes:
+    if blob_storage_enabled():
+        raw = blob_get(_blob_object_name(chat_id, attachment_id))
+        if raw is None:
+            raise FileNotFoundError(f"Inline attachment not found: {attachment_id}")
+        return raw
+
     path = inline_attachment_path(chat_id, attachment_id)
     if not path.is_file():
         raise FileNotFoundError(f"Inline attachment not found: {attachment_id}")

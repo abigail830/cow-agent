@@ -21,7 +21,8 @@ def artifact_download_url(chat_id: uuid.UUID, artifact_id: str, *, variant: str 
 
 
 def artifact_preview_url(chat_id: uuid.UUID, artifact_id: str) -> str:
-    return f"/api/v1/chats/{chat_id}/artifacts/{artifact_id}/preview/"
+    # No trailing slash: Vercel frontend /api rewrites 404 on `/preview/`.
+    return f"/api/v1/chats/{chat_id}/artifacts/{artifact_id}/preview"
 
 
 def build_slide_artifact_spec(

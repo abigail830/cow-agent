@@ -1,0 +1,507 @@
+/* inspire-deck-scoped.css — Inspire chrome + page layouts (references/inspire-brand.md)
+ * Bundled as assets/inspire-deck-scoped.css on render. Full-deck style.css @imports this file. */
+.tpl-inspire-brand {
+  --inspire-starry: #10213e;
+  --inspire-creative: #5db2e2;
+  --inspire-creative-muted: #4a9fd8;
+  --inspire-gray: #f5f5f6;
+  --inspire-section-grad: linear-gradient(135deg, #1b2b47 0%, #4a9fd8 100%);
+  --inspire-safe-top: 88px;
+  --inspire-safe-bottom: 72px;
+  --inspire-safe-x: 60px;
+  --bg: #ffffff;
+  --bg-soft: #f5f5f6;
+  --text-1: #10213e;
+  --text-2: #64748b;
+  --text-3: #94a3b8;
+  --accent: #5db2e2;
+  --accent-2: #10213e;
+  --grad: var(--inspire-section-grad);
+  font-family: 'Noto Sans SC', 'Inter', 'Microsoft YaHei', sans-serif;
+}
+
+.tpl-inspire-brand .deck {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.tpl-inspire-brand .slide {
+  padding: 48px 60px;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+/* Preview (deck-host / iframe): base.css overrides must not break Inspire chrome */
+body.deck-host.tpl-inspire-brand .slide {
+  padding: 48px 60px;
+}
+
+body.deck-host.tpl-inspire-brand .slide.inspire-cover,
+body.deck-host.tpl-inspire-brand .slide.inspire-section,
+body.deck-host.tpl-inspire-brand .slide.inspire-end {
+  justify-content: center;
+  align-items: stretch;
+  text-align: center;
+}
+
+body.deck-host.tpl-inspire-brand .slide.inspire-section {
+  text-align: left;
+}
+
+body.deck-host.tpl-inspire-brand .slide.inspire-agenda,
+body.deck-host.tpl-inspire-brand .slide.inspire-content,
+body.deck-host.tpl-inspire-brand .slide.inspire-interaction,
+body.deck-host.tpl-inspire-brand .slide.inspire-case {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: 'head' 'main';
+  padding: var(--inspire-safe-top) var(--inspire-safe-x) var(--inspire-safe-bottom);
+  justify-content: stretch;
+  align-items: stretch;
+  align-content: stretch;
+  text-align: left;
+}
+
+body.deck-host.tpl-inspire-brand .slide.inspire-content:has(> .slide-main):not(:has(> .slide-header)),
+body.deck-host.tpl-inspire-brand .slide.inspire-interaction:has(> .slide-main):not(:has(> .slide-header)),
+body.deck-host.tpl-inspire-brand .slide.inspire-case:has(> .slide-main):not(:has(> .slide-header)) {
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: 'main';
+}
+
+body.deck-host.tpl-inspire-brand .slide:has(> .slide-header) > .slide-header {
+  grid-area: head;
+}
+
+body.deck-host.tpl-inspire-brand .slide:has(> .slide-main) > .slide-main {
+  grid-area: main;
+  padding-bottom: 0;
+}
+
+.tpl-inspire-brand .slide.inspire-agenda,
+.tpl-inspire-brand .slide.inspire-content,
+.tpl-inspire-brand .slide.inspire-interaction,
+.tpl-inspire-brand .slide.inspire-case {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: 'head' 'main';
+  justify-content: stretch;
+  align-items: stretch;
+  align-content: stretch;
+  text-align: left;
+}
+
+.tpl-inspire-brand .slide.inspire-content:has(> .slide-main):not(:has(> .slide-header)),
+.tpl-inspire-brand .slide.inspire-interaction:has(> .slide-main):not(:has(> .slide-header)),
+.tpl-inspire-brand .slide.inspire-case:has(> .slide-main):not(:has(> .slide-header)) {
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: 'main';
+}
+
+.tpl-inspire-brand .slide:has(> .slide-header) > .slide-header {
+  grid-area: head;
+}
+
+.tpl-inspire-brand .slide:has(> .slide-main) > .slide-main {
+  grid-area: main;
+}
+
+/* ---- chrome (fixed anchors — never in document flow) ---- */
+.tpl-inspire-brand .inspire-logo,
+body.deck-host.tpl-inspire-brand .inspire-logo {
+  position: absolute;
+  top: 40px;
+  right: 60px;
+  left: auto;
+  height: 32px;
+  width: auto;
+  max-width: none;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.tpl-inspire-brand .inspire-logo-sm {
+  position: static;
+  height: 22px;
+  width: auto;
+  max-width: none;
+  opacity: 0.85;
+}
+
+.tpl-inspire-brand .inspire-footer,
+.tpl-inspire-brand .inspire-footer-light,
+.tpl-inspire-brand .deck-footer.inspire-footer,
+.tpl-inspire-brand .deck-footer.inspire-footer-light,
+body.deck-host.tpl-inspire-brand .deck-footer.inspire-footer,
+body.deck-host.tpl-inspire-brand .deck-footer.inspire-footer-light {
+  position: absolute;
+  top: auto;
+  left: 60px;
+  right: 60px;
+  bottom: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.tpl-inspire-brand .inspire-footer-light {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.tpl-inspire-brand .inspire-footer-light .slide-number {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.tpl-inspire-brand .inspire-copyright {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  opacity: 0.85;
+}
+
+.tpl-inspire-brand .inspire-footer .inspire-copyright,
+.tpl-inspire-brand .deck-footer.inspire-footer .inspire-copyright {
+  color: var(--text-3);
+}
+
+.tpl-inspire-brand .inspire-footer-light .inspire-copyright,
+.tpl-inspire-brand .deck-footer.inspire-footer-light .inspire-copyright {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ---- slide stage (optional — for agent-authored content pages) ---- */
+.tpl-inspire-brand .slide-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+  width: 100%;
+  padding-bottom: 0;
+  box-sizing: border-box;
+}
+
+.tpl-inspire-brand .slide:has(> .inspire-logo) .slide-main {
+  padding-top: 0;
+}
+
+.tpl-inspire-brand .slide-header {
+  flex-shrink: 0;
+  width: 100%;
+  padding-bottom: 12px;
+  margin-bottom: 8px;
+  border-bottom: 2px solid var(--inspire-starry);
+}
+
+.tpl-inspire-brand .slide-header .inspire-content-title,
+.tpl-inspire-brand .slide-header .inspire-case-title {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+  border-left: none;
+  padding-left: 0;
+}
+
+.tpl-inspire-brand .slide-header .lede {
+  margin-top: 10px;
+  max-width: 80%;
+}
+
+/* Content pages without .slide-main: reserve footer band */
+.tpl-inspire-brand .slide.inspire-content:not(:has(.slide-main)),
+.tpl-inspire-brand .slide.inspire-interaction:not(:has(.slide-main)) {
+  padding-bottom: var(--inspire-safe-bottom);
+  padding-top: var(--inspire-safe-top);
+}
+
+.tpl-inspire-brand .slide.inspire-agenda:not(:has(.slide-main)) {
+  padding-top: var(--inspire-safe-top);
+  padding-bottom: var(--inspire-safe-bottom);
+}
+
+/* ---- cover ---- */
+.tpl-inspire-brand .inspire-cover {
+  color: #fff;
+  background: var(--inspire-section-grad);
+  justify-content: center;
+  text-align: center;
+}
+
+.tpl-inspire-brand .inspire-cover .h1 {
+  color: #fff;
+  font-size: 52px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.15);
+}
+
+.tpl-inspire-brand .inspire-cover .lede {
+  color: rgba(255, 255, 255, 0.82);
+  margin: 16px auto 0;
+  max-width: 36ch;
+}
+
+.tpl-inspire-brand .inspire-cover-photo .inspire-photo-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  z-index: 0;
+}
+
+.tpl-inspire-brand .inspire-cover-photo .inspire-photo-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(27, 43, 71, 0.82) 0%,
+    rgba(27, 43, 71, 0.45) 100%
+  );
+}
+
+.tpl-inspire-brand .inspire-cover-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+/* ---- agenda ---- */
+.tpl-inspire-brand .inspire-agenda {
+  background: #fff;
+}
+
+.tpl-inspire-brand .inspire-agenda-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 48px;
+  align-items: start;
+  margin-top: 32px;
+}
+
+.tpl-inspire-brand .inspire-agenda-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 2px solid #1b2b47;
+  padding-left: 24px;
+}
+
+.tpl-inspire-brand .inspire-agenda-list li {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  padding: 14px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.tpl-inspire-brand .inspire-agenda-list li:last-child {
+  border-bottom: none;
+}
+
+.tpl-inspire-brand .inspire-agenda-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--inspire-creative-muted);
+  min-width: 36px;
+}
+
+.tpl-inspire-brand .inspire-timing {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: #f5f7fa;
+  border: 1px solid #e2e8f0;
+  color: #1b2b47;
+}
+
+/* ---- section divider ---- */
+.tpl-inspire-brand .inspire-section {
+  color: #fff;
+  background: var(--inspire-section-grad);
+  justify-content: center;
+}
+
+.tpl-inspire-brand .inspire-part {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--inspire-creative-muted);
+  margin: 0 0 12px;
+}
+
+.tpl-inspire-brand .inspire-section .h1 {
+  color: #fff;
+  font-size: 48px;
+  font-weight: 600;
+  max-width: 14ch;
+}
+
+.tpl-inspire-brand .inspire-section .lede {
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 16px;
+}
+
+.tpl-inspire-brand .inspire-section-num {
+  position: absolute;
+  right: 60px;
+  bottom: 48px;
+  font-size: 120px;
+  font-weight: 700;
+  line-height: 1;
+  color: rgba(74, 159, 216, 0.15);
+  letter-spacing: -0.04em;
+}
+
+/* ---- content ---- */
+.tpl-inspire-brand .inspire-content {
+  background: #fff;
+}
+
+.tpl-inspire-brand .inspire-content-title {
+  font-size: 36px;
+  font-weight: 600;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--inspire-starry);
+  margin: 0;
+}
+
+.tpl-inspire-brand .inspire-bullets {
+  list-style: none;
+  margin: 28px 0 0;
+  padding: 0;
+  max-width: 80%;
+}
+
+.tpl-inspire-brand .inspire-bullets li {
+  position: relative;
+  padding: 10px 0 10px 28px;
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--inspire-starry);
+}
+
+.tpl-inspire-brand .inspire-bullets li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 18px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--inspire-creative-muted);
+}
+
+/* ---- case study ---- */
+.tpl-inspire-brand .inspire-case-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--inspire-creative-muted);
+  margin: 0 0 8px;
+}
+
+.tpl-inspire-brand .inspire-case-title {
+  font-size: 32px;
+  font-weight: 600;
+  padding-left: 16px;
+  border-left: 4px solid var(--inspire-starry);
+  margin: 0 0 24px;
+}
+
+.tpl-inspire-brand .inspire-case-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.tpl-inspire-brand .inspire-case-grid .card {
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(27, 43, 71, 0.08);
+}
+
+.tpl-inspire-brand .inspire-case-grid .card p,
+.tpl-inspire-brand .inspire-case-grid .card li,
+.tpl-inspire-brand .slide-main .grid p,
+.tpl-inspire-brand .slide-main .grid li {
+  font-size: clamp(15px, 1rem, 18px);
+  line-height: 1.55;
+}
+
+.tpl-inspire-brand .inspire-case-grid .card h4,
+.tpl-inspire-brand .slide-main .grid h4 {
+  font-size: clamp(16px, 1.05rem, 20px);
+  margin: 0 0 8px;
+  color: var(--inspire-starry);
+}
+
+.tpl-inspire-brand .inspire-case-result {
+  background: #f5f7fa;
+  border-left: 4px solid #2f5b56;
+}
+
+.tpl-inspire-brand .inspire-case-result .metric {
+  font-size: 28px;
+  font-weight: 700;
+  color: #2f5b56;
+}
+
+/* ---- interaction ---- */
+.tpl-inspire-brand .inspire-interaction {
+  background: #fff9e6;
+  border-left: 4px solid #f59e0b;
+}
+
+.tpl-inspire-brand .inspire-interaction-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: #fff9e6;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+/* ---- end ---- */
+.tpl-inspire-brand .inspire-end {
+  color: #fff;
+  background: var(--inspire-section-grad);
+  justify-content: center;
+  text-align: center;
+}
+
+.tpl-inspire-brand .inspire-end .h1 {
+  color: #fff;
+  font-size: 56px;
+  font-weight: 600;
+}
+
+.tpl-inspire-brand .inspire-end .lede {
+  color: rgba(255, 255, 255, 0.82);
+  margin: 16px auto 0;
+}
+
+.tpl-inspire-brand .kicker {
+  color: var(--inspire-creative-muted);
+  font-weight: 600;
+}
+
+.tpl-inspire-brand .dim2 {
+  color: var(--text-3);
+}

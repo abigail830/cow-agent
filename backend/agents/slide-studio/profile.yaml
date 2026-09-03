@@ -1,11 +1,14 @@
 id: slide-studio
 name: "Z Slide Studio"
-description: "Design presentations with Slidev or html-ppt — live preview and optional PDF export."
+description: "Executive-ready presentations (16:9) — consulting reports, solution decks, and roadmaps via html-ppt or Slidev."
 
 model_provider: azure_openai
 model: ${AZURE_OPENAI_DEPLOYMENT}
 # model_provider: azure_anthropic
-# model: ${CLAUDE_AZURE_FOUNDRY_MODEL}
+# model: ${CLAUDE_AZURE_FOUNDRY_MODEL_4_7}
+# model_provider: siliconflow
+# model: ${SILICONFLOW_DEFAULT_MODEL} 
+
 prompt_file: system_prompt.md
 skills_dir: skills
 

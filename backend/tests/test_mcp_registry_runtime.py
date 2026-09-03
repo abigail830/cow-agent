@@ -55,7 +55,7 @@ def test_mcp_registry_uses_in_process_postgres_locally(monkeypatch):
     monkeypatch.setattr(mcp_registry, "IS_VERCEL", False)
 
     class FakeRow:
-        name = "sg-sp-analysis:postgres"
+        name = "yl-worker1:postgres"
         transport = "stdio"
         description = "postgres"
         connection = {

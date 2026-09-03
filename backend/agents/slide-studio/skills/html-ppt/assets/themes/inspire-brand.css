@@ -1,0 +1,59 @@
+/* theme: inspire-brand — Inspire 企业品牌标准 (references/inspire-brand.md) */
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f5f5f6;
+  --surface: #ffffff;
+  --surface-2: #f5f7fa;
+  --border: #e2e8f0;
+  --border-strong: rgba(16, 33, 62, 0.28);
+  --text-1: #10213e;
+  --text-2: #64748b;
+  --text-3: #94a3b8;
+  --accent: #5db2e2;
+  --accent-2: #10213e;
+  --accent-3: #625d9c;
+  --good: #00524c;
+  --warn: #f59e0b;
+  --bad: #ef4444;
+  --grad: linear-gradient(135deg, #1b2b47 0%, #4a9fd8 100%);
+  --grad-soft: linear-gradient(135deg, #eef4fb, #e8f4fd 55%, #f0f9ff);
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-lg: 12px;
+  --shadow: 0 2px 8px rgba(27, 43, 71, 0.08);
+  --shadow-lg: 0 4px 12px rgba(27, 43, 71, 0.12);
+  --font-sans: 'Noto Sans SC', 'Inter', 'Microsoft YaHei', sans-serif;
+  --font-display: 'Noto Sans SC', 'Inter', sans-serif;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.divider-accent {
+  background: var(--accent-2);
+  height: 2px;
+  width: 64px;
+}
+
+.kicker {
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+h1.title,
+h2.title,
+.h1,
+.h2 {
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.pill-accent {
+  background: #e8f4fd;
+  color: #4a9fd8;
+  border: 1px solid rgba(93, 178, 226, 0.35);
+}

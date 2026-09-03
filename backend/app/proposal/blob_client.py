@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 from urllib.parse import urlencode
 
@@ -14,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 _BLOB_CONTROL_API = "https://vercel.com/api/blob"
 _API_VERSION = "12"
+_RETRIABLE_BLOB_STATUS = frozenset({429, 502, 503, 504})
+_BLOB_PUT_MAX_ATTEMPTS = 4
 
 
 def blob_storage_enabled() -> bool:
@@ -88,15 +91,37 @@ def blob_put(pathname: str, body: bytes | str, *, content_type: str) -> dict[str
         "x-allow-overwrite": "1",
         "x-content-type": content_type,
     }
+    last_error: RuntimeError | None = None
     with httpx.Client(timeout=60.0) as client:
-        response = client.put(url, content=payload, headers=headers)
-    if response.status_code >= 400:
-        detail = (response.text or "").strip() or response.reason_phrase
-        raise RuntimeError(f"Vercel Blob upload failed ({response.status_code}): {detail}")
-    data = response.json()
-    if not isinstance(data, dict):
-        raise RuntimeError("Vercel Blob upload returned unexpected payload.")
-    return data
+        for attempt in range(1, _BLOB_PUT_MAX_ATTEMPTS + 1):
+            response = client.put(url, content=payload, headers=headers)
+            if response.status_code < 400:
+                data = response.json()
+                if not isinstance(data, dict):
+                    raise RuntimeError("Vercel Blob upload returned unexpected payload.")
+                return data
+
+            detail = (response.text or "").strip() or response.reason_phrase
+            last_error = RuntimeError(
+                f"Vercel Blob upload failed ({response.status_code}): {detail}"
+            )
+            if response.status_code not in _RETRIABLE_BLOB_STATUS or attempt >= _BLOB_PUT_MAX_ATTEMPTS:
+                raise last_error
+
+            delay = 0.5 * (2 ** (attempt - 1))
+            logger.warning(
+                "Vercel Blob upload retry %s/%s for %s (HTTP %s); sleeping %.1fs",
+                attempt,
+                _BLOB_PUT_MAX_ATTEMPTS,
+                pathname,
+                response.status_code,
+                delay,
+            )
+            time.sleep(delay)
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("Vercel Blob upload failed.")
 
 
 def blob_get(pathname: str) -> bytes | None:

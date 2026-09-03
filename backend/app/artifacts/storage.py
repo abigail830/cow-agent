@@ -180,6 +180,12 @@ def chat_artifact_exists(chat_id: uuid.UUID, artifact_id: str) -> bool:
     return bool(meta)
 
 
+def get_chat_artifact_format(chat_id: uuid.UUID, artifact_id: str) -> str:
+    meta = _load_meta(chat_id, artifact_id)
+    fmt = str(meta.get("format") or "slidev").strip().lower()
+    return fmt if fmt in {"slidev", "html", "pdf", "markdown"} else "slidev"
+
+
 def load_chat_artifact_payload(
     chat_id: uuid.UUID,
     artifact_id: str,

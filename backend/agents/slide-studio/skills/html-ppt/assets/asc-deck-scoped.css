@@ -1,0 +1,181 @@
+/* asc-deck-scoped.css — Ascentium slide variants + tables (references/themes.md)
+ * Link with assets/themes/asc-brand.css and <body class="tpl-asc-brand">. */
+.tpl-asc-brand {
+  --asc-midnight: #0f1514;
+  --asc-orange: #ff6600;
+  --asc-cream: #f5f2ef;
+  --asc-highlight: #fff0e7;
+  font-family: 'Poppins', 'Noto Sans SC', 'Inter', 'Microsoft YaHei', sans-serif;
+}
+
+.tpl-asc-brand .deck {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.tpl-asc-brand .slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 48px 60px;
+}
+
+body.deck-host.tpl-asc-brand .slide {
+  padding: 48px 60px;
+}
+
+body.deck-host.tpl-asc-brand .slide.asc-midnight,
+body.deck-host.tpl-asc-brand .slide.asc-orange {
+  justify-content: center;
+  align-items: stretch;
+  text-align: center;
+}
+
+body.deck-host.tpl-asc-brand .slide.asc-white,
+body.deck-host.tpl-asc-brand .slide.asc-cream,
+body.deck-host.tpl-asc-brand .slide.asc-split {
+  justify-content: flex-start;
+  align-items: stretch;
+  text-align: left;
+}
+
+/* ---- page background variants ---- */
+.tpl-asc-brand .slide.asc-white {
+  background: #ffffff;
+  color: var(--asc-body-deep, #272c2c);
+}
+
+.tpl-asc-brand .slide.asc-cream {
+  background: #f5f2ef;
+  color: var(--asc-body-deep, #272c2c);
+}
+
+.tpl-asc-brand .slide.asc-midnight {
+  background: #0f1514;
+  color: #ffffff;
+}
+
+.tpl-asc-brand .slide.asc-orange {
+  background: #ff6600;
+  color: #ffffff;
+}
+
+.tpl-asc-brand .slide.asc-split {
+  background: linear-gradient(to right, #fff0e7 0%, #fff0e7 40%, #ffffff 40%, #ffffff 100%);
+  color: var(--asc-body-deep, #272c2c);
+}
+
+.tpl-asc-brand .slide.asc-midnight .h1,
+.tpl-asc-brand .slide.asc-midnight .h2,
+.tpl-asc-brand .slide.asc-midnight h1.title,
+.tpl-asc-brand .slide.asc-midnight h2.title,
+.tpl-asc-brand .slide.asc-orange .h1,
+.tpl-asc-brand .slide.asc-orange .h2,
+.tpl-asc-brand .slide.asc-orange h1.title,
+.tpl-asc-brand .slide.asc-orange h2.title {
+  color: #ffffff;
+}
+
+.tpl-asc-brand .slide.asc-midnight .lede,
+.tpl-asc-brand .slide.asc-midnight .dim2,
+.tpl-asc-brand .slide.asc-orange .lede,
+.tpl-asc-brand .slide.asc-orange .dim2 {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.tpl-asc-brand .slide.asc-midnight .kicker,
+.tpl-asc-brand .slide.asc-orange .kicker {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.tpl-asc-brand .slide.asc-midnight .slide-icon-box,
+.tpl-asc-brand .slide.asc-orange .slide-icon-box {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+/* ---- chrome ---- */
+.tpl-asc-brand .asc-footer,
+.tpl-asc-brand .deck-footer.asc-footer {
+  position: absolute;
+  left: 60px;
+  right: 60px;
+  bottom: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--asc-muted, #575b5b);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.tpl-asc-brand .slide.asc-midnight .asc-footer,
+.tpl-asc-brand .slide.asc-orange .asc-footer,
+.tpl-asc-brand .slide.asc-midnight .deck-footer,
+.tpl-asc-brand .slide.asc-orange .deck-footer {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.tpl-asc-brand .asc-deco-block {
+  background: #bdd5ef;
+  border-radius: var(--radius, 6px);
+}
+
+/* ---- tables ---- */
+.tpl-asc-brand table.asc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: clamp(0.875rem, 1.2vw, 1rem);
+}
+
+.tpl-asc-brand table.asc-table thead th {
+  background: #ff6611;
+  color: #ffffff;
+  font-weight: 600;
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid #b7b9b9;
+}
+
+.tpl-asc-brand table.asc-table tbody td {
+  color: #272c2c;
+  padding: 10px 14px;
+  border-bottom: 1px solid #b7b9b9;
+}
+
+.tpl-asc-brand table.asc-table tbody tr:nth-child(even) td {
+  background: #f5f2ef;
+}
+
+.tpl-asc-brand table.asc-table.asc-table-plain tbody tr:nth-child(even) td {
+  background: #ffffff;
+}
+
+/* ---- stage (optional content band) ---- */
+.tpl-asc-brand .slide-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  padding-bottom: 48px;
+  box-sizing: border-box;
+}
+
+.tpl-asc-brand .slide.asc-split .asc-split-narrative {
+  width: 38%;
+  max-width: 38%;
+  padding-right: 24px;
+  box-sizing: border-box;
+}
+
+.tpl-asc-brand .slide.asc-split .asc-split-data {
+  margin-left: auto;
+  width: 58%;
+  max-width: 58%;
+}

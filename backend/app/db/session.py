@@ -22,6 +22,7 @@ def init_db_engine() -> None:
         connect_args=settings.async_database_connect_args,
         echo=settings.debug,
         pool_pre_ping=True,
+        pool_recycle=300,
     )
     async_session_factory = async_sessionmaker(_engine, expire_on_commit=False)
 

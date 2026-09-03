@@ -1,6 +1,10 @@
 """Skill tools are auto-allowed when agent has skills — skill name is not a tool name."""
 
-from unittest.mock import MagicMock
+import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from agent_framework import FunctionTool
 
 from app.middleware.allowed_tools import AllowedToolsMiddleware
 from app.platform.hook_registry import resolve_middleware
@@ -39,6 +43,24 @@ def test_platform_merges_skill_tools_when_agent_has_skills():
     assert "postgres_run_query" in mw._allowed
     assert "load_skill" in mw._allowed
     assert "read_skill_resource" in mw._allowed
+
+
+@pytest.mark.asyncio
+async def test_disallowed_tool_returns_error_without_terminating_run():
+    tool = FunctionTool(name="run_skill_script", description="test", func=AsyncMock())
+    context = MagicMock()
+    context.function = tool
+    context.function.additional_properties = {}
+    context.result = None
+
+    mw = AllowedToolsMiddleware({"load_skill"})
+    call_next = AsyncMock()
+
+    await mw.process(context, call_next)
+
+    call_next.assert_not_awaited()
+    assert context.result["error"] == "Tool not allowed: run_skill_script"
+    assert "hint" in context.result
 
 
 def test_empty_allowed_tools_skips_middleware_entirely():
