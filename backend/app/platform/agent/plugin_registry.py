@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
-from app.agent_specific.content_studio.plugin import ContentStudioPlugin
-from app.agent_specific.diagram.plugin import DiagramPlugin
 from app.agent_specific.proposal.plugin import ProposalPlugin
 from app.agent_specific.slide.plugin import SlidePlugin
 from app.agent_specific.viz.plugin import VIZ_TOOL_NAMES, VizCapabilityPlugin
 from app.agent_specific.yl_worker2.plugin import YlWorker2Plugin
 from app.platform.runtime.plugin import AgentPlugin
-from app.shared.artifacts.plugin import ArtifactRuntimePlugin
+from app.shared.artifacts.plugin import ArtifactRuntimePlugin, DiagramArtifactPlugin, SandboxArtifactPlugin
 
 _ALL_PLUGINS: tuple[AgentPlugin, ...] = (
     ProposalPlugin(),
-    DiagramPlugin(),
     ArtifactRuntimePlugin(),
+    DiagramArtifactPlugin(),
+    SandboxArtifactPlugin(),
     SlidePlugin(),
-    ContentStudioPlugin(),
     YlWorker2Plugin(),
 )
 

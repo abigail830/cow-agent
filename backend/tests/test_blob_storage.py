@@ -2,7 +2,8 @@ import uuid
 from unittest.mock import MagicMock
 
 from app.config import get_settings
-from app.agent_specific.proposal import blob_client, storage
+from app.agent_specific.proposal import blob_client
+from app.shared.artifacts import storage
 
 
 def _upload_bytes(uploads: list[tuple[str, bytes | str, str]], pathname: str) -> bytes | None:
@@ -39,7 +40,7 @@ def test_save_diagram_artifact_to_blob(monkeypatch):
     )
 
     assert len(uploads) == 3
-    payload = storage.load_artifact_payload(chat_id, artifact_id)
+    payload = storage.load_chat_artifact_payload(chat_id, artifact_id)
     assert payload is not None
     assert payload.data == b"<svg></svg>"
     assert payload.filename == "flow.svg"

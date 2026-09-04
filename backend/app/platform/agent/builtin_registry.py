@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from app.agent_specific.content_studio.tools import CONTENT_STUDIO_BUILTIN_TOOLS
-from app.agent_specific.diagram.tools import DIAGRAM_BUILTIN_TOOLS
-from app.agent_specific.mdm.tools import MDM_BUILTIN_TOOLS
+from app.shared.artifacts.diagram_tools import DIAGRAM_BUILTIN_TOOLS
+from app.shared.artifacts.publish_tools import PUBLISH_BUILTIN_TOOLS
+from app.shared.sandbox.tools import SANDBOX_BUILTIN_TOOLS
+from app.agent_specific.proposal.mdm.tools import MDM_BUILTIN_TOOLS
 from app.agent_specific.proposal.tools import PROPOSAL_BUILTIN_TOOLS
 from app.agent_specific.slide.tools import SLIDE_BUILTIN_TOOLS
 from app.agent_specific.viz.tools import VIZ_BUILTIN_TOOLS
@@ -18,7 +19,8 @@ _TOOL_FRAGMENTS: tuple[dict[str, Callable[..., Any]], ...] = (
     MDM_BUILTIN_TOOLS,
     DIAGRAM_BUILTIN_TOOLS,
     SLIDE_BUILTIN_TOOLS,
-    CONTENT_STUDIO_BUILTIN_TOOLS,
+    SANDBOX_BUILTIN_TOOLS,
+    PUBLISH_BUILTIN_TOOLS,
     VIZ_BUILTIN_TOOLS,
     YL_WORKER2_TOOLS,
 )

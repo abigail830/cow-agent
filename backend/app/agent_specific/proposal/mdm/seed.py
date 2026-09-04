@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.engine import Connection
-from app.agent_specific.mdm.snapshot_io import MdmCatalogSnapshot
+from app.agent_specific.proposal.mdm.snapshot_io import MdmCatalogSnapshot
 
 BVI_JURISDICTION = "BVI"
 BVI_BU = "Harneys"

@@ -1,9 +1,9 @@
-from app.agent_specific.mdm.catalog_rows import (
+from app.agent_specific.proposal.mdm.catalog_rows import (
     package_row_to_payload,
     pricing_warnings,
     service_row_to_materializer_payload,
 )
-from app.agent_specific.mdm.catalog_scope import CatalogScopeError, resolve_catalog_scope
+from app.agent_specific.proposal.mdm.catalog_scope import CatalogScopeError, resolve_catalog_scope
 from app.agent_specific.proposal.context import init_run_proposal_state, reset_run_proposal_state
 from app.agent_specific.proposal.draft import materialize_draft
 

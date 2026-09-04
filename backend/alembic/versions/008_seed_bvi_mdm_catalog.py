@@ -18,8 +18,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    from app.agent_specific.mdm.seed import seed_bvi_catalog_sync
-    from app.agent_specific.mdm.snapshot_io import load_bvi_catalog_json
+    from app.agent_specific.proposal.mdm.seed import seed_bvi_catalog_sync
+    from app.agent_specific.proposal.mdm.snapshot_io import load_bvi_catalog_json
 
     snapshot = load_bvi_catalog_json()
     counts = seed_bvi_catalog_sync(op.get_bind(), snapshot)
@@ -31,7 +31,7 @@ def downgrade() -> None:
     from sqlalchemy.orm import Session
 
     from app.db.mdm_models import MdmPackage, MdmPackageService, MdmService
-    from app.agent_specific.mdm.excel_import import BVI_CATEGORY_ID
+    from app.agent_specific.proposal.mdm.seed import BVI_CATEGORY_ID
 
     session = Session(bind=op.get_bind())
     try:

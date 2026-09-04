@@ -1,22 +1,25 @@
-"""Diagram rendering tools — PlantUML and future diagram backends."""
+"""PlantUML diagram tools — shared chat artifact capability (like slide/html decks)."""
 
 from __future__ import annotations
 
 import re
+import uuid
 from typing import Annotated, Any
 
 from agent_framework import tool
 
-from app.agent_specific.diagram.context import get_run_diagram_state
-from app.agent_specific.diagram.plantuml_renderer import PlantUmlRenderError, render_plantuml
-from app.agent_specific.proposal.artifact_spec import ArtifactSpec
-from app.agent_specific.proposal.storage import new_artifact_id, save_diagram_artifact
+from app.shared.artifacts.context import get_run_artifact_state
+from app.shared.artifacts.plantuml_renderer import PlantUmlRenderError, render_plantuml
+from app.shared.artifacts.spec import ArtifactSpec
+from app.shared.artifacts.storage import new_chat_artifact_id, save_diagram_artifact
+
+DIAGRAM_TOOL_NAMES = frozenset({"render_plantuml"})
 
 _PREVIEW_CHAR_LIMIT = 120_000
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 
-def _artifact_download_url(chat_id, artifact_id: str, *, variant: str | None = None) -> str:
+def _artifact_download_url(chat_id: uuid.UUID, artifact_id: str, *, variant: str | None = None) -> str:
     base = f"/api/v1/chats/{chat_id}/artifacts/{artifact_id}"
     if variant:
         return f"{base}?format={variant}"
@@ -34,9 +37,9 @@ def _build_diagram_artifact(
     svg: str,
     png: bytes,
     source: str,
-    chat_id,
+    chat_id: uuid.UUID | None,
 ) -> ArtifactSpec:
-    artifact_id = new_artifact_id(prefix="diag")
+    artifact_id = new_chat_artifact_id(prefix="diag")
     filename_base = _slugify(title)
     svg_filename = f"{filename_base}.svg"
     png_filename = f"{filename_base}.png"
@@ -70,9 +73,9 @@ def _build_diagram_artifact(
 
 
 def _queue_artifact(spec: ArtifactSpec) -> dict[str, Any]:
-    ctx = get_run_diagram_state()
+    ctx = get_run_artifact_state()
     if ctx is None:
-        return {"status": "error", "message": "Diagram context unavailable for this run."}
+        return {"status": "error", "message": "Artifact context unavailable for this run."}
     queued = ctx.queue_artifact(spec)
     payload = spec.model_dump(mode="json")
     payload["status"] = "queued" if queued else "deduplicated"
@@ -93,9 +96,9 @@ def render_plantuml_tool(
     source: Annotated[str, "Complete PlantUML source (@startuml ... @enduml)."],
     title: Annotated[str, "Short diagram title for the artifact card."] = "PlantUML diagram",
 ) -> dict[str, Any]:
-    ctx = get_run_diagram_state()
+    ctx = get_run_artifact_state()
     if ctx is None:
-        return {"status": "error", "message": "Diagram context unavailable for this run."}
+        return {"status": "error", "message": "Artifact context unavailable for this run."}
 
     result = render_plantuml(source)
     if isinstance(result, PlantUmlRenderError):

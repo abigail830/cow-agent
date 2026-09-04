@@ -43,6 +43,7 @@ class _InlineAttachment:
 def test_attachment_to_maf_content_inline_image(tmp_path, monkeypatch):
     import app.platform.attachments.attachment_storage as attachment_storage
 
+    monkeypatch.setattr(attachment_storage, "blob_storage_enabled", lambda: False)
     monkeypatch.setattr(attachment_storage, "INLINE_ATTACHMENTS_ROOT", tmp_path)
 
     chat_id = uuid.uuid4()
@@ -58,6 +59,7 @@ def test_attachment_to_maf_content_inline_image(tmp_path, monkeypatch):
 def test_metadata_attachment_to_maf_content_inline_image(tmp_path, monkeypatch):
     import app.platform.attachments.attachment_storage as attachment_storage
 
+    monkeypatch.setattr(attachment_storage, "blob_storage_enabled", lambda: False)
     monkeypatch.setattr(attachment_storage, "INLINE_ATTACHMENTS_ROOT", tmp_path)
 
     chat_id = uuid.uuid4()

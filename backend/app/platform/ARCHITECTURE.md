@@ -7,7 +7,9 @@ This document describes how `backend/app/platform/` maps to [Microsoft Agent Fra
 ```
 app/
 ├── agent_specific/*/         # Per-agent domain: tools, hooks, plugins, stream emitters
-├── shared/                   # Cross-agent artifacts, sandbox
+├── shared/                   # Cross-agent capabilities
+│   ├── artifacts/            # Chat artifact cards: slide/html, diagram (PlantUML), content docs
+│   └── sandbox/              # E2B execution for content-studio / slide builds
 ├── platform/                 # MAF assembly + platform services
 │   ├── chat/                 # Chat run orchestration (ChatRunService, stream pipeline)
 │   ├── agent/                # AgentFactory, registries, profile sync
@@ -66,7 +68,7 @@ We use MAF providers but **not** the default full auto-save path:
 
 | Source | Registration |
 |--------|----------------|
-| Builtin `@tool` | `agent_specific/*/tools.py` → `agent/builtin_registry.py` |
+| Builtin `@tool` | `agent_specific/*/tools.py` + `shared/artifacts/diagram_tools.py` → `agent/builtin_registry.py` |
 | MCP | DB `McpServer` + `mcp/mcp_registry.py` |
 | Skills | `agent/skill_registry.py` |
 

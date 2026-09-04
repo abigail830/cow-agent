@@ -44,7 +44,7 @@ def test_get_chat_proposal_draft_returns_persisted_draft():
 
     async def _run():
         with patch(
-            "app.agent_specific.proposal.preview_service.load_chat_proposal_draft",
+            "app.agent_specific.proposal.draft.preview_service.load_chat_proposal_draft",
             return_value=draft,
         ):
             return await get_chat_proposal_draft(None, uuid.uuid4())
@@ -87,7 +87,7 @@ def test_recover_proposal_draft_from_latest_draft_tool_result():
             return messages
 
     async def _run():
-        with patch("app.agent_specific.proposal.preview_service.MessageRepository", FakeRepo):
+        with patch("app.agent_specific.proposal.draft.preview_service.MessageRepository", FakeRepo):
             return await _recover_proposal_draft_from_messages(None, uuid.uuid4())
 
     recovered = asyncio.run(_run())

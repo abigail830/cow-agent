@@ -434,7 +434,7 @@ def _catalog_scope_for_draft(draft: dict[str, Any]) -> tuple[str | None, str | N
     if not template_id:
         return None, None
     try:
-        from app.agent_specific.mdm.catalog_scope import resolve_catalog_scope
+        from app.agent_specific.proposal.mdm.catalog_scope import resolve_catalog_scope
 
         scope = resolve_catalog_scope(template_id=template_id)
         return scope.get("jurisdiction"), scope.get("bu")

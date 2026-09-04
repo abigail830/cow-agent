@@ -61,7 +61,7 @@ IMPORT_REPLACEMENTS: list[tuple[str, str]] = [
     ("app.slide", "app.agent_specific.slide"),
     ("app.viz", "app.agent_specific.viz"),
     ("app.yl_worker2", "app.agent_specific.yl_worker2"),
-    ("app.mdm", "app.agent_specific.mdm"),
+    ("app.mdm", "app.agent_specific.proposal.mdm"),
     ("app.artifacts", "app.shared.artifacts"),
     ("app.sandbox", "app.shared.sandbox"),
     ("app.platform.agent_factory", "app.platform.agent.agent_factory"),

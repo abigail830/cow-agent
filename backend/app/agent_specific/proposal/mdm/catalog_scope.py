@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent_specific.proposal.context import get_run_proposal_state
-from app.agent_specific.proposal.loaders import load_template_yaml
+from app.agent_specific.proposal.runtime.context import get_run_proposal_state
+from app.agent_specific.proposal.templates.loaders import load_template_yaml
 
 
 class CatalogScopeError(ValueError):

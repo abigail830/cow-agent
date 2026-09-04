@@ -7,7 +7,7 @@ BD/销售跨 jurisdiction 出具 Proposal 的 agent（draft-first proposal compo
 | 组件 | 位置 |
 |------|------|
 | Draft 管线 | `backend/app/proposal/draft.py` |
-| MDM catalog | `backend/app/mdm/catalog_service.py` + tools `list_mdm_packages`, `get_mdm_package_services`, `search_mdm_services`, `list_mdm_packages_for_services` |
+| MDM catalog | `backend/app/agent_specific/proposal/mdm/` + tools `list_mdm_packages`, `get_mdm_package_services`, `search_mdm_services`, `list_mdm_packages_for_services` |
 | Builtin tools | `list_templates`, `read_knowledge`, MDM catalog tools (above), `initialize_proposal_draft`, `get_proposal_draft`, `patch_proposal_draft`, `add_package_to_proposal_draft`, `add_services_to_proposal_draft`, `enable_proposal_draft_section`, `render_preview`, `generate_document` |
 | 会话持久化 | `Chat.session_state.proposal_draft` |
 

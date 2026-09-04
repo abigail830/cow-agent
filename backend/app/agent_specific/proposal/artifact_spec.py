@@ -1,5 +1,1 @@
-"""Backward-compatible re-exports — canonical definitions live in app.shared.artifacts.spec."""
-
-from app.shared.artifacts.spec import ArtifactFormat, ArtifactKind, ArtifactSpec
-
-__all__ = ["ArtifactFormat", "ArtifactKind", "ArtifactSpec"]
+from app.agent_specific.proposal.storage.artifact_spec import *  # noqa: F403

@@ -7,8 +7,8 @@ from typing import Annotated, Any
 
 from agent_framework import tool
 
-from app.agent_specific.mdm.catalog_scope import CatalogScopeError, resolve_catalog_scope
-from app.agent_specific.mdm.catalog_service import (
+from app.agent_specific.proposal.mdm.catalog_scope import CatalogScopeError, resolve_catalog_scope
+from app.agent_specific.proposal.mdm.catalog_service import (
     catalog_tool_error,
     catalog_tool_response,
     get_package_services,

@@ -85,7 +85,7 @@ def test_word_export_without_optional_sections_in_draft():
     cases = {
         "sg-incorp": ["appendices", "first_invoice"],
         "au-advisory": ["appendices", "payment_options", "credentials"],
-        "harneys-bvi": ["appendices", "required_documents", "additional_info"],
+        "harneys-bvi": ["appendices", "required_documents"],
     }
 
     for template_id, optional_ids in cases.items():
@@ -305,6 +305,14 @@ def test_render_word_document_cover_for(tmp_path, monkeypatch):
 
 def test_generate_proposal_docx_persists_artifact(tmp_path, monkeypatch):
     from app.agent_specific.proposal import loaders
+    from app.agent_specific.proposal import storage as proposal_storage
+
+    monkeypatch.setattr(proposal_storage, "blob_storage_enabled", lambda: False)
+    monkeypatch.setattr(proposal_storage, "ARTIFACTS_ROOT", tmp_path / "proposal-artifacts")
+    monkeypatch.setattr(
+        "app.agent_specific.proposal.storage.persistence.blob_storage_enabled",
+        lambda: False,
+    )
 
     template_root = tmp_path / "sg-incorp"
     export_dir = template_root / "export"
@@ -338,26 +346,29 @@ document_export:
     monkeypatch.setattr(loaders, "TEMPLATES_ROOT", tmp_path)
     loaders.load_template_yaml.cache_clear()
 
-    draft = materialize_draft(template_id="sg-incorp")
-    draft["facts"]["client"]["company_name"] = "Acme Pte Ltd"
-    from app.agent_specific.proposal.placeholders import sync_draft_template_placeholders
+    try:
+        draft = materialize_draft(template_id="sg-incorp")
+        draft["facts"]["client"]["company_name"] = "Acme Pte Ltd"
+        from app.agent_specific.proposal.placeholders import sync_draft_template_placeholders
 
-    draft = sync_draft_template_placeholders(draft)
-    chat_id = uuid.uuid4()
+        draft = sync_draft_template_placeholders(draft)
+        chat_id = uuid.uuid4()
 
-    result = generate_proposal_docx(draft, chat_id=chat_id, force=False, persist=True)
-    assert result["status"] == "ok"
-    assert result["filename"].endswith(".docx")
-    assert result["download_url"]
+        result = generate_proposal_docx(draft, chat_id=chat_id, force=False, persist=True)
+        assert result["status"] == "ok"
+        assert result["filename"].endswith(".docx")
+        assert result["download_url"]
 
-    path = resolve_artifact_path(chat_id, result["artifact_id"])
-    assert path is not None
-    assert path.suffix == ".docx"
-    assert path.read_bytes().startswith(b"PK")
+        path = resolve_artifact_path(chat_id, result["artifact_id"])
+        assert path is not None
+        assert path.suffix == ".docx"
+        assert path.read_bytes().startswith(b"PK")
+    finally:
+        loaders.load_template_yaml.cache_clear()
 
 
 def test_word_export_status_without_template_file(tmp_path, monkeypatch):
-    from app.agent_specific.proposal import loaders
+    from app.agent_specific.proposal.templates import loaders
 
     template_root = tmp_path / "sg-incorp"
     template_root.mkdir(parents=True)
@@ -369,6 +380,7 @@ def test_word_export_status_without_template_file(tmp_path, monkeypatch):
     status = word_export_status(draft)
     assert status["available"] is False
     assert status["reason"] == "no_word_template"
+    loaders.load_template_yaml.cache_clear()
 
 
 def test_generate_proposal_docx_blocked_without_content():

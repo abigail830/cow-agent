@@ -5,7 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from app.agent_specific.proposal.pricing_rules import FIXED_PRICING_TYPE, coerce_price_amount, normalize_pricing_type
+from app.agent_specific.proposal.draft.pricing_rules import FIXED_PRICING_TYPE, coerce_price_amount, normalize_pricing_type
 
 
 def _optional_str(value: Any) -> str | None:

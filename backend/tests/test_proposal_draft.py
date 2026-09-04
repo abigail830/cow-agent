@@ -66,7 +66,7 @@ def test_materialize_bvi_draft_from_template_sections():
     ids = [section["id"] for section in draft["document"]["sections"]]
     assert "introduction" in ids
     assert "solution_and_fees" in ids
-    assert "additional_info" in ids
+    assert "required_documents" in ids
     assert "appendices" in ids
     appendices = next(s for s in draft["document"]["sections"] if s["id"] == "appendices")
     assert appendices["kind"] == "collection"

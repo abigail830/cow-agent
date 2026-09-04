@@ -14,13 +14,15 @@ from app.agent_specific.proposal.blob_client import blob_get, blob_put, blob_sto
 _BACKEND_ROOT = Path(__file__).resolve().parents[3]
 CHAT_ARTIFACTS_ROOT = _BACKEND_ROOT / "data" / "chat-artifacts"
 
-ChatArtifactFormat = Literal["slidev", "html", "pdf", "markdown", "docx", "pptx"]
+ChatArtifactFormat = Literal["slidev", "html", "pdf", "markdown", "docx", "pptx", "svg"]
 
 _MEDIA_TYPES: dict[str, str] = {
     "slidev": "text/markdown; charset=utf-8",
     "html": "text/html; charset=utf-8",
     "pdf": "application/pdf",
     "markdown": "text/markdown; charset=utf-8",
+    "svg": "image/svg+xml",
+    "png": "image/png",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
@@ -204,6 +206,44 @@ def save_slide_deck(
     _write_meta(chat_id, artifact_id, meta)
 
 
+def save_diagram_artifact(
+    chat_id: uuid.UUID,
+    artifact_id: str,
+    *,
+    svg: str,
+    png: bytes,
+    filename_base: str,
+) -> None:
+    """Persist SVG diagram + PNG variant under chat-artifacts (shared with slide/html)."""
+    svg_filename = f"{filename_base}.svg"
+    png_filename = f"{filename_base}.png"
+    svg_object = f"{artifact_id}.svg"
+    png_object = f"{artifact_id}.png"
+    _put_bytes(chat_id, svg_object, svg.encode("utf-8"), content_type=_MEDIA_TYPES["svg"])
+    _put_bytes(chat_id, png_object, png, content_type=_MEDIA_TYPES["png"])
+    _write_meta(
+        chat_id,
+        artifact_id,
+        {
+            "kind": "diagram_svg",
+            "filename": svg_filename,
+            "format": "svg",
+            "media_type": _MEDIA_TYPES["svg"],
+            "source_object": svg_object,
+            "preview_index": None,
+            "preview_files": {},
+            "variants": {
+                "png": {
+                    "filename": png_filename,
+                    "format": "png",
+                    "media_type": _MEDIA_TYPES["png"],
+                    "object_name": png_object,
+                }
+            },
+        },
+    )
+
+
 def chat_artifact_exists(chat_id: uuid.UUID, artifact_id: str) -> bool:
     if not artifact_id or ".." in artifact_id or "/" in artifact_id:
         return False
@@ -214,7 +254,7 @@ def chat_artifact_exists(chat_id: uuid.UUID, artifact_id: str) -> bool:
 def get_chat_artifact_format(chat_id: uuid.UUID, artifact_id: str) -> str:
     meta = _load_meta(chat_id, artifact_id)
     fmt = str(meta.get("format") or "slidev").strip().lower()
-    return fmt if fmt in {"slidev", "html", "pdf", "markdown", "docx", "pptx"} else "slidev"
+    return fmt if fmt in {"slidev", "html", "pdf", "markdown", "docx", "pptx", "svg"} else "slidev"
 
 
 def load_chat_artifact_payload(

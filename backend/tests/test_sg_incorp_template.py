@@ -1,7 +1,10 @@
 
 def test_materialize_sg_incorp_draft():
+    from app.agent_specific.proposal import loaders
     from app.agent_specific.proposal.draft import materialize_draft
     from app.agent_specific.proposal.placeholders import sync_draft_template_placeholders
+
+    loaders.load_template_yaml.cache_clear()
 
     draft = materialize_draft(
         template_id="sg-incorp",
@@ -16,9 +19,9 @@ def test_materialize_sg_incorp_draft():
         "executive_summary",
         "scope_of_service",
         "solution_and_fees",
-        "terms",
         "appendices",
         "first_invoice",
+        "terms",
     ]
     executive = next(s for s in draft["document"]["sections"] if s["id"] == "executive_summary")
     assert "Dear Sara," in executive["content"]

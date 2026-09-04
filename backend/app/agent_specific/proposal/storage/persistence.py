@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from app.agent_specific.proposal.blob_client import blob_get, blob_put, blob_storage_enabled
+from app.agent_specific.proposal.storage.blob_client import blob_get, blob_put, blob_storage_enabled
 
-_BACKEND_ROOT = Path(__file__).resolve().parents[3]
+_BACKEND_ROOT = Path(__file__).resolve().parents[4]
 ARTIFACTS_ROOT = _BACKEND_ROOT / "data" / "proposal-artifacts"
 
 ArtifactFormat = Literal["markdown", "docx", "svg", "png"]
@@ -113,56 +113,6 @@ def _variant_meta(meta: dict, variant: str | None) -> dict:
     entry = variants.get(variant)
     return entry if isinstance(entry, dict) else {}
 
-
-def save_diagram_artifact(
-    chat_id: uuid.UUID,
-    artifact_id: str,
-    *,
-    svg: str,
-    png: bytes,
-    filename_base: str,
-) -> None:
-    svg_filename = f"{filename_base}.svg"
-    png_filename = f"{filename_base}.png"
-    meta_payload = json.dumps(
-        {
-            "filename": svg_filename,
-            "format": "svg",
-            "media_type": _MEDIA_TYPES["svg"],
-            "variants": {
-                "png": {
-                    "filename": png_filename,
-                    "format": "png",
-                    "media_type": _MEDIA_TYPES["png"],
-                    "extension": ".png",
-                }
-            },
-        }
-    )
-
-    if blob_storage_enabled():
-        blob_put(
-            _blob_object_name(chat_id, f"{artifact_id}.svg"),
-            svg,
-            content_type=_MEDIA_TYPES["svg"],
-        )
-        blob_put(
-            _blob_object_name(chat_id, f"{artifact_id}.png"),
-            png,
-            content_type=_MEDIA_TYPES["png"],
-        )
-        blob_put(
-            _meta_blob_path(chat_id, artifact_id),
-            meta_payload,
-            content_type="application/json",
-        )
-        return
-
-    chat_dir = ARTIFACTS_ROOT / str(chat_id)
-    chat_dir.mkdir(parents=True, exist_ok=True)
-    (chat_dir / f"{artifact_id}.svg").write_text(svg, encoding="utf-8")
-    (chat_dir / f"{artifact_id}.png").write_bytes(png)
-    _meta_path(chat_id, artifact_id).write_text(meta_payload, encoding="utf-8")
 
 
 def save_artifact(

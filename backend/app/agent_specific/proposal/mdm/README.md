@@ -19,7 +19,7 @@ alembic upgrade head
 ```
 
 Runtime source of truth: PostgreSQL `mdm_*` tables.  
-Migration snapshot fixture retained for revision 008: `app/mdm/data/bvi_catalog.json`.
+Migration snapshot fixture retained for revision 008: `proposal/mdm/data/bvi_catalog.json`.
 
 Runtime proposal flows query MDM through **catalog builtin tools**
 (`list_mdm_packages`, `get_mdm_package_services`, `search_mdm_services`,

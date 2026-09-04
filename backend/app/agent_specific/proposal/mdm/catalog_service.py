@@ -10,12 +10,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import get_settings
-from app.agent_specific.mdm.catalog_rows import (
+from app.agent_specific.proposal.mdm.catalog_rows import (
     package_row_to_payload,
     pricing_warnings,
     service_row_to_materializer_payload,
 )
-from app.agent_specific.mdm.catalog_scope import CatalogScopeError, resolve_catalog_scope, scope_payload
+from app.agent_specific.proposal.mdm.catalog_scope import CatalogScopeError, resolve_catalog_scope, scope_payload
 
 _SERVICE_COLUMNS = """
     s.sku,

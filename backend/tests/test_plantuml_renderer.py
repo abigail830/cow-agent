@@ -1,6 +1,6 @@
 import pytest
 
-from app.agent_specific.diagram.plantuml_renderer import normalize_plantuml_source, render_plantuml
+from app.shared.artifacts.plantuml_renderer import normalize_plantuml_source, render_plantuml
 
 _PNG_HEADER = b"\x89PNG\r\n\x1a\n" + b"\x00" * 20
 
@@ -45,7 +45,7 @@ def test_render_plantuml_success(monkeypatch):
                 return FakeResponse(status_code=200, content=_PNG_HEADER)
             raise AssertionError(url)
 
-    monkeypatch.setattr("app.agent_specific.diagram.plantuml_renderer.httpx.Client", FakeClient)
+    monkeypatch.setattr("app.shared.artifacts.plantuml_renderer.httpx.Client", FakeClient)
     result = render_plantuml("A -> B")
     assert result.svg == svg
     assert result.png.startswith(b"\x89PNG")
@@ -71,7 +71,7 @@ def test_render_plantuml_error(monkeypatch):
         def post(self, url, content, headers):
             return FakeResponse()
 
-    monkeypatch.setattr("app.agent_specific.diagram.plantuml_renderer.httpx.Client", FakeClient)
+    monkeypatch.setattr("app.shared.artifacts.plantuml_renderer.httpx.Client", FakeClient)
     result = render_plantuml("bad syntax {{{")
     assert result.message == "Syntax Error"
     assert "@startuml" in result.normalized_source
