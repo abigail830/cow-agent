@@ -4,6 +4,7 @@ description: "伊利奶粉分仓补货供应链分析助手"
 
 model_provider: azure_anthropic
 model: ${CLAUDE_AZURE_FOUNDRY_MODEL}
+default_model: claude-sonnet-4-6
 prompt_file: system_prompt.md
 skills_dir: skills
 

@@ -26,6 +26,7 @@ from app.platform.agent.profile_loader import (
     mcp_storage_name,
 )
 from app.platform.agent.builtin_registry import BUILTIN_TOOLS
+from app.platform.llm.model_catalog import get_model_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -148,9 +149,23 @@ async def sync_agents_from_profiles(session: AsyncSession) -> None:
 
     synced_slugs = {p.slug for p in profiles}
 
+    catalog = get_model_catalog()
+
     for profile in profiles:
         agent_dir = AGENTS_ROOT / profile.slug
         agent_id = agent_id_for_slug(profile.slug)
+        default_model_id = catalog.resolve_default_model_id(
+            default_model=profile.default_model_id,
+            model_provider=profile.model_provider,
+            model_name=profile.model_name,
+        )
+        resolved_entry = (
+            catalog.get(default_model_id)
+            if default_model_id
+            else catalog.find_by_provider_deployment(profile.model_provider, profile.model_name)
+        )
+        model_provider = resolved_entry.provider if resolved_entry else profile.model_provider
+        model_name = resolved_entry.deployment if resolved_entry else profile.model_name
         mcp_ids = await _sync_agent_mcp_servers(
             session,
             profile.slug,
@@ -167,8 +182,9 @@ async def sync_agents_from_profiles(session: AsyncSession) -> None:
                 name=profile.name,
                 description=profile.description,
                 instructions=profile.instructions,
-                model_provider=profile.model_provider,
-                model_name=profile.model_name,
+                model_provider=model_provider,
+                model_name=model_name,
+                default_model_id=default_model_id,
                 config=profile.extra_config,
             )
             session.add(row)
@@ -177,8 +193,9 @@ async def sync_agents_from_profiles(session: AsyncSession) -> None:
             row.name = profile.name
             row.description = profile.description
             row.instructions = profile.instructions
-            row.model_provider = profile.model_provider
-            row.model_name = profile.model_name
+            row.model_provider = model_provider
+            row.model_name = model_name
+            row.default_model_id = default_model_id
             row.config = profile.extra_config
 
         await session.flush()

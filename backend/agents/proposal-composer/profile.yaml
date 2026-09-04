@@ -6,6 +6,7 @@ description: "Cross-jurisdiction proposal drafting with MDM catalog, templates, 
 # model: ${AZURE_OPENAI_DEPLOYMENT}
 model_provider: azure_anthropic
 model: ${CLAUDE_AZURE_FOUNDRY_MODEL}
+default_model: claude-sonnet-4-6
 prompt_file: system_prompt.md
 skills_dir: skills
 

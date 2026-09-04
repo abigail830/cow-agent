@@ -66,6 +66,7 @@ class AgentModel(Base):
     instructions: Mapped[str] = mapped_column(Text, nullable=False)
     model_provider: Mapped[str] = mapped_column(String(50), nullable=False)
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    default_model_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     config: Mapped[dict] = mapped_column(JSONB, server_default="{}")
     a2a_endpoint: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

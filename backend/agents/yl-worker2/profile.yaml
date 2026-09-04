@@ -4,6 +4,7 @@ description: "伊利成人营养品事业部调度管理组工作助手（本体
 
 model_provider: azure_anthropic
 model: ${CLAUDE_AZURE_FOUNDRY_MODEL}
+default_model: claude-sonnet-4-6
 prompt_file: system_prompt.md
 skills_dir: skills
 

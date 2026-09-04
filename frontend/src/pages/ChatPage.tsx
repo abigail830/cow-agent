@@ -12,6 +12,7 @@ import { ChatHistoryIcon } from '../components/ChatHistoryIcon'
 import { ChatMessageList } from '../components/ChatMessageList'
 import { ArtifactPanelHost } from '../components/ArtifactPanelHost'
 import { useArtifactPanel } from '../hooks/useArtifactPanel'
+import { ModelSelect } from '../components/ModelSelect'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { PanelLoadingState } from '../components/PanelLoadingState'
 import { NewChatIcon } from '../components/NewChatIcon'
@@ -23,6 +24,7 @@ import {
   type AgentChatSession,
 } from '../lib/agentChatSession'
 import { getStoredChatId, setStoredChatId } from '../lib/chatStorage'
+import { getStoredModelId, setStoredModelId } from '../lib/modelStorage'
 import { StreamRegistry } from '../lib/streamRegistry'
 import {
   DEFAULT_ATTACHMENT_LIMITS,
@@ -56,7 +58,7 @@ import type { ArtifactSpec } from '../types/artifact'
 import type { VizSpec } from '../types/viz'
 import type { ProposalPreview } from '../types/proposalPreview'
 import type { ProposalDraftResponse } from '../types/proposalDraft'
-import type { Agent, ChatSummary, Message } from '../types'
+import type { Agent, ChatSummary, Message, ModelOption } from '../types'
 
 const SIDEBAR_COLLAPSED_KEY = 'agent-platform:sidebar-collapsed'
 const PROPOSAL_COMPOSER_SLUG = 'proposal-composer'
@@ -170,6 +172,8 @@ export function ChatPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [agentsLoading, setAgentsLoading] = useState(true)
   const [agentsError, setAgentsError] = useState<string | null>(null)
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
+  const [selectedModelByAgent, setSelectedModelByAgent] = useState<Record<string, string>>({})
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [sessions, setSessions] = useState<Record<string, AgentChatSession>>({})
   const [attachmentUploading, setAttachmentUploading] = useState(false)
@@ -256,6 +260,7 @@ export function ChatPage() {
   const turnSyncHint = turnSyncStatusLabel(turnSyncPhase)
 
   const selected = agents.find((a) => a.id === selectedId) ?? null
+  const selectedModelId = selectedId ? selectedModelByAgent[selectedId] ?? null : null
   const isProposalComposer = selected?.slug === PROPOSAL_COMPOSER_SLUG
   const isYlWorker2 = selected?.slug === YL_WORKER2_SLUG
   const showChat = !agentsLoading && selected != null
@@ -377,7 +382,34 @@ export function ChatPage() {
 
   useEffect(() => {
     void api.getAttachmentConfig().then(setAttachmentLimits)
+    void api.listModels().then(setModelOptions).catch(() => setModelOptions([]))
   }, [])
+
+  useEffect(() => {
+    if (!selectedId || !selected) return
+    const stored = getStoredModelId(selectedId)
+    const initial =
+      stored ??
+      selected.selected_model_id ??
+      selected.default_model_id ??
+      modelOptions[0]?.id ??
+      null
+    if (!initial) return
+    setSelectedModelByAgent((prev) =>
+      prev[selectedId] === initial ? prev : { ...prev, [selectedId]: initial },
+    )
+  }, [modelOptions, selected, selectedId])
+
+  const handleModelChange = useCallback(async (modelId: string) => {
+    if (!selectedId) return
+    setSelectedModelByAgent((prev) => ({ ...prev, [selectedId]: modelId }))
+    setStoredModelId(selectedId, modelId)
+    try {
+      await api.patchAgentModelSelection(selectedId, modelId)
+    } catch {
+      /* local selection remains; server may still use previous preference until retry */
+    }
+  }, [selectedId])
 
   const collapseProposalPanel = useCallback(() => {
     if (!selectedId) return
@@ -1508,44 +1540,52 @@ export function ChatPage() {
                         >
                           {attachmentUploading ? <LoadingSpinner size="sm" /> : '+'}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => (loading ? void stopStreaming() : void send())}
-                          disabled={
-                            chatSessionLoading ||
-                            (!loading && !input.trim() && pendingAttachments.length === 0)
-                          }
-                          className={`chat-send-btn${loading ? ' chat-send-btn-stop' : ''}`}
-                          aria-label={loading ? 'Stop generating' : 'Send'}
-                          title={loading ? 'Stop' : 'Send'}
-                        >
-                          {loading ? (
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="currentColor"
-                              aria-hidden
-                            >
-                              <rect x="5" y="5" width="14" height="14" rx="2" />
-                            </svg>
-                          ) : (
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2.25"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              aria-hidden
-                            >
-                              <path d="M12 19V5" />
-                              <path d="m5 12 7-7 7 7" />
-                            </svg>
-                          )}
-                        </button>
+                        <div className="chat-composer-actions">
+                          <ModelSelect
+                            value={selectedModelId}
+                            options={modelOptions}
+                            onChange={handleModelChange}
+                            disabled={loading || chatSessionLoading || agentsLoading}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => (loading ? void stopStreaming() : void send())}
+                            disabled={
+                              chatSessionLoading ||
+                              (!loading && !input.trim() && pendingAttachments.length === 0)
+                            }
+                            className={`chat-send-btn${loading ? ' chat-send-btn-stop' : ''}`}
+                            aria-label={loading ? 'Stop generating' : 'Send'}
+                            title={loading ? 'Stop' : 'Send'}
+                          >
+                            {loading ? (
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                                aria-hidden
+                              >
+                                <rect x="5" y="5" width="14" height="14" rx="2" />
+                              </svg>
+                            ) : (
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.25"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden
+                              >
+                                <path d="M12 19V5" />
+                                <path d="m5 12 7-7 7 7" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>

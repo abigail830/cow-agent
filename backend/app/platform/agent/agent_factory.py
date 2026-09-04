@@ -4,7 +4,6 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
 from app.db.models import AgentModel
 from app.platform.memory.compaction import build_platform_compaction
 from app.platform.memory.long_term.context_provider import LongTermMemoryProvider
@@ -14,6 +13,7 @@ from app.platform.agent.agent_bundle import AgentBundle
 from app.platform.hooks.hook_config import normalize_hooks
 from app.platform.hooks.hook_registry import resolve_middleware
 from app.platform.mcp.mcp_registry import McpRegistry
+from app.platform.llm.model_catalog import resolve_agent_model
 from app.platform.llm.model_registry import ModelProvider, ModelProviderRegistry
 from app.platform.agent.platform_instructions import append_platform_instructions
 from app.platform.session.session_store import SessionStore
@@ -44,19 +44,15 @@ class AgentFactory:
         *,
         chat_id: uuid.UUID | None = None,
         user_id: uuid.UUID | None = None,
+        model_id: str | None = None,
         stop_event: asyncio.Event | None = None,
         turn_start_sequence: int | None = None,
         session_store: SessionStore | None = None,
     ) -> AgentBundle:
         row = await self.get_agent_row(agent_id)
-        provider = ModelProvider(row.model_provider)
-        settings = get_settings()
-        if provider == ModelProvider.AZURE_OPENAI:
-            model_name = row.model_name or settings.azure_openai_deployment
-        elif provider == ModelProvider.SILICONFLOW:
-            model_name = row.model_name or settings.siliconflow_default_model or ""
-        else:
-            model_name = row.model_name or settings.claude_azure_foundry_model or ""
+        model_entry = resolve_agent_model(row, model_id)
+        provider = ModelProvider(model_entry.provider)
+        model_name = model_entry.deployment
 
         memory_config = parse_memory_config(row.config)
         store = session_store or SessionStore(self._db)

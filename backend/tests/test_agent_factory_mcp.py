@@ -23,6 +23,8 @@ async def test_build_attaches_mcp_tools_to_agent():
     mock_row = MagicMock()
     mock_row.model_provider = "azure_anthropic"
     mock_row.model_name = "claude-test"
+    mock_row.default_model_id = None
+    mock_row.slug = "test-agent"
     mock_row.name = "test-agent"
     mock_row.instructions = "test"
     mock_row.config = {"allowed_tools": ["postgres_run_query"]}

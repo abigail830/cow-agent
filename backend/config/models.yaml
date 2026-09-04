@@ -1,0 +1,27 @@
+# Platform model catalog — provider credentials stay in .env; entries reference deployments.
+providers:
+  azure_openai:
+    base_url: ${AZURE_OPENAI_BASE_URL}
+  azure_anthropic:
+    base_url: ${CLAUDE_AZURE_FOUNDRY_ENDPOINT}
+  siliconflow:
+    base_url: ${SILICONFLOW_BASE_URL}
+
+models:
+  - id: gpt-5.4
+    label: GPT-5.4
+    provider: azure_openai
+    deployment: ${AZURE_OPENAI_DEPLOYMENT}
+    enabled: true
+
+  - id: claude-sonnet-4-6
+    label: Claude Sonnet 4.6
+    provider: azure_anthropic
+    deployment: ${CLAUDE_AZURE_FOUNDRY_MODEL}
+    enabled: true
+
+  - id: glm-5.2
+    label: GLM-5.2
+    provider: siliconflow
+    deployment: ${SILICONFLOW_DEFAULT_MODEL}
+    enabled: true

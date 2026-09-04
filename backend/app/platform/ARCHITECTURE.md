@@ -11,6 +11,7 @@ app/
 │   ├── artifacts/            # Chat artifact cards: slide/html, diagram (PlantUML), content docs
 │   └── sandbox/              # E2B execution for content-studio / slide builds
 ├── platform/                 # MAF assembly + platform services
+│   ├── attachments/          # User message file uploads (all agents)
 │   ├── chat/                 # Chat run orchestration (ChatRunService, stream pipeline)
 │   ├── agent/                # AgentFactory, registries, profile sync
 │   ├── hooks/                # MAF middleware (Agent / Function / Chat)
@@ -18,8 +19,22 @@ app/
 │   ├── mcp/                  # MCP connection, registry, native DB tools
 │   ├── memory/               # HistoryProvider, ContextProvider, compaction
 │   ├── llm/                  # Model clients
+│   ├── session/              # SessionStore, user run input
 │   └── runtime/              # AgentPlugin protocol, StreamEmitter protocol
 └── api/                      # HTTP routes
+```
+
+### agent_specific layout (example: proposal-composer)
+
+```
+agent_specific/proposal/
+├── mdm/          # MDM catalog (proposal-composer only)
+├── draft/        # Draft state machine, fee tables, placeholders
+├── export/       # Word export
+├── runtime/      # Plugin, tools, hooks, stream emitter
+├── storage/      # Proposal artifacts + blob client
+├── templates/    # template.yaml loaders
+└── *.py          # Back-compat shims → prefer subpackages for new code
 ```
 
 ## MAF middleware (three layers)
@@ -68,9 +83,9 @@ We use MAF providers but **not** the default full auto-save path:
 
 | Source | Registration |
 |--------|----------------|
-| Builtin `@tool` | `agent_specific/*/tools.py` + `shared/artifacts/diagram_tools.py` → `agent/builtin_registry.py` |
-| MCP | DB `McpServer` + `mcp/mcp_registry.py` |
-| Skills | `agent/skill_registry.py` |
+| Builtin `@tool` | `agent_specific/*/runtime/tools.py` or `shared/**/tools.py` → `platform/agent/builtin_registry.py` |
+| MCP | DB `McpServer` + `platform/mcp/mcp_registry.py` |
+| Skills | `platform/agent/skill_registry.py` |
 
 `AgentFactory.build()` merges builtin + MCP + skill tools and attaches middleware.
 

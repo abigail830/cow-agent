@@ -24,6 +24,8 @@ from app.platform.agent.platform_instructions import RUN_CANCELLED_USER_TEXT
 from app.platform.session.session_store import SessionStore
 from app.platform.session.user_message_input import build_user_run_input, link_attachments_metadata
 from app.platform.attachments.service import AttachmentService
+from app.platform.llm.model_catalog import resolve_agent_model
+from app.platform.llm.model_preference import get_model_preference
 from app.platform.llm.stream_errors import user_facing_stream_error
 from app.platform.chat.run_manager import get_run_manager
 from app.platform.agent.plugin_registry import (
@@ -80,18 +82,29 @@ class ChatRunService:
         if snippet:
             chat.title = snippet
 
-    async def _resolve_attachments(self, chat: Chat, attachment_ids: list[uuid.UUID]) -> list:
+    async def _resolve_attachments(
+        self,
+        chat: Chat,
+        attachment_ids: list[uuid.UUID],
+        *,
+        expected_provider: str,
+    ) -> list:
         if not attachment_ids:
             return []
-        agent = await self._db.get(AgentModel, chat.agent_id)
-        if agent is None:
-            raise ValueError("Agent not found for chat")
         service = AttachmentService(self._db)
         return await service.resolve_for_message(
             chat.id,
             attachment_ids,
-            expected_provider=agent.model_provider,
+            expected_provider=expected_provider,
         )
+
+    async def _resolve_run_model(self, chat: Chat) -> tuple[str, str]:
+        preference_id = await get_model_preference(chat.user_id, chat.agent_id)
+        agent = await self._db.get(AgentModel, chat.agent_id)
+        if agent is None:
+            raise ValueError("Agent not found for chat")
+        model_entry = resolve_agent_model(agent, preference_id)
+        return model_entry.id, model_entry.provider
 
     async def _commit_user_turn(
         self,
@@ -271,7 +284,12 @@ class ChatRunService:
         memory_config = await self._memory_config_for_chat(chat)
         session = await self._sessions.get_or_create(chat_id)
         run_ctx = await self._prepare_run_plugins(chat)
-        attachments = await self._resolve_attachments(chat, attachment_ids or [])
+        model_id, model_provider = await self._resolve_run_model(chat)
+        attachments = await self._resolve_attachments(
+            chat,
+            attachment_ids or [],
+            expected_provider=model_provider,
+        )
         if not content.strip() and not attachments:
             raise ValueError("Message content or attachments required")
         user_row = await self._commit_user_turn(
@@ -303,6 +321,7 @@ class ChatRunService:
             chat.agent_id,
             chat_id=chat_id,
             user_id=chat.user_id,
+            model_id=model_id,
             turn_start_sequence=user_row.sequence,
             session_store=self._sessions,
         )
@@ -347,7 +366,12 @@ class ChatRunService:
         memory_config = await self._memory_config_for_chat(chat)
         session = await self._sessions.get_or_create(chat_id)
         run_ctx = await self._prepare_run_plugins(chat)
-        attachments = await self._resolve_attachments(chat, attachment_ids or [])
+        model_id, model_provider = await self._resolve_run_model(chat)
+        attachments = await self._resolve_attachments(
+            chat,
+            attachment_ids or [],
+            expected_provider=model_provider,
+        )
         if not content.strip() and not attachments:
             raise ValueError("Message content or attachments required")
         user_row = await self._commit_user_turn(
@@ -419,6 +443,7 @@ class ChatRunService:
                 chat.agent_id,
                 chat_id=chat_id,
                 user_id=chat.user_id,
+                model_id=model_id,
                 stop_event=run.stop_event,
                 turn_start_sequence=user_row.sequence,
                 session_store=self._sessions,

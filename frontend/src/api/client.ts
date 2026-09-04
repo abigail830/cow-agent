@@ -5,6 +5,7 @@ import type {
   ChatSummary,
   MemoryDocument,
   Message,
+  ModelOption,
   StreamEvent,
   User,
 } from '../types'
@@ -52,6 +53,12 @@ export const api = {
   getCurrentUser: () => request<User>('/auth/me'),
   listAgents: () => request<Agent[]>('/agents'),
   getAgent: (id: string) => request<Agent>(`/agents/${id}`),
+  listModels: () => request<ModelOption[]>('/models'),
+  patchAgentModelSelection: (agentId: string, modelId: string) =>
+    request<Agent>(`/agents/${agentId}/model-selection`, {
+      method: 'PATCH',
+      body: JSON.stringify({ model_id: modelId }),
+    }),
 
   listChats: (agentId: string) =>
     request<ChatSummary[]>(`/chats?agent_id=${encodeURIComponent(agentId)}`),

@@ -22,6 +22,19 @@ class AgentOut(BaseModel):
     description: str | None
     model_provider: str
     model_name: str
+    default_model_id: str | None = None
+    selected_model_id: str | None = None
+
+
+class AgentModelSelectionIn(BaseModel):
+    model_id: str
+
+
+class ModelOut(BaseModel):
+    id: str
+    label: str
+    provider: str
+    supports_attachments: bool = True
 
 
 class ChatCreate(BaseModel):

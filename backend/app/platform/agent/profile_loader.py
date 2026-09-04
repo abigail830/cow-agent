@@ -37,6 +37,7 @@ class AgentProfile:
     description: str | None
     model_provider: str
     model_name: str
+    default_model_id: str | None
     instructions: str
     skill_paths: list[Path]
     mcp_servers: list[str]
@@ -222,6 +223,10 @@ def load_agent_profile(agent_dir: Path) -> AgentProfile:
 
     mcp_servers, mcp_server_overrides = _parse_profile_mcp_servers(raw)
 
+    default_model_id = raw.get("default_model")
+    if default_model_id is not None:
+        default_model_id = str(default_model_id).strip() or None
+
     reserved = {
         "id",
         "name",
@@ -229,6 +234,7 @@ def load_agent_profile(agent_dir: Path) -> AgentProfile:
         "version",
         "model",
         "model_provider",
+        "default_model",
         "prompt_file",
         "skills_dir",
         "skills",
@@ -245,6 +251,7 @@ def load_agent_profile(agent_dir: Path) -> AgentProfile:
         description=raw.get("description"),
         model_provider=str(model_provider),
         model_name=model_name,
+        default_model_id=default_model_id,
         instructions=instructions,
         skill_paths=skill_paths,
         mcp_servers=mcp_servers,

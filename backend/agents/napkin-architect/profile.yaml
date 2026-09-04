@@ -4,6 +4,7 @@ description: "Turns napkin sketches into renderable diagrams — PlantUML/C4 wit
 
 model_provider: azure_openai
 model: ${AZURE_OPENAI_DEPLOYMENT}
+default_model: gpt-5.4
 prompt_file: system_prompt.md
 skills_dir: skills
 

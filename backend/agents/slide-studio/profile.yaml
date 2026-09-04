@@ -4,6 +4,7 @@ description: "Executive-ready presentations (16:9) — consulting reports, solut
 
 model_provider: azure_openai
 model: ${AZURE_OPENAI_DEPLOYMENT}
+default_model: gpt-5.4
 # model_provider: azure_anthropic
 # model: ${CLAUDE_AZURE_FOUNDRY_MODEL_4_7}
 # model_provider: siliconflow

@@ -11,6 +11,15 @@ export interface Agent {
   description: string | null
   model_provider: string
   model_name: string
+  default_model_id: string | null
+  selected_model_id: string | null
+}
+
+export interface ModelOption {
+  id: string
+  label: string
+  provider: string
+  supports_attachments: boolean
 }
 
 export interface Chat {
