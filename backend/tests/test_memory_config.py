@@ -1,4 +1,4 @@
-from app.memory.memory_config import parse_memory_config
+from app.platform.memory.memory_config import parse_memory_config
 
 
 def test_parse_memory_config_defaults():

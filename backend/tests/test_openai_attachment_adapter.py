@@ -1,6 +1,6 @@
 import pytest
 
-from app.platform.attachment_adapters import (
+from app.platform.attachments.attachment_adapters import (
     _azure_openai_files_url,
     azure_openai_file_upload_purpose,
     is_azure_openai_base_url,

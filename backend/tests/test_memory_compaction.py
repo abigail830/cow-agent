@@ -1,10 +1,10 @@
 import pytest
 from agent_framework import Content, Message
 
-from app.memory.compaction import PlatformSlimCompactionStrategy, build_platform_compaction
-from app.memory.maf_mapping import maf_messages_to_projection_rows, to_maf_messages
-from app.memory.memory_config import parse_memory_config
-from app.memory.slimmer import HistoryProjection
+from app.platform.memory.compaction import PlatformSlimCompactionStrategy, build_platform_compaction
+from app.platform.memory.maf_mapping import maf_messages_to_projection_rows, to_maf_messages
+from app.platform.memory.memory_config import parse_memory_config
+from app.platform.memory.slimmer import HistoryProjection
 
 
 def _sql_history_rows() -> list[dict]:

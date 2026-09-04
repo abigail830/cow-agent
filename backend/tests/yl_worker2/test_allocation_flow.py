@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from app.yl_worker2.tools.allocation import (
+from app.agent_specific.yl_worker2.tools.allocation import (
     activate_allocation_and_push,
     save_forward_allocation_draft,
     simulate_allocation_effect,
@@ -56,7 +56,7 @@ async def test_forward_draft_update_activate_dual_write(require_p1_snapshot):
     assert activated["status"] == "activated"
     assert activated["push_num"] == 1600
 
-    from app.yl_worker2.db import yl_connect
+    from app.agent_specific.yl_worker2.db import yl_connect
 
     conn = await yl_connect()
     try:

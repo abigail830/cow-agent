@@ -8,7 +8,7 @@ import pytest
 import pytest_asyncio
 
 from app.config import get_settings
-from app.yl_worker2.obda.queries import fetch_inventory_snapshot
+from app.agent_specific.yl_worker2.obda.queries import fetch_inventory_snapshot
 
 MOCK_PRODUCT = "MOCK_YLP001"
 MOCK_SNAPSHOT_DATE = "2026-07-13"

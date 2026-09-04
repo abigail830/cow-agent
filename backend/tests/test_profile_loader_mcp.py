@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from app.platform.profile_loader import (
+from app.platform.agent.profile_loader import (
     _parse_profile_mcp_servers,
     _resolve_env,
     load_agent_mcp_servers,

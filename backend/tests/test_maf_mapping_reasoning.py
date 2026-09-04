@@ -1,6 +1,6 @@
 from agent_framework import Content, Message
 
-from app.memory.maf_mapping import maf_message_to_rows, to_maf_messages
+from app.platform.memory.maf_mapping import maf_message_to_rows, to_maf_messages
 
 
 def test_reasoning_round_trip_preserves_thinking_signature():

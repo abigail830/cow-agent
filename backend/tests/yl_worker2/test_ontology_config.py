@@ -1,6 +1,6 @@
 """Unit tests for ontology_sources / ontology_refs config."""
 
-from app.yl_worker2.runtime.ontology_config import (
+from app.agent_specific.yl_worker2.runtime.ontology_config import (
     get_table_column_aliases,
     resolve_ref_rule,
     resolve_table_column,

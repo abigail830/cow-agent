@@ -1,6 +1,6 @@
 """Base routing lead time enrichment."""
 
-from app.yl_worker2.runtime.base_routing import enrich_base_rows, lead_time_days
+from app.agent_specific.yl_worker2.runtime.base_routing import enrich_base_rows, lead_time_days
 
 
 def test_lead_time_tianjin_to_zhengzhou():

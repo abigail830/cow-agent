@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.slide.html_ppt import (
+from app.agent_specific.slide.html_ppt import (
     build_html_ppt_dist,
     collect_html_ppt_assets,
     extract_html_ppt_asset_relpaths,

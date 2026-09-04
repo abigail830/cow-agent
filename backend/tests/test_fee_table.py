@@ -1,4 +1,4 @@
-from app.proposal.fee_table import render_frequency_table, render_payment_options_table, format_scope_html
+from app.agent_specific.proposal.fee_table import render_frequency_table, render_payment_options_table, format_scope_html
 
 
 def test_format_scope_html_bullets_after_including():

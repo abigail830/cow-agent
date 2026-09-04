@@ -1,7 +1,7 @@
 import uuid
 from types import SimpleNamespace
 
-from app.services.chat_run import _StreamSseEmitter
+from app.platform.chat.run_service import _StreamSseEmitter
 
 
 def _content(type_: str, **kwargs: object) -> SimpleNamespace:

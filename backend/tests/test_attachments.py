@@ -1,7 +1,7 @@
 from agent_framework import Content, Message
 
-from app.memory.maf_mapping import to_maf_messages
-from app.platform.user_message_input import build_user_run_input
+from app.platform.memory.maf_mapping import to_maf_messages
+from app.platform.session.user_message_input import build_user_run_input
 
 
 class _Attachment:

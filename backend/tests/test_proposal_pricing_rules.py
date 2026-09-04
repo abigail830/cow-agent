@@ -1,8 +1,8 @@
 import pytest
 
-from app.proposal.draft import add_services_to_draft, build_draft_preview, materialize_draft
-from app.proposal.fee_table import format_money
-from app.proposal.pricing_rules import (
+from app.agent_specific.proposal.draft import add_services_to_draft, build_draft_preview, materialize_draft
+from app.agent_specific.proposal.fee_table import format_money
+from app.agent_specific.proposal.pricing_rules import (
     FEE_RAW_DISPLAY_TYPES,
     FIXED_PRICING_TYPE,
     coerce_price_amount,

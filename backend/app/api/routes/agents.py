@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.schemas import AgentOut
 from app.db.models import AgentModel
 from app.db.session import get_db
-from app.platform.current_user import get_current_user
-from app.platform.profile_loader import discover_agent_profiles
+from app.platform.auth.current_user import get_current_user
+from app.platform.agent.profile_loader import discover_agent_profiles
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 

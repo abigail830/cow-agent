@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.proposal.draft import _effective_fee_layout, materialize_draft
-from app.proposal.fee_row import materialize_mdm_fee_row
+from app.agent_specific.proposal.draft import _effective_fee_layout, materialize_draft
+from app.agent_specific.proposal.fee_row import materialize_mdm_fee_row
 
 
 def make_mdm_fee_row(

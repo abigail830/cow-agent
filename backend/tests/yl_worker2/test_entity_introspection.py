@@ -2,8 +2,8 @@
 
 import pytest
 
-from app.yl_worker2.tools.discovery import resolve_entity, search_products
-from app.yl_worker2.tools.introspection import describe_entity_type, list_entity_types
+from app.agent_specific.yl_worker2.tools.discovery import resolve_entity, search_products
+from app.agent_specific.yl_worker2.tools.introspection import describe_entity_type, list_entity_types
 from tests.yl_worker2.conftest import (
     MOCK_PRODUCT,
     MOCK_SITE_ZHENGZHOU,

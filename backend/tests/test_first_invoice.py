@@ -1,6 +1,6 @@
-from app.proposal.draft import build_draft_preview, enable_draft_section, materialize_draft, patch_draft
-from app.proposal.fee_row import first_invoice_row_amount, is_adhoc_fee_row
-from app.proposal.fee_table import render_first_invoice_table
+from app.agent_specific.proposal.draft import build_draft_preview, enable_draft_section, materialize_draft, patch_draft
+from app.agent_specific.proposal.fee_row import first_invoice_row_amount, is_adhoc_fee_row
+from app.agent_specific.proposal.fee_table import render_first_invoice_table
 from tests.proposal_fee_fixtures import make_mdm_fee_row
 
 

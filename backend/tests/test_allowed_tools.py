@@ -1,4 +1,4 @@
-from app.platform.allowed_tools import mcp_remote_tools_for_server, runtime_function_allowlist
+from app.platform.agent.allowed_tools import mcp_remote_tools_for_server, runtime_function_allowlist
 
 PROFILE = [
     "postgres_list_tables",

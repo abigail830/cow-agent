@@ -1,7 +1,7 @@
 
 def test_materialize_sg_incorp_draft():
-    from app.proposal.draft import materialize_draft
-    from app.proposal.placeholders import sync_draft_template_placeholders
+    from app.agent_specific.proposal.draft import materialize_draft
+    from app.agent_specific.proposal.placeholders import sync_draft_template_placeholders
 
     draft = materialize_draft(
         template_id="sg-incorp",

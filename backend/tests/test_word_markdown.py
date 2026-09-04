@@ -6,15 +6,15 @@ from pathlib import Path
 import pytest
 from docx import Document
 
-from app.proposal.draft import materialize_draft
-from app.proposal.word_context import build_word_context
-from app.proposal.word_markdown import (
+from app.agent_specific.proposal.draft import materialize_draft
+from app.agent_specific.proposal.word_context import build_word_context
+from app.agent_specific.proposal.word_markdown import (
     build_markdown_subdoc,
     markdown_has_gfm_table,
     markdown_to_plain,
     split_gfm_markdown,
 )
-from app.proposal.word_render import render_word_document
+from app.agent_specific.proposal.word_render import render_word_document
 from docxtpl import DocxTemplate
 
 
@@ -120,7 +120,7 @@ def test_build_word_context_attaches_subdoc_for_appendix_block():
 
 
 def test_render_harneys_required_documents_kyc_table(tmp_path):
-    from app.proposal import loaders
+    from app.agent_specific.proposal import loaders
 
     template_root = tmp_path / "harneys-bvi"
     export_dir = template_root / "export"
@@ -156,7 +156,7 @@ def test_render_harneys_required_documents_kyc_table(tmp_path):
 
 
 def test_render_word_document_includes_native_table_for_appendix(tmp_path, monkeypatch):
-    from app.proposal import loaders
+    from app.agent_specific.proposal import loaders
 
     template_root = tmp_path / "harneys-bvi"
     export_dir = template_root / "export"

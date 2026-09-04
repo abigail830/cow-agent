@@ -1,9 +1,9 @@
 from unittest.mock import MagicMock
 from uuid import uuid4
 
-from app.middleware.proposal_persist import ProposalPersistMiddleware
-from app.platform.hook_catalog import build_hook_middleware
-from app.platform.hook_context import HookBuildContext
+from app.agent_specific.proposal.hooks import ProposalPersistMiddleware
+from app.platform.hooks.hook_catalog import build_hook_middleware
+from app.platform.hooks.hook_context import HookBuildContext
 
 
 def test_proposal_persist_hook_builds_middleware():

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.slide.html_ppt import build_html_ppt_dist
-from app.slide.html_ppt_normalize import collect_html_ppt_warnings, normalize_html_ppt_source
+from app.agent_specific.slide.html_ppt import build_html_ppt_dist
+from app.agent_specific.slide.html_ppt_normalize import collect_html_ppt_warnings, normalize_html_ppt_source
 
 
 def test_normalize_strips_inspire_meta_from_footer() -> None:

@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.yl_worker2.tools.ontology_query import (
+from app.agent_specific.yl_worker2.tools.ontology_query import (
     describe_table,
     follow_ref,
     list_sources,

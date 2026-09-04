@@ -2,8 +2,8 @@
 
 import pytest
 
-from app.yl_worker2.fulfillment.context import init_run_fulfillment_forms_state
-from app.yl_worker2.tools.fulfillment_proposal import propose_fulfillment_forms
+from app.agent_specific.yl_worker2.fulfillment.context import init_run_fulfillment_forms_state
+from app.agent_specific.yl_worker2.tools.fulfillment_proposal import propose_fulfillment_forms
 from tests.yl_worker2.conftest import (
     MOCK_BASE_TIANJIN,
     MOCK_PRODUCT,

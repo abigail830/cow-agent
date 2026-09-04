@@ -58,8 +58,8 @@ async def _run(*, dry_run: bool) -> int:
     from app.config import get_settings
     from app.db.models import AgentModel
     from app.db.session import get_async_session_factory, init_db_engine
-    from app.platform.platform_sync import sync_platform_config
-    from app.platform.profile_loader import discover_agent_profiles
+    from app.platform.agent.platform_sync import sync_platform_config
+    from app.platform.agent.profile_loader import discover_agent_profiles
 
     logger.info("Database target: %s", _mask_database_target(get_settings().database_url))
     init_db_engine()

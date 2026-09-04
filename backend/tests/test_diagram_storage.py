@@ -1,6 +1,6 @@
 import uuid
 
-from app.proposal import storage
+from app.agent_specific.proposal import storage
 
 
 def test_save_diagram_artifact_variants(tmp_path, monkeypatch):

@@ -1,6 +1,6 @@
 import pytest
 
-from app.platform.attachment_adapters import validate_attachment_file, validate_message_attachments
+from app.platform.attachments.attachment_adapters import validate_attachment_file, validate_message_attachments
 
 
 def test_validate_attachment_file_rejects_empty():

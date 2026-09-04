@@ -8,8 +8,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.config import get_settings
-from app.platform.model_registry import ModelProviderRegistry
-from app.platform.utility_models import UtilityModelRegistry
+from app.platform.llm.model_registry import ModelProviderRegistry
+from app.platform.llm.utility_models import UtilityModelRegistry
 
 
 async def main() -> None:

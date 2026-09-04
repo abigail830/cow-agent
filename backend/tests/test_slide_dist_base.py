@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.slide.dist_base import normalize_preview_base, rewrite_slidev_dist_base
+from app.agent_specific.slide.dist_base import normalize_preview_base, rewrite_slidev_dist_base
 
 
 def test_normalize_preview_base_adds_trailing_slash() -> None:

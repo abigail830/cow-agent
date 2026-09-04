@@ -1,6 +1,6 @@
 """Unit tests for fulfillment warehouse label mapping."""
 
-from app.yl_worker2.fulfillment.warehouse_labels import to_logic_warehouse_label
+from app.agent_specific.yl_worker2.fulfillment.warehouse_labels import to_logic_warehouse_label
 
 
 def test_to_logic_warehouse_label_adds_suffix():

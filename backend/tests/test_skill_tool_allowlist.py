@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from agent_framework import FunctionTool
 
-from app.middleware.allowed_tools import AllowedToolsMiddleware
-from app.platform.hook_registry import resolve_middleware
+from app.platform.hooks.allowed_tools import AllowedToolsMiddleware
+from app.platform.hooks.hook_registry import resolve_middleware
 
 
 def _allowed_middleware(

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from app.memory.maf_mapping import to_maf_messages
-from app.memory.provider_history import sanitize_rows_for_provider
-from app.platform.model_registry import ModelProvider
+from app.platform.memory.maf_mapping import to_maf_messages
+from app.platform.memory.provider_history import sanitize_rows_for_provider
+from app.platform.llm.model_registry import ModelProvider
 
 
 def _tool_call_row(call_id: str, *, seq: int = 2) -> dict:

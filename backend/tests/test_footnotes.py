@@ -1,5 +1,5 @@
-from app.proposal.draft import add_package_to_draft, build_draft_preview, materialize_draft
-from app.proposal.footnotes import (
+from app.agent_specific.proposal.draft import add_package_to_draft, build_draft_preview, materialize_draft
+from app.agent_specific.proposal.footnotes import (
     apply_footnote_numbers,
     collect_footnotes,
     collect_table_footnotes,

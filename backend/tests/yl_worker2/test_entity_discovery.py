@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.yl_worker2.tools.discovery import (
+from app.agent_specific.yl_worker2.tools.discovery import (
     list_products,
     list_warehouses,
     query_snapshot_catalog,

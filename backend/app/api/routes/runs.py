@@ -3,8 +3,8 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.platform.current_user import get_current_user
-from app.runs.manager import get_run_manager
+from app.platform.auth.current_user import get_current_user
+from app.platform.chat.run_manager import get_run_manager
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 

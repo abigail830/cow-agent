@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.config import get_settings
 from app.db.models import AgentModel
-from app.platform.agent_factory import AgentFactory
+from app.platform.agent.agent_factory import AgentFactory
 
 
 async def main() -> int:

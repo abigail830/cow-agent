@@ -5,19 +5,19 @@ from __future__ import annotations
 import uuid
 from types import SimpleNamespace
 
-from app.artifacts.context import init_run_artifact_state, reset_run_artifact_state
-from app.artifacts.spec import ArtifactSpec
-from app.sandbox.e2b_session import acquire_e2b_sandbox, release_e2b_session
-from app.sandbox.providers.e2b import E2BSandboxProvider
-from app.sandbox.types import SlidevBuildOutput
-from app.slide.build_cache import get_cached_build, put_cached_build, slide_build_cache_key
-from app.slide.build_jobs import (
+from app.shared.artifacts.context import init_run_artifact_state, reset_run_artifact_state
+from app.shared.artifacts.spec import ArtifactSpec
+from app.shared.sandbox.e2b_session import acquire_e2b_sandbox, release_e2b_session
+from app.shared.sandbox.providers.e2b import E2BSandboxProvider
+from app.shared.sandbox.types import SlidevBuildOutput
+from app.agent_specific.slide.build_cache import get_cached_build, put_cached_build, slide_build_cache_key
+from app.agent_specific.slide.build_jobs import (
     drain_completed_slide_build_jobs,
     has_pending_slide_build_jobs,
     reset_slide_build_jobs,
     submit_slide_build_job,
 )
-from app.slide.renderer import SlideRenderer
+from app.agent_specific.slide.renderer import SlideRenderer
 
 
 def test_e2b_session_reuse() -> None:
@@ -71,7 +71,7 @@ def test_e2b_template_skips_npm_install(monkeypatch) -> None:
         _ = sandbox, dist_dir, workdir, logs
         return {"index.html": b"<html></html>"}
 
-    monkeypatch.setattr("app.sandbox.providers.e2b._collect_dist_files", _fake_collect)
+    monkeypatch.setattr("app.shared.sandbox.providers.e2b._collect_dist_files", _fake_collect)
 
     result = provider.build_slidev(slides_md="---\ntitle: X\n---\n\n# Hi")
     assert result.ok
@@ -112,7 +112,7 @@ def test_slide_renderer_uses_cache(monkeypatch) -> None:
     get_settings.cache_clear()
 
     calls = {"count": 0}
-    from app.sandbox.providers import local as local_provider
+    from app.shared.sandbox.providers import local as local_provider
 
     def _counting_build(self, **kwargs: object) -> SlidevBuildOutput:
         _ = self, kwargs
@@ -149,8 +149,8 @@ def test_async_slide_build_job(monkeypatch) -> None:
             artifact_id="slide-test123",
         )
 
-    monkeypatch.setattr("app.slide.build_jobs.run_slidev_build", _fake_build)
-    monkeypatch.setattr("app.slide.build_jobs.build_slide_artifact_spec", _fake_spec)
+    monkeypatch.setattr("app.agent_specific.slide.build_jobs.run_slidev_build", _fake_build)
+    monkeypatch.setattr("app.agent_specific.slide.build_jobs.build_slide_artifact_spec", _fake_spec)
 
     job_id = submit_slide_build_job(chat_id=chat_id, slides_md="# Deck", title="Demo")
     assert job_id.startswith("slide-job-")

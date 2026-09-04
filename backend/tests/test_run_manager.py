@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from app.runs.manager import RunManager, RunStatus
+from app.platform.chat.run_manager import RunManager, RunStatus
 
 
 @pytest.mark.asyncio

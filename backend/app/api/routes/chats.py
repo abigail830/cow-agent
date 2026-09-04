@@ -23,22 +23,22 @@ from app.api.schemas import (
     FulfillmentFormsOut,
 )
 from app.db.models import AgentModel, Chat
-from app.platform.current_user import get_current_user, get_current_user_id, get_owned_chat
+from app.platform.auth.current_user import get_current_user, get_current_user_id, get_owned_chat
 from app.db.session import get_db
-from app.services.attachment_service import AttachmentService
-from app.services.chat_run import ChatRunService, list_chat_messages
-from app.services.stream_errors import user_facing_stream_error
-from app.services.proposal_preview_service import get_chat_proposal_draft, get_chat_proposal_preview, load_chat_proposal_draft
-from app.services.fulfillment_forms_service import (
+from app.platform.attachments.service import AttachmentService
+from app.platform.chat.run_service import ChatRunService, list_chat_messages
+from app.platform.llm.stream_errors import user_facing_stream_error
+from app.agent_specific.proposal.preview_service import get_chat_proposal_draft, get_chat_proposal_preview, load_chat_proposal_draft
+from app.agent_specific.yl_worker2.fulfillment.service import (
     confirm_chat_fulfillment_form,
     get_chat_fulfillment_forms,
     patch_chat_fulfillment_form,
     reject_chat_fulfillment_form,
 )
-from app.proposal.export_service import ProposalExportError, generate_proposal_docx
-from app.artifacts.resolver import load_artifact_payload, load_preview_payload
-from app.artifacts.storage import get_chat_artifact_format
-from app.artifacts.preview_html import SLIDE_PREVIEW_CSP, prepare_html_ppt_preview_html, prepare_slide_preview_html
+from app.agent_specific.proposal.export_service import ProposalExportError, generate_proposal_docx
+from app.shared.artifacts.resolver import load_artifact_payload, load_preview_payload
+from app.shared.artifacts.storage import get_chat_artifact_format
+from app.shared.artifacts.preview_html import SLIDE_PREVIEW_CSP, prepare_html_ppt_preview_html, prepare_slide_preview_html
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
@@ -200,7 +200,7 @@ async def export_proposal(
     except ProposalExportError as exc:
         detail: dict[str, Any] = {"code": exc.code, "message": exc.message}
         if exc.code == "blocked":
-            from app.proposal.draft import build_draft_preview
+            from app.agent_specific.proposal.draft import build_draft_preview
 
             preview = build_draft_preview(draft)
             detail["missing_required"] = (preview.get("completeness") or {}).get("missing_required") or []

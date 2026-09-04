@@ -1,5 +1,5 @@
-from app.proposal.draft import add_package_to_draft, build_draft_preview, materialize_draft
-from app.proposal.placeholders import sync_draft_template_placeholders
+from app.agent_specific.proposal.draft import add_package_to_draft, build_draft_preview, materialize_draft
+from app.agent_specific.proposal.placeholders import sync_draft_template_placeholders
 
 
 def _pkg003_service():

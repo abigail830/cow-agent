@@ -1,4 +1,4 @@
-from app.guardrails.sql_rules import validate_sql
+from app.platform.guardrails.sql_rules import validate_sql
 
 
 def test_allows_select():

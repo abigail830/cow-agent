@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import uuid
 
-from app.artifacts.context import init_run_artifact_state, reset_run_artifact_state
-from app.artifacts.spec import ArtifactSpec
-from app.services.chat_run import _StreamTurnAccumulator, _emit_pending_artifact_events
+from app.shared.artifacts.context import init_run_artifact_state, reset_run_artifact_state
+from app.shared.artifacts.spec import ArtifactSpec
+from app.platform.chat.run_service import _StreamTurnAccumulator, _emit_pending_artifact_events
 
 
 def test_emit_pending_slide_artifact_events() -> None:

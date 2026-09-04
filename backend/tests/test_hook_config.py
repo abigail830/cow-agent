@@ -1,4 +1,4 @@
-from app.platform.hook_config import normalize_hooks
+from app.platform.hooks.hook_config import normalize_hooks
 
 
 def test_hooks_map_with_params():
@@ -38,3 +38,19 @@ def test_legacy_custom_and_guardrails():
     )
     assert hooks[0] == ("sql_validator", {"max_rows": 500})
     assert hooks[1] == ("result_truncator", {"max_observation_bytes": 999})
+
+
+def test_sql_viz_sorted_last():
+    hooks = normalize_hooks(
+        {
+            "sql_viz": {"auto": True},
+            "sql_validator": {"max_rows": 100},
+            "result_truncator": {"max_observation_bytes": 1000},
+        }
+    )
+    assert [name for name, _ in hooks] == [
+        "sql_validator",
+        "result_truncator",
+        "sql_viz",
+    ]
+    assert hooks[-1][1]["auto"] is True

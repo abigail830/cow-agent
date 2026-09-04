@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from uuid import uuid4
 
-from app.services.chat_run import _StreamSseEmitter, _merge_tool_arguments, _normalize_tool_arguments
+from app.platform.chat.run_service import _StreamSseEmitter, _merge_tool_arguments, _normalize_tool_arguments
 
 
 def _content(type_: str, **kwargs):

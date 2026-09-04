@@ -16,7 +16,7 @@ from sqlalchemy import select
 
 from app.db.models import User
 from app.db.session import get_async_session_factory, init_db_engine
-from app.platform.passwords import hash_password
+from app.platform.auth.passwords import hash_password
 
 
 async def _upsert_user(email: str, name: str | None, password: str) -> None:

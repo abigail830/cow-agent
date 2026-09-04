@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.sandbox.providers.e2b import E2BSandboxProvider
-from app.sandbox.types import SlidevBuildOutput
-from app.slide.build_executor import run_slidev_build
+from app.shared.sandbox.providers.e2b import E2BSandboxProvider
+from app.shared.sandbox.types import SlidevBuildOutput
+from app.agent_specific.slide.build_executor import run_slidev_build
 
 
 def test_e2b_provider_fails_fast_on_npm_install_error(monkeypatch) -> None:
@@ -43,7 +43,7 @@ def test_run_slidev_build_uses_worker_thread(monkeypatch) -> None:
         return SlidevBuildOutput(dist_files={"index.html": b"<html></html>"})
 
     monkeypatch.setattr(
-        "app.slide.build_executor.SlideRenderer",
+        "app.agent_specific.slide.build_executor.SlideRenderer",
         lambda: SimpleNamespace(build=fake_build),
     )
 

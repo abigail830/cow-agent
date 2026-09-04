@@ -1,4 +1,4 @@
-from app.tools import BUILTIN_TOOLS
+from app.platform.agent.builtin_registry import BUILTIN_TOOLS
 
 
 def test_mdm_catalog_tools_registered():

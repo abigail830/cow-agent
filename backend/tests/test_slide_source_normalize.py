@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.slide.source_normalize import normalize_slidev_source
+from app.agent_specific.slide.source_normalize import normalize_slidev_source
 
 
 def test_dedents_indented_html_tags() -> None:

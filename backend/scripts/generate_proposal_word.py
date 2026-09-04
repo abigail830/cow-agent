@@ -14,11 +14,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.proposal.draft import enable_draft_section, materialize_draft
-from app.proposal.export_service import ProposalExportError, generate_proposal_docx, word_template_path
-from app.proposal.placeholders import sync_draft_template_placeholders
-from app.proposal.word_context import build_word_context, word_export_filename
-from app.proposal.word_render import render_word_document
+from app.agent_specific.proposal.draft import enable_draft_section, materialize_draft
+from app.agent_specific.proposal.export_service import ProposalExportError, generate_proposal_docx, word_template_path
+from app.agent_specific.proposal.placeholders import sync_draft_template_placeholders
+from app.agent_specific.proposal.word_context import build_word_context, word_export_filename
+from app.agent_specific.proposal.word_render import render_word_document
 from tests.proposal_fee_fixtures import make_mdm_fee_row
 
 

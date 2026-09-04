@@ -1,8 +1,8 @@
 import uuid
 from unittest.mock import AsyncMock
 
-from app.services.chat_run import _StreamTurnAccumulator
-from app.viz.spec import VizSpec
+from app.platform.chat.run_service import _StreamTurnAccumulator
+from app.agent_specific.viz.spec import VizSpec
 
 
 async def test_persist_cancelled_keeps_viz_rows():

@@ -1,6 +1,6 @@
 """Unit tests for OIP ↔ mock linking helpers."""
 
-from app.yl_worker2.allocation_links import (
+from app.agent_specific.yl_worker2.allocation_links import (
     embed_mock_no,
     extract_mock_no,
     is_cancelled_remark,

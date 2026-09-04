@@ -7,16 +7,16 @@ from pathlib import Path
 import pytest
 from docx import Document
 
-from app.proposal.draft import materialize_draft
-from app.proposal.export_service import ProposalExportError, generate_proposal_docx, word_export_status
-from app.proposal.storage import resolve_artifact_path
-from app.proposal.word_context import build_word_context, cover_for_name, word_export_filename
-from app.proposal.word_render import render_word_document
+from app.agent_specific.proposal.draft import materialize_draft
+from app.agent_specific.proposal.export_service import ProposalExportError, generate_proposal_docx, word_export_status
+from app.agent_specific.proposal.storage import resolve_artifact_path
+from app.agent_specific.proposal.word_context import build_word_context, cover_for_name, word_export_filename
+from app.agent_specific.proposal.word_render import render_word_document
 
 
 def test_build_word_context_payment_options_au_advisory():
     from tests.proposal_fee_fixtures import make_mdm_fee_row
-    from app.proposal.draft import enable_draft_section
+    from app.agent_specific.proposal.draft import enable_draft_section
 
     draft = materialize_draft(template_id="au-advisory")
     fee = next(s for s in draft["document"]["sections"] if s["kind"] == "fee_section")
@@ -79,7 +79,7 @@ def test_word_export_without_optional_sections_in_draft():
     """Word templates use sections.<id>; missing draft nodes must get template stubs."""
     from jinja2 import Environment
 
-    from app.proposal.loaders import load_template_yaml
+    from app.agent_specific.proposal.loaders import load_template_yaml
 
     env = Environment(autoescape=False)
     cases = {
@@ -186,7 +186,7 @@ def test_cover_for_name_falls_back_to_contact():
 
 
 def test_richtext_filter_resolves_section_objects():
-    from app.proposal.word_context import WordSectionContext, WordSectionIntro, resolve_word_text
+    from app.agent_specific.proposal.word_context import WordSectionContext, WordSectionIntro, resolve_word_text
 
     section = WordSectionContext(
         enabled=True,
@@ -241,7 +241,7 @@ def test_appendix_blocks_page_break_after():
 
 
 def test_build_word_context_cover_for(tmp_path, monkeypatch):
-    from app.proposal import loaders
+    from app.agent_specific.proposal import loaders
 
     template_root = tmp_path / "sg-incorp"
     export_dir = template_root / "export"
@@ -286,7 +286,7 @@ document_export:
 
 
 def test_render_word_document_cover_for(tmp_path, monkeypatch):
-    from app.proposal import loaders
+    from app.agent_specific.proposal import loaders
 
     template_root = tmp_path / "sg-incorp"
     export_dir = template_root / "export"
@@ -304,7 +304,7 @@ def test_render_word_document_cover_for(tmp_path, monkeypatch):
 
 
 def test_generate_proposal_docx_persists_artifact(tmp_path, monkeypatch):
-    from app.proposal import loaders
+    from app.agent_specific.proposal import loaders
 
     template_root = tmp_path / "sg-incorp"
     export_dir = template_root / "export"
@@ -340,7 +340,7 @@ document_export:
 
     draft = materialize_draft(template_id="sg-incorp")
     draft["facts"]["client"]["company_name"] = "Acme Pte Ltd"
-    from app.proposal.placeholders import sync_draft_template_placeholders
+    from app.agent_specific.proposal.placeholders import sync_draft_template_placeholders
 
     draft = sync_draft_template_placeholders(draft)
     chat_id = uuid.uuid4()
@@ -357,7 +357,7 @@ document_export:
 
 
 def test_word_export_status_without_template_file(tmp_path, monkeypatch):
-    from app.proposal import loaders
+    from app.agent_specific.proposal import loaders
 
     template_root = tmp_path / "sg-incorp"
     template_root.mkdir(parents=True)
@@ -397,7 +397,7 @@ def test_word_export_filename_appends_cover_when_not_in_title():
 def test_render_word_document_deduplicates_word_ids(tmp_path, monkeypatch):
     from collections import Counter
 
-    from app.proposal import loaders
+    from app.agent_specific.proposal import loaders
 
     template_root = tmp_path / "sg-incorp"
     export_dir = template_root / "export"

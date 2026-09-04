@@ -1,5 +1,5 @@
-from app.proposal.draft import patch_draft, materialize_draft, build_draft_preview, DraftPatchError, _effective_fee_layout
-from app.proposal.fee_row import (
+from app.agent_specific.proposal.draft import patch_draft, materialize_draft, build_draft_preview, DraftPatchError, _effective_fee_layout
+from app.agent_specific.proposal.fee_row import (
     build_mdm_source,
     effective_pricing,
     materialize_mdm_fee_row,
@@ -127,7 +127,7 @@ def test_resolve_recurring_once_off_recurring_canonical():
 
 
 def test_render_one_off_recurring_table():
-    from app.proposal.fee_table import render_one_off_recurring_table
+    from app.agent_specific.proposal.fee_table import render_one_off_recurring_table
 
     groups = [
         {

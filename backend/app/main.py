@@ -13,10 +13,10 @@ from sqlalchemy import func, select
 from app.db.models import AgentModel
 from app.db.seed import ensure_dev_seed
 from app.db.session import check_db_connection, get_async_session_factory, init_db_engine
-from app.platform.profile_loader import discover_agent_profiles
-from app.platform.model_registry import ModelProviderRegistry
-from app.platform.mcp_compat import apply_mcp_compat_patches
-from app.platform.utility_models import UtilityModelRegistry
+from app.platform.agent.profile_loader import discover_agent_profiles
+from app.platform.llm.model_registry import ModelProviderRegistry
+from app.platform.mcp.mcp_compat import apply_mcp_compat_patches
+from app.platform.llm.utility_models import UtilityModelRegistry
 
 apply_mcp_compat_patches()
 
@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
                         "Skipping agent profile sync (SYNC_AGENT_PROFILES_ON_STARTUP=false); "
                         "run scripts/sync_agent_profiles.py after profile changes"
                     )
-                from app.platform.platform_sync import ensure_platform_user
+                from app.platform.agent.platform_sync import ensure_platform_user
 
                 await ensure_platform_user(session)
                 await session.commit()

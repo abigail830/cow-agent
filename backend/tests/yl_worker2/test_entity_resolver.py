@@ -1,6 +1,6 @@
 """Unit tests for entity mention scoring."""
 
-from app.yl_worker2.runtime.entity_resolver import (
+from app.agent_specific.yl_worker2.runtime.entity_resolver import (
     build_resolution,
     normalize_mention,
     score_product_row,

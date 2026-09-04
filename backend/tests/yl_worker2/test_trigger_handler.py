@@ -1,7 +1,7 @@
 """Webhook trigger message rendering tests."""
 
-from app.yl_worker2.triggers.handler import render_trigger_message
-from app.yl_worker2.triggers.schemas import YlWorker2TriggerPayload
+from app.agent_specific.yl_worker2.triggers.handler import render_trigger_message
+from app.agent_specific.yl_worker2.triggers.schemas import YlWorker2TriggerPayload
 
 
 def test_render_base_inbound_delay():

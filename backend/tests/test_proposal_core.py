@@ -1,4 +1,4 @@
-from app.proposal.loaders import load_template_yaml, load_templates
+from app.agent_specific.proposal.loaders import load_template_yaml, load_templates
 
 
 def test_load_templates():

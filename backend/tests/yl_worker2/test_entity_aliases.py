@@ -1,6 +1,6 @@
 """Unit tests for entity alias matching."""
 
-from app.yl_worker2.runtime.entity_aliases import clear_alias_cache, load_entity_aliases, match_aliases
+from app.agent_specific.yl_worker2.runtime.entity_aliases import clear_alias_cache, load_entity_aliases, match_aliases
 
 
 def setup_function():

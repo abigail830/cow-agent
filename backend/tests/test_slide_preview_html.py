@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.artifacts.preview_html import SLIDE_PREVIEW_CSP, prepare_html_ppt_preview_html, prepare_slide_preview_html
+from app.shared.artifacts.preview_html import SLIDE_PREVIEW_CSP, prepare_html_ppt_preview_html, prepare_slide_preview_html
 
 
 def test_prepare_slide_preview_html_injects_base_tag() -> None:

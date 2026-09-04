@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from app.services.chat_run import _StreamTurnAccumulator
+from app.platform.chat.run_service import _StreamTurnAccumulator
 
 
 def _reasoning_update(text: str) -> SimpleNamespace:

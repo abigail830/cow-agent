@@ -6,7 +6,7 @@ from uuid import UUID
 import pytest
 from agent_framework import MCPStdioTool
 
-from app.platform.agent_factory import AgentFactory
+from app.platform.agent.agent_factory import AgentFactory
 
 
 @pytest.mark.asyncio
@@ -32,12 +32,12 @@ async def test_build_attaches_mcp_tools_to_agent():
 
     with (
         patch.object(AgentFactory, "get_agent_row", AsyncMock(return_value=mock_row)),
-        patch("app.platform.agent_factory.PostgresHistoryProvider"),
-        patch("app.platform.agent_factory.SkillRegistry") as skill_reg_cls,
-        patch("app.platform.agent_factory.ToolRegistry") as tool_reg_cls,
-        patch("app.platform.agent_factory.McpRegistry") as mcp_reg_cls,
-        patch("app.platform.agent_factory.ModelProviderRegistry") as model_reg_cls,
-        patch("app.platform.agent_factory.resolve_middleware", return_value=[]),
+        patch("app.platform.agent.agent_factory.PostgresHistoryProvider"),
+        patch("app.platform.agent.agent_factory.SkillRegistry") as skill_reg_cls,
+        patch("app.platform.agent.agent_factory.ToolRegistry") as tool_reg_cls,
+        patch("app.platform.agent.agent_factory.McpRegistry") as mcp_reg_cls,
+        patch("app.platform.agent.agent_factory.ModelProviderRegistry") as model_reg_cls,
+        patch("app.platform.agent.agent_factory.resolve_middleware", return_value=[]),
     ):
         skill_reg_cls.return_value.resolve_provider_for_agent = AsyncMock(return_value=None)
         tool_reg_cls.return_value.resolve_for_agent = AsyncMock(return_value=[])

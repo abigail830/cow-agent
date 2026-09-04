@@ -5,9 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import MemoryAppendIn, MemoryOut, MemoryRemoveIn, MemoryReplaceIn
 from app.db.session import get_db
-from app.memory.long_term.formatter import parse_bullets, validate_line
-from app.memory.long_term.repository import MemoryRepository, MemoryScope
-from app.platform.current_user import get_current_user, get_current_user_id
+from app.platform.memory.long_term.formatter import parse_bullets, validate_line
+from app.platform.memory.long_term.repository import MemoryRepository, MemoryScope
+from app.platform.auth.current_user import get_current_user, get_current_user_id
 
 router = APIRouter(prefix="/memories", tags=["memories"])
 

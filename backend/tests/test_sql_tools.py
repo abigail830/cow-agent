@@ -1,4 +1,4 @@
-from app.middleware.sql_tools import is_mysql_run_query, is_postgres_run_query, is_sql_run_query
+from app.platform.hooks.sql_tools import is_mysql_run_query, is_postgres_run_query, is_sql_run_query
 
 
 def test_postgres_run_query_names():

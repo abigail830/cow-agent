@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.yl_worker2.tools.metrics import get_order_progress
+from app.agent_specific.yl_worker2.tools.metrics import get_order_progress
 from tests.yl_worker2.conftest import (
     MOCK_PRODUCT,
     MOCK_SITE_HUHEHAOTE,

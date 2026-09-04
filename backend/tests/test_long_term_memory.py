@@ -1,6 +1,6 @@
-from app.memory.long_term.commands import _parse_command
-from app.memory.long_term.formatter import format_for_injection, parse_bullets, validate_line
-from app.memory.memory_config import parse_memory_config
+from app.platform.memory.long_term.commands import _parse_command
+from app.platform.memory.long_term.formatter import format_for_injection, parse_bullets, validate_line
+from app.platform.memory.memory_config import parse_memory_config
 
 
 def test_parse_memory_config_long_term_defaults():

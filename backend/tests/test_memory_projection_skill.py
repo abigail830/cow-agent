@@ -1,7 +1,7 @@
-from app.memory.memory_config import parse_memory_config
-from app.memory.projectors.skill import SkillMemoryProjector
-from app.memory.projectors.utils import ensure_dict
-from app.memory.slimmer import HistoryProjection
+from app.platform.memory.memory_config import parse_memory_config
+from app.platform.memory.projectors.skill import SkillMemoryProjector
+from app.platform.memory.projectors.utils import ensure_dict
+from app.platform.memory.slimmer import HistoryProjection
 
 
 def test_ensure_dict_parses_json_string():

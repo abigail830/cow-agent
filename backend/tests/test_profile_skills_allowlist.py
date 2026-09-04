@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.platform.profile_loader import AGENTS_ROOT, load_agent_profile
+from app.platform.agent.profile_loader import AGENTS_ROOT, load_agent_profile
 
 
 def test_slide_studio_profile_skills_allowlist() -> None:

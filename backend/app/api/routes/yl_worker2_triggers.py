@@ -8,10 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.platform.current_user import get_current_user_id
-from app.platform.platform_sync import agent_id_for_slug
-from app.yl_worker2.triggers.handler import AGENT_SLUG, handle_yl_worker2_trigger
-from app.yl_worker2.triggers.schemas import YlWorker2TriggerPayload, YlWorker2TriggerResponse
+from app.platform.auth.current_user import get_current_user_id
+from app.platform.agent.platform_sync import agent_id_for_slug
+from app.agent_specific.yl_worker2.triggers.handler import AGENT_SLUG, handle_yl_worker2_trigger
+from app.agent_specific.yl_worker2.triggers.schemas import YlWorker2TriggerPayload, YlWorker2TriggerResponse
 
 router = APIRouter(prefix="/agents", tags=["yl-worker2-triggers"])
 

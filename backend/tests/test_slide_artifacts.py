@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import uuid
 
-from app.artifacts.context import get_run_artifact_state, init_run_artifact_state, reset_run_artifact_state
-from app.artifacts.spec import ArtifactSpec
-from app.artifacts.storage import (
+from app.shared.artifacts.context import get_run_artifact_state, init_run_artifact_state, reset_run_artifact_state
+from app.shared.artifacts.spec import ArtifactSpec
+from app.shared.artifacts.storage import (
     chat_artifact_exists,
     load_chat_artifact_payload,
     load_slide_preview_payload,
     new_chat_artifact_id,
     save_slide_deck,
 )
-from app.sandbox.providers.local import LocalSandboxProvider
-from app.slide.renderer import SlideRenderer
+from app.shared.sandbox.providers.local import LocalSandboxProvider
+from app.agent_specific.slide.renderer import SlideRenderer
 
 
 def test_run_artifact_state_queue_dedupes() -> None:

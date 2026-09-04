@@ -1,7 +1,7 @@
-from app.platform.profile_loader import load_agent_profile
-from app.proposal.paths import AGENT_ROOT
-from app.tools import BUILTIN_TOOLS
-from app.tools.proposal import _coerce_object_list
+from app.platform.agent.profile_loader import load_agent_profile
+from app.agent_specific.proposal.paths import AGENT_ROOT
+from app.platform.agent.builtin_registry import BUILTIN_TOOLS
+from app.agent_specific.proposal.tools import _coerce_object_list
 
 
 def test_proposal_composer_profile_loads():

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.platform.anthropic_client import PlatformAnthropicClient
+from app.platform.llm.anthropic_client import PlatformAnthropicClient
 
 
 def test_prepare_options_strips_conversation_id() -> None:

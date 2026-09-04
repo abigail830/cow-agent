@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.platform.platform_sync import sync_platform_config
+from app.platform.agent.platform_sync import sync_platform_config
 
 
 async def ensure_dev_seed(session: AsyncSession) -> None:

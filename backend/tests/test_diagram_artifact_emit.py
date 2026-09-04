@@ -1,8 +1,8 @@
 import uuid
 
-from app.diagram.context import init_run_diagram_state, reset_run_diagram_state
-from app.proposal.artifact_spec import ArtifactSpec
-from app.services.chat_run import _StreamTurnAccumulator, _emit_pending_artifact_events
+from app.agent_specific.diagram.context import init_run_diagram_state, reset_run_diagram_state
+from app.agent_specific.proposal.artifact_spec import ArtifactSpec
+from app.platform.chat.run_service import _StreamTurnAccumulator, _emit_pending_artifact_events
 
 
 def test_emit_pending_diagram_artifact_events():

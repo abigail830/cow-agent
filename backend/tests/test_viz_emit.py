@@ -1,8 +1,8 @@
 import uuid
 
-from app.services.chat_run import _StreamTurnAccumulator, _emit_pending_viz_events
-from app.viz.context import init_run_viz_state, reset_run_viz_state
-from app.viz.pipeline import build_viz_from_rows
+from app.platform.chat.run_service import _StreamTurnAccumulator, _emit_pending_viz_events
+from app.agent_specific.viz.context import init_run_viz_state, reset_run_viz_state
+from app.agent_specific.viz.pipeline import build_viz_from_rows
 
 
 def test_emit_pending_viz_events_persists_viz_row():
@@ -15,7 +15,7 @@ def test_emit_pending_viz_events_persists_viz_row():
             {"d": "2026-05-03", "n": 3},
         ]
         result = build_viz_from_rows(rows, ["d", "n"], intent="trend", title="Trend")
-        from app.viz.context import get_run_viz_state
+        from app.agent_specific.viz.context import get_run_viz_state
 
         state = get_run_viz_state()
         assert state is not None

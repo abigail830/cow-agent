@@ -1,6 +1,6 @@
 """Unit tests for StandardPolicyMatrix / SupplyChainMetrics pure logic."""
 
-from app.yl_worker2.runtime.policy_evaluator import (
+from app.agent_specific.yl_worker2.runtime.policy_evaluator import (
     calc_order_gap,
     calc_replenishment_quantity,
     calc_ship_gap,

@@ -7,18 +7,18 @@ from pathlib import Path
 
 import pytest
 
-from app.proposal.draft import materialize_draft
-from app.proposal.export_service import generate_proposal_docx, word_template_path
-from app.proposal.placeholders import sync_draft_template_placeholders
-from app.proposal.word_context import build_word_context, word_export_filename
-from app.proposal.word_render import render_word_document
+from app.agent_specific.proposal.draft import materialize_draft
+from app.agent_specific.proposal.export_service import generate_proposal_docx, word_template_path
+from app.agent_specific.proposal.placeholders import sync_draft_template_placeholders
+from app.agent_specific.proposal.word_context import build_word_context, word_export_filename
+from app.agent_specific.proposal.word_render import render_word_document
 
 REAL_TEMPLATE = word_template_path("sg-incorp")
 
 
 @pytest.mark.skipif(REAL_TEMPLATE is None, reason="sg-incorp export/proposal.docx not present")
 def test_render_real_sg_incorp_proposal_docx():
-    from app.proposal.loaders import load_template_yaml
+    from app.agent_specific.proposal.loaders import load_template_yaml
 
     load_template_yaml.cache_clear()
     draft = sync_draft_template_placeholders(

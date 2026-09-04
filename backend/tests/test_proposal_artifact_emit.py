@@ -1,11 +1,11 @@
 import uuid
 
-from app.proposal.artifact_spec import ArtifactSpec
-from app.services.chat_run import _StreamTurnAccumulator, _emit_pending_artifact_events
+from app.agent_specific.proposal.artifact_spec import ArtifactSpec
+from app.platform.chat.run_service import _StreamTurnAccumulator, _emit_pending_artifact_events
 
 
 def test_emit_pending_artifact_events():
-    from app.proposal.context import get_run_proposal_state, init_run_proposal_state, reset_run_proposal_state
+    from app.agent_specific.proposal.context import get_run_proposal_state, init_run_proposal_state, reset_run_proposal_state
 
     reset_run_proposal_state()
     chat_id = uuid.uuid4()

@@ -30,7 +30,7 @@ agents/
 
 ### hooks（平台可复用）
 
-Hook 实现注册在 `app/platform/hook_catalog.py`，任意 agent 按名称启用并覆盖参数：
+Hook 实现注册在 `app/platform/hooks/hook_catalog.py`，任意 agent 按名称启用并覆盖参数。Middleware 分层见 `app/platform/ARCHITECTURE.md`。
 
 ```yaml
 hooks:
@@ -42,13 +42,19 @@ hooks:
 
 仅用默认值时可写 `sql_validator: {}` 或列表形式 `- sql_validator`。
 
+平台还会自动挂载（无需在 profile 声明）：
+
+- `ChatPiiRedactionMiddleware` — Chat 层密钥/PII 脱敏
+- `AuditMiddleware` — 结构化 tool 调用审计（有 chat 上下文时）
+
 | Hook | 参数 | 默认 |
 |------|------|------|
 | `sql_validator` | `max_rows` | `2000` |
 | `result_truncator` | `max_observation_bytes` | `50000` |
+| `sql_viz` | `auto`, `min_rows` | `false`, `3`（应排在其他 SQL hook 之后；平台会自动排序） |
 | `proposal_persist` | — | 无参数；需 `allowed_tools` 含 proposal builtin tools |
 
-新增平台 hook：在 `hook_catalog.py` 注册 `HookSpec`，各 agent 的 profile 即可引用。
+新增平台 hook：在 `hook_catalog.py` 注册 `HookSpec`，并在 `hook_config._HOOK_ORDER` 中指定顺序（如需要）。
 
 ### 完整示例
 

@@ -20,7 +20,7 @@ from sqlalchemy import delete, func, select
 from app.db.models import AgentModel, Chat, ChatAttachment, Message
 from app.db.redis_client import check_redis_connection, get_redis
 from app.db.session import get_async_session_factory, init_db_engine
-from app.proposal.storage import ARTIFACTS_ROOT
+from app.agent_specific.proposal.storage import ARTIFACTS_ROOT
 
 PROPOSAL_AGENT_SLUG = "proposal-composer"
 

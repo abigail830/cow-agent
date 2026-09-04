@@ -1,6 +1,6 @@
-from app.memory.memory_config import parse_memory_config
-from app.memory.slimmer import HistoryProjection
-from app.tools.sql.memory import (
+from app.platform.memory.memory_config import parse_memory_config
+from app.platform.memory.slimmer import HistoryProjection
+from app.platform.memory.sql_tool_projectors import (
     SqlDescribeTableMemoryProjector,
     SqlListTablesMemoryProjector,
     SqlRunQueryMemoryProjector,

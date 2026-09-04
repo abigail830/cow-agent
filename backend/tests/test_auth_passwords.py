@@ -1,4 +1,4 @@
-from app.platform.passwords import hash_password, verify_password
+from app.platform.auth.passwords import hash_password, verify_password
 
 
 def test_hash_and_verify_roundtrip():

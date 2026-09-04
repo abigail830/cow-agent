@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.yl_worker2.tools.discovery import query_snapshot_catalog
+from app.agent_specific.yl_worker2.tools.discovery import query_snapshot_catalog
 from tests.yl_worker2.conftest import MOCK_PRODUCT, MOCK_SNAPSHOT_DATE, requires_yl_db
 
 

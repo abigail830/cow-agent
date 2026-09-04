@@ -2,8 +2,8 @@ from unittest.mock import patch
 from types import SimpleNamespace
 import json
 
-from app.proposal.draft import build_draft_preview
-from app.proposal.preview import proposal_state_fingerprint
+from app.agent_specific.proposal.draft import build_draft_preview
+from app.agent_specific.proposal.preview import proposal_state_fingerprint
 
 
 def test_fingerprint_changes_when_draft_changes():
@@ -22,7 +22,7 @@ def test_build_draft_preview_empty_draft():
 
 
 def test_build_draft_preview_includes_harneys_word_export():
-    from app.proposal.draft import materialize_draft
+    from app.agent_specific.proposal.draft import materialize_draft
 
     draft = materialize_draft(template_id="harneys-bvi")
     preview = build_draft_preview(draft)
@@ -34,7 +34,7 @@ def test_get_chat_proposal_draft_returns_persisted_draft():
     import asyncio
     import uuid
 
-    from app.services.proposal_preview_service import get_chat_proposal_draft
+    from app.agent_specific.proposal.preview_service import get_chat_proposal_draft
 
     draft = {
         "meta": {"template_id": "au-advisory"},
@@ -44,7 +44,7 @@ def test_get_chat_proposal_draft_returns_persisted_draft():
 
     async def _run():
         with patch(
-            "app.services.proposal_preview_service.load_chat_proposal_draft",
+            "app.agent_specific.proposal.preview_service.load_chat_proposal_draft",
             return_value=draft,
         ):
             return await get_chat_proposal_draft(None, uuid.uuid4())
@@ -58,7 +58,7 @@ def test_recover_proposal_draft_from_latest_draft_tool_result():
     import asyncio
     import uuid
 
-    from app.services.proposal_preview_service import _recover_proposal_draft_from_messages
+    from app.agent_specific.proposal.preview_service import _recover_proposal_draft_from_messages
 
     old_draft = {"facts": {"client": {"company_name": "Old Ltd"}}}
     latest_draft = {"facts": {"client": {"company_name": "Latest Ltd"}}}
@@ -87,7 +87,7 @@ def test_recover_proposal_draft_from_latest_draft_tool_result():
             return messages
 
     async def _run():
-        with patch("app.services.proposal_preview_service.MessageRepository", FakeRepo):
+        with patch("app.agent_specific.proposal.preview_service.MessageRepository", FakeRepo):
             return await _recover_proposal_draft_from_messages(None, uuid.uuid4())
 
     recovered = asyncio.run(_run())

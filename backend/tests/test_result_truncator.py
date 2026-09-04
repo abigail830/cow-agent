@@ -1,6 +1,6 @@
 import json
 
-from app.middleware.result_truncator import (
+from app.platform.hooks.result_truncator import (
     extract_response_text,
     truncate_observation_text,
     truncate_tool_response,

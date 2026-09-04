@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from agent_framework import Content
 
-from app.memory.maf_mapping import to_maf_messages
+from app.platform.memory.maf_mapping import to_maf_messages
 
 
 def test_to_maf_messages_stringifies_tool_call_arguments() -> None:

@@ -1,6 +1,6 @@
 import pytest
 
-from app.proposal.draft import (
+from app.agent_specific.proposal.draft import (
     add_package_to_draft,
     add_services_to_draft,
     build_draft_preview,
@@ -79,7 +79,7 @@ def test_materialize_bvi_draft_from_template_sections():
 
 
 def test_materialize_copies_section_agent_guidance():
-    from app.proposal.draft import _collection_section
+    from app.agent_specific.proposal.draft import _collection_section
 
     section = _collection_section(
         {
@@ -93,7 +93,7 @@ def test_materialize_copies_section_agent_guidance():
 
 
 def test_materialize_skips_blank_section_agent_guidance():
-    from app.proposal.draft import _collection_section
+    from app.agent_specific.proposal.draft import _collection_section
 
     section = _collection_section(
         {

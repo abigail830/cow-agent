@@ -6,7 +6,7 @@ from app.api.schemas import UserCreate, UserOut
 from app.config import get_settings
 from app.db.models import User
 from app.db.session import get_db
-from app.platform.current_user import get_current_user
+from app.platform.auth.current_user import get_current_user
 
 router = APIRouter(prefix="/users", tags=["users"])
 

@@ -1,4 +1,4 @@
-from app.memory.turn_window import group_messages_into_turns, take_last_turns
+from app.platform.memory.turn_window import group_messages_into_turns, take_last_turns
 
 
 def _user(seq: int, content: str = "hi") -> dict:

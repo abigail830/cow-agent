@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.yl_worker2.runtime.query_compiler import QueryCompileError, compile_where
+from app.agent_specific.yl_worker2.runtime.query_compiler import QueryCompileError, compile_where
 
 ALLOWED = {"product_code", "site_code", "site_type", "product_name"}
 

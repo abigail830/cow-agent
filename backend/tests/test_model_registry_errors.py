@@ -1,11 +1,11 @@
 from unittest.mock import MagicMock, patch
 
-from app.platform.model_registry import ModelProvider, ModelProviderRegistry
+from app.platform.llm.model_registry import ModelProvider, ModelProviderRegistry
 
 
 def test_anthropic_client_enables_detailed_tool_errors():
     registry = ModelProviderRegistry()
-    with patch("app.platform.model_registry.PlatformAnthropicClient") as mock_cls:
+    with patch("app.platform.llm.model_registry.PlatformAnthropicClient") as mock_cls:
         registry.create_azure_anthropic_client()
         _, kwargs = mock_cls.call_args
         assert kwargs["function_invocation_configuration"] == {"include_detailed_errors": True}
@@ -13,7 +13,7 @@ def test_anthropic_client_enables_detailed_tool_errors():
 
 def test_openai_client_enables_detailed_tool_errors():
     registry = ModelProviderRegistry()
-    with patch("app.platform.model_registry.OpenAIChatClient") as mock_cls:
+    with patch("app.platform.llm.model_registry.OpenAIChatClient") as mock_cls:
         registry.create_azure_openai_client()
         _, kwargs = mock_cls.call_args
         assert kwargs["function_invocation_configuration"] == {"include_detailed_errors": True}
@@ -33,7 +33,7 @@ def test_create_agent_uses_configured_client():
 
 def test_siliconflow_client_uses_chat_completions_api():
     registry = ModelProviderRegistry()
-    with patch("app.platform.model_registry.OpenAIChatCompletionClient") as mock_cls:
+    with patch("app.platform.llm.model_registry.OpenAIChatCompletionClient") as mock_cls:
         with patch.object(
             registry,
             "_settings",

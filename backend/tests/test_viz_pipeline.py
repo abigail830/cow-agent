@@ -1,7 +1,7 @@
 import json
 
-from app.viz.pipeline import build_viz_from_rows
-from app.viz.sql_parse import parse_sql_tool_result
+from app.agent_specific.viz.pipeline import build_viz_from_rows
+from app.agent_specific.viz.sql_parse import parse_sql_tool_result
 
 
 def test_parse_sql_tool_result_rows():
@@ -75,7 +75,7 @@ def test_auto_title_from_columns():
 
 
 def test_multiple_sql_calls_not_deduped():
-    from app.viz.context import RunVizState
+    from app.agent_specific.viz.context import RunVizState
 
     state = RunVizState()
     rows_a = [{"d": "2026-05-01", "n": 1}, {"d": "2026-05-02", "n": 2}, {"d": "2026-05-03", "n": 3}]
@@ -88,7 +88,7 @@ def test_multiple_sql_calls_not_deduped():
 
 
 def test_same_call_deduped():
-    from app.viz.context import RunVizState
+    from app.agent_specific.viz.context import RunVizState
 
     state = RunVizState()
     rows = [{"d": "2026-05-01", "n": 1}, {"d": "2026-05-02", "n": 2}, {"d": "2026-05-03", "n": 3}]
@@ -99,8 +99,8 @@ def test_same_call_deduped():
 
 
 def test_list_sql_results_returns_cached_entries():
-    from app.tools.viz import list_sql_results
-    from app.viz.context import get_run_viz_state, init_run_viz_state, reset_run_viz_state
+    from app.agent_specific.viz.tools import list_sql_results
+    from app.agent_specific.viz.context import get_run_viz_state, init_run_viz_state, reset_run_viz_state
 
     init_run_viz_state()
     try:

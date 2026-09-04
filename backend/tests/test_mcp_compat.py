@@ -4,7 +4,7 @@ from mcp import types
 
 
 def test_initialize_result_protocol_version_compat(monkeypatch):
-    from app.platform import mcp_compat
+    import app.platform.mcp.mcp_compat as mcp_compat
 
     monkeypatch.setattr(mcp_compat, "_applied", False)
     mcp_compat.apply_mcp_compat_patches()

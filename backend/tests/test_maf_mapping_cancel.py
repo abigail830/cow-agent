@@ -1,5 +1,5 @@
-from app.memory.maf_mapping import to_maf_messages
-from app.platform.platform_instructions import RUN_CANCELLED_USER_TEXT
+from app.platform.memory.maf_mapping import to_maf_messages
+from app.platform.agent.platform_instructions import RUN_CANCELLED_USER_TEXT
 
 
 def test_run_cancelled_maps_to_user_message():

@@ -2,12 +2,12 @@ import uuid
 
 from agent_framework import Content
 
-from app.platform.attachment_adapters import (
+from app.platform.attachments.attachment_adapters import (
     attachment_to_maf_content,
     metadata_attachment_to_maf_content,
     should_use_azure_inline_image,
 )
-from app.platform.attachment_storage import (
+from app.platform.attachments.attachment_storage import (
     format_inline_provider_file_id,
     is_inline_provider_file_id,
     load_inline_attachment,
@@ -41,7 +41,7 @@ class _InlineAttachment:
 
 
 def test_attachment_to_maf_content_inline_image(tmp_path, monkeypatch):
-    from app.platform import attachment_storage
+    import app.platform.attachments.attachment_storage as attachment_storage
 
     monkeypatch.setattr(attachment_storage, "INLINE_ATTACHMENTS_ROOT", tmp_path)
 
@@ -56,7 +56,7 @@ def test_attachment_to_maf_content_inline_image(tmp_path, monkeypatch):
 
 
 def test_metadata_attachment_to_maf_content_inline_image(tmp_path, monkeypatch):
-    from app.platform import attachment_storage
+    import app.platform.attachments.attachment_storage as attachment_storage
 
     monkeypatch.setattr(attachment_storage, "INLINE_ATTACHMENTS_ROOT", tmp_path)
 
@@ -76,7 +76,7 @@ def test_metadata_attachment_to_maf_content_inline_image(tmp_path, monkeypatch):
 
 
 def test_save_inline_attachment_uses_blob_when_enabled(monkeypatch):
-    from app.platform import attachment_storage
+    import app.platform.attachments.attachment_storage as attachment_storage
 
     stored: dict[str, bytes] = {}
 

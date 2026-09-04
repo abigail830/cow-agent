@@ -1,7 +1,7 @@
 import os
 
-from app.platform import mcp_registry
-from app.platform.mcp_registry import _build_native_db_tools
+import app.platform.mcp.mcp_registry as mcp_registry
+from app.platform.mcp.mcp_registry import _build_native_db_tools
 
 
 def test_vercel_uses_in_process_postgres_tools(monkeypatch):

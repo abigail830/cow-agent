@@ -1,4 +1,4 @@
-from app.proposal.draft import add_package_to_draft, materialize_draft
+from app.agent_specific.proposal.draft import add_package_to_draft, materialize_draft
 
 _PKG = {"package_id": "PKG001", "package_name": "Incorporation"}
 

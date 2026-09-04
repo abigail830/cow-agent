@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 
 from app.db.models import DEV_USER_ID
 from app.main import app
-from app.platform.current_user import get_current_user_id
-from app.yl_worker2.triggers.handler import _persist_trigger_user_message
+from app.platform.auth.current_user import get_current_user_id
+from app.agent_specific.yl_worker2.triggers.handler import _persist_trigger_user_message
 
 
 @pytest.fixture
@@ -28,9 +28,9 @@ from fastapi.testclient import TestClient
 
 from app.db.models import DEV_USER_ID
 from app.main import app
-from app.platform.current_user import get_current_user_id
-from app.yl_worker2.triggers.handler import _persist_trigger_user_message
-from app.yl_worker2.triggers.schemas import YlWorker2TriggerResponse
+from app.platform.auth.current_user import get_current_user_id
+from app.agent_specific.yl_worker2.triggers.handler import _persist_trigger_user_message
+from app.agent_specific.yl_worker2.triggers.schemas import YlWorker2TriggerResponse
 
 
 @pytest.fixture
@@ -99,7 +99,7 @@ def test_trigger_auto_run_false_query_param(trigger_client):
 async def test_persist_trigger_user_message_inserts_user_row():
     db = MagicMock()
     with patch(
-        "app.yl_worker2.triggers.handler.MessageRepository"
+        "app.agent_specific.yl_worker2.triggers.handler.MessageRepository"
     ) as repo_cls:
         repo = repo_cls.return_value
         repo.insert = AsyncMock()

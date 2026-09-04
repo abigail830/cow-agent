@@ -4,9 +4,9 @@ import uuid
 
 import pytest
 
-from app.yl_worker2.allocation_links import extract_mock_no
-from app.yl_worker2.db import yl_connect
-from app.yl_worker2.tools.allocation import (
+from app.agent_specific.yl_worker2.allocation_links import extract_mock_no
+from app.agent_specific.yl_worker2.db import yl_connect
+from app.agent_specific.yl_worker2.tools.allocation import (
     activate_allocation_and_push,
     cancel_allocation_order,
     save_forward_allocation_draft,

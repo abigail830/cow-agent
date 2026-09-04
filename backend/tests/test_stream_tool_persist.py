@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.chat_run import _StreamTurnAccumulator
+from app.platform.chat.run_service import _StreamTurnAccumulator
 
 
 def _content(type_: str, **kwargs):

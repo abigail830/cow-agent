@@ -1,6 +1,6 @@
 import pytest
 
-from app.tools.proposal import _validate_read_path
+from app.agent_specific.proposal.tools import _validate_read_path
 
 
 @pytest.mark.parametrize(

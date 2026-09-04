@@ -2,7 +2,7 @@ import uuid
 from unittest.mock import MagicMock
 
 from app.config import get_settings
-from app.proposal import blob_client, storage
+from app.agent_specific.proposal import blob_client, storage
 
 
 def _upload_bytes(uploads: list[tuple[str, bytes | str, str]], pathname: str) -> bytes | None:
