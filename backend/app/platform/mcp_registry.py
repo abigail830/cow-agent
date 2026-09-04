@@ -4,6 +4,7 @@ import uuid
 from typing import Any
 
 from agent_framework import MCPStdioTool, MCPStreamableHTTPTool
+from httpx import AsyncClient, Timeout
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +18,15 @@ from app.tools.database import build_mysql_tools, build_postgres_tools
 
 logger = logging.getLogger(__name__)
 IS_VERCEL = os.getenv("VERCEL") == "1"
+
+
+def _mcp_http_client(headers: dict[str, str] | None = None) -> AsyncClient:
+    timeout_seconds = float(get_settings().mcp_http_request_timeout)
+    return AsyncClient(
+        headers=dict(headers or {}),
+        follow_redirects=True,
+        timeout=Timeout(timeout_seconds, read=timeout_seconds * 10),
+    )
 
 
 class McpRegistry:
@@ -77,12 +87,23 @@ class McpRegistry:
             headers = config.get("headers")
             if headers:
                 static_headers = dict(headers)
+                auth = static_headers.get("Authorization", "")
+                if not auth.strip():
+                    logger.error("MCP server %s has empty Authorization after decrypt", row.name)
+                else:
+                    logger.info(
+                        "MCP server %s auth configured (Authorization length=%d)",
+                        row.name,
+                        len(auth),
+                    )
+                http_client = _mcp_http_client(static_headers)
                 return MCPStreamableHTTPTool(
                     name=tool_name,
                     url=url,
                     description=description,
                     allowed_tools=mcp_allowed,
                     request_timeout=request_timeout,
+                    http_client=http_client,
                     header_provider=lambda _kwargs, h=static_headers: dict(h),
                 )
             return MCPStreamableHTTPTool(
