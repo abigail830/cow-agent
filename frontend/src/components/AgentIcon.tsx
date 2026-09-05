@@ -1,9 +1,12 @@
+import { useEffect, useState } from 'react'
+import { agentIconSrc } from '../lib/agentIcon'
+
 type Props = {
   className?: string
+  slug?: string | null
 }
 
-/** Line-style agent icon for sidebar nav. */
-export function AgentIcon({ className = 'h-[18px] w-[18px]' }: Props) {
+function AgentIconFallback({ className = 'h-6 w-6' }: Pick<Props, 'className'>) {
   return (
     <svg
       className={className}
@@ -23,4 +26,28 @@ export function AgentIcon({ className = 'h-[18px] w-[18px]' }: Props) {
       <path d="M8 7V5a4 4 0 0 1 8 0v2" />
     </svg>
   )
+}
+
+/** Agent avatar from `/public/agents/{slug}.png`, with SVG fallback. */
+export function AgentIcon({ className = 'h-6 w-6', slug }: Props) {
+  const [failed, setFailed] = useState(false)
+  const src = agentIconSrc(slug)
+
+  useEffect(() => {
+    setFailed(false)
+  }, [slug])
+
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt=""
+        className={`${className} shrink-0 rounded-full object-cover`}
+        aria-hidden
+        onError={() => setFailed(true)}
+      />
+    )
+  }
+
+  return <AgentIconFallback className={className} />
 }

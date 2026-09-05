@@ -1378,7 +1378,7 @@ export function ChatPage() {
                     sidebarCollapsed ? 'agent-nav-item-collapsed' : ''
                   }${agentBusy ? ' agent-nav-item-busy' : ''}`}
                 >
-                  <AgentIcon className="h-[18px] w-[18px] shrink-0" />
+                  <AgentIcon slug={agent.slug} className="h-6 w-6 shrink-0" />
                   {!sidebarCollapsed && (
                     <span className="agent-nav-label">{formatAgentLabel(agent)}</span>
                   )}
@@ -1392,7 +1392,9 @@ export function ChatPage() {
         </ul>
 
         <div className="agent-sidebar-footer">
-          <SidebarUserMenu user={user} collapsed={sidebarCollapsed} onLogout={logout} />
+          {!sidebarCollapsed ? (
+            <SidebarUserMenu user={user} collapsed={sidebarCollapsed} onLogout={logout} />
+          ) : null}
           <button
             type="button"
             className="agent-sidebar-toggle-btn"
@@ -1411,7 +1413,7 @@ export function ChatPage() {
             <div className="chat-main-inner">
             <div className="chat-header">
               <div className="chat-header-brand">
-                <AgentIcon className="chat-header-icon h-[18px] w-[18px] shrink-0" />
+                <AgentIcon slug={selected.slug} className="chat-header-icon h-7 w-7 shrink-0" />
                 <h1 className="chat-header-title">{selected.name}</h1>
               </div>
               <div className="chat-header-actions">
