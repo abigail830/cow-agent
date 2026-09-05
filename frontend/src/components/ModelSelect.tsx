@@ -8,11 +8,13 @@ interface ModelSelectProps {
 }
 
 export function ModelSelect({ value, options, onChange, disabled }: ModelSelectProps) {
-  if (options.length === 0) return null
+  const selectable = options.filter((option) => option.available !== false)
+  if (selectable.length === 0 && options.length === 0) return null
 
-  const selected = value && options.some((option) => option.id === value)
-    ? value
-    : options[0]?.id
+  const selected =
+    value && selectable.some((option) => option.id === value)
+      ? value
+      : selectable[0]?.id ?? value ?? options[0]?.id
 
   return (
     <select
@@ -22,11 +24,16 @@ export function ModelSelect({ value, options, onChange, disabled }: ModelSelectP
       disabled={disabled}
       aria-label="Model"
     >
-        {options.map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      {options.map((option) => (
+        <option
+          key={option.id}
+          value={option.id}
+          disabled={option.available === false}
+        >
+          {option.label}
+          {option.available === false ? ' (未配置)' : ''}
+        </option>
+      ))}
+    </select>
   )
 }

@@ -388,10 +388,12 @@ export function ChatPage() {
   useEffect(() => {
     if (!selectedId || !selected) return
     const stored = getStoredModelId(selectedId)
+    const firstAvailable = modelOptions.find((option) => option.available !== false)?.id
     const initial =
       stored ??
       selected.selected_model_id ??
       selected.default_model_id ??
+      firstAvailable ??
       modelOptions[0]?.id ??
       null
     if (!initial) return
@@ -712,7 +714,6 @@ export function ChatPage() {
         patchSession(agentId, (prev) => ({
           messages: mergeMessagesFromApi(rows, prev.messages),
         }))
-        await refreshChatHistory(agentId)
       })()
       reloadInFlightRef.current.set(id, task)
       try {
@@ -723,7 +724,7 @@ export function ChatPage() {
         }
       }
     },
-    [patchSession, refreshChatHistory],
+    [patchSession],
   )
 
   const setInputForSelected = (value: string) => {
@@ -1012,7 +1013,7 @@ export function ChatPage() {
             loading: false,
             activeRunId: null,
             turnSyncPhase: 'saving-messages',
-            proposalTurnSyncing: composer,
+            proposalTurnSyncing: composer && !handle.previewFreshFromStream,
           })
           patchStreamSession((prev) => ({
             messages: finalizeStreamLocalMessages(prev.messages),
@@ -1023,11 +1024,6 @@ export function ChatPage() {
         if (composer && !handle.previewFreshFromStream) {
           patchStreamSession({ turnSyncPhase: 'updating-preview' })
           await fetchProposalPreview(agentId, activeChatId)
-        }
-        const tab = proposalPanelTabRef.current.get(agentId) ?? 'preview'
-        if (composer && tab === 'state') {
-          patchStreamSession({ turnSyncPhase: 'refreshing-draft' })
-          await fetchProposalState(agentId, activeChatId)
         }
         await fulfillment.afterStreamTurn(handle, agentId, activeChatId)
       } finally {
@@ -1097,10 +1093,6 @@ export function ChatPage() {
               handle.previewFreshFromStream = true
               applyProposalPreview(agentId, preview, activeChatId)
             }
-            const tab = proposalPanelTabRef.current.get(agentId) ?? 'preview'
-            if (tab === 'state') {
-              void fetchProposalState(agentId, activeChatId)
-            }
           }
           const proposalDraftWriteTools = new Set([
             'initialize_proposal_draft',
@@ -1120,10 +1112,6 @@ export function ChatPage() {
               if (draft && typeof draft === 'object' && !Array.isArray(draft)) {
                 patchStreamSession({ proposalState: draft as Record<string, unknown> })
               }
-            }
-            const tab = proposalPanelTabRef.current.get(agentId) ?? 'preview'
-            if (tab === 'state') {
-              void fetchProposalState(agentId, activeChatId)
             }
           }
           if (ev.event === 'reasoning' && typeof ev.data.text === 'string') {
@@ -1172,7 +1160,7 @@ export function ChatPage() {
               loading: false,
               activeRunId: null,
               turnSyncPhase: 'saving-messages',
-              proposalTurnSyncing: composer,
+              proposalTurnSyncing: composer && !handle.previewFreshFromStream,
               messages: finalizeStreamLocalMessages(prev.messages),
             }))
           }

@@ -97,6 +97,10 @@ def _provider_configured(provider: str, settings: Settings) -> bool:
     return False
 
 
+def is_provider_configured(provider: str, settings: Settings | None = None) -> bool:
+    return _provider_configured(provider, settings or get_settings())
+
+
 def _load_catalog_from_disk() -> ModelCatalog:
     if not _CATALOG_PATH.exists():
         raise FileNotFoundError(f"Model catalog not found: {_CATALOG_PATH}")

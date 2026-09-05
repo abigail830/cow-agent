@@ -35,6 +35,7 @@ class ModelOut(BaseModel):
     label: str
     provider: str
     supports_attachments: bool = True
+    available: bool = True
 
 
 class ChatCreate(BaseModel):

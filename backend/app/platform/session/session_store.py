@@ -98,12 +98,56 @@ class SessionStore:
         turn_start_sequence: int,
     ) -> None:
         """Append a completed turn from DB into the Redis working set."""
-        all_rows = await self._load_db_rows(chat_id)
-        turn_rows = [r for r in all_rows if int(r.get("sequence") or 0) >= turn_start_sequence]
+        turn_rows = [
+            row_to_dict(row)
+            for row in await self._messages.list_by_chat_since(chat_id, turn_start_sequence)
+        ]
+        await self._merge_turn_rows(chat_id, memory_config, turn_rows)
+
+    async def finalize_turn(
+        self,
+        chat_id: uuid.UUID,
+        session: AgentSession,
+        memory_config: MemoryConfig,
+        turn_rows: list[dict[str, Any]],
+    ) -> None:
+        """Merge persisted turn rows into working set and save MAF session in one payload write."""
+        payload = await self._load_payload(chat_id) or {}
+        if turn_rows:
+            payload = await self._merge_turn_rows_into_payload(
+                chat_id,
+                memory_config,
+                turn_rows,
+                payload=payload,
+            )
+        payload["session"] = session.to_dict()
+        await self._save_payload(chat_id, payload)
+
+    async def _merge_turn_rows(
+        self,
+        chat_id: uuid.UUID,
+        memory_config: MemoryConfig,
+        turn_rows: list[dict[str, Any]],
+    ) -> None:
         if not turn_rows:
             return
-
         payload = await self._load_payload(chat_id) or {}
+        payload = await self._merge_turn_rows_into_payload(
+            chat_id,
+            memory_config,
+            turn_rows,
+            payload=payload,
+        )
+        await self._save_payload(chat_id, payload)
+
+    async def _merge_turn_rows_into_payload(
+        self,
+        chat_id: uuid.UUID,
+        memory_config: MemoryConfig,
+        turn_rows: list[dict[str, Any]],
+        *,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
         working_set = _extract_working_set(payload)
         existing_rows: list[dict[str, Any]] = []
 
@@ -111,7 +155,7 @@ class SessionStore:
             existing_rows = list(working_set.get("rows") or [])
         else:
             existing_rows = await self._rebuild_working_set(chat_id, memory_config, cold=True)
-            payload = await self._load_payload(chat_id) or {}
+            payload = await self._load_payload(chat_id) or payload
             working_set = _extract_working_set(payload)
             existing_rows = list((working_set or {}).get("rows") or existing_rows)
 
@@ -133,7 +177,7 @@ class SessionStore:
             "last_sequence": last_sequence,
             "rows": trimmed,
         }
-        await self._save_payload(chat_id, payload)
+        return payload
 
     async def _rebuild_working_set(
         self,

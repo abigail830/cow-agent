@@ -24,6 +24,45 @@ class MessageRepository:
         )
         return list(result.scalars().all())
 
+    async def list_by_chat_since(self, chat_id: uuid.UUID, min_sequence: int) -> list[Message]:
+        result = await self._session.execute(
+            select(Message)
+            .where(Message.chat_id == chat_id, Message.sequence >= min_sequence)
+            .order_by(Message.sequence)
+        )
+        return list(result.scalars().all())
+
+    async def insert_many(
+        self,
+        chat_id: uuid.UUID,
+        rows: list[dict[str, Any]],
+        *,
+        flush: bool = True,
+    ) -> list[Message]:
+        if not rows:
+            return []
+        start_sequence = await self.next_sequence(chat_id)
+        saved: list[Message] = []
+        for index, row in enumerate(rows):
+            sequence = row.get("sequence")
+            if sequence is None:
+                sequence = start_sequence + index
+            message = Message(
+                id=row.get("message_id") or uuid.uuid4(),
+                chat_id=chat_id,
+                role=row["role"],
+                content=row.get("content"),
+                message_type=row["message_type"],
+                message_metadata=row.get("metadata") or {},
+                parent_id=row.get("parent_id"),
+                sequence=int(sequence),
+            )
+            self._session.add(message)
+            saved.append(message)
+        if flush:
+            await self._session.flush()
+        return saved
+
     async def insert(
         self,
         *,

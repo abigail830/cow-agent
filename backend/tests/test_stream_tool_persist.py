@@ -55,6 +55,15 @@ async def test_accumulator_persist_tool_rows_keeps_arguments():
 
         async def insert(self, **kwargs):
             self.rows.append(kwargs)
+            return kwargs
+
+        async def insert_many(self, chat_id, rows):
+            saved = []
+            for row in rows:
+                payload = {"chat_id": chat_id, **row}
+                self.rows.append(payload)
+                saved.append(payload)
+            return saved
 
     repo = FakeRepo()
     saved = await acc.persist_tool_rows(repo, uuid4())

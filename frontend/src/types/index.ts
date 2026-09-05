@@ -20,6 +20,7 @@ export interface ModelOption {
   label: string
   provider: string
   supports_attachments: boolean
+  available?: boolean
 }
 
 export interface Chat {

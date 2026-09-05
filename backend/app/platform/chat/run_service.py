@@ -16,7 +16,7 @@ from app.db.models import AgentModel, Chat, Message
 from app.db.repositories.attachments import AttachmentRepository
 from app.db.repositories.messages import MessageRepository
 from app.platform.memory.long_term import try_handle_memory_command
-from app.platform.memory.maf_mapping import maf_message_to_rows
+from app.platform.memory.maf_mapping import maf_message_to_rows, row_to_dict
 from app.platform.memory.memory_config import MemoryConfig, parse_memory_config
 from app.platform.agent.agent_factory import AgentFactory
 from app.platform.mcp.mcp_connect import disconnect_bundle, iter_mcp_connect_keepalive
@@ -207,19 +207,20 @@ class ChatRunService:
         run_ctx: RunContext | None = None,
         accumulator: "_StreamTurnAccumulator | None" = None,
     ) -> None:
+        turn_rows: list[dict[str, Any]] = []
         if accumulator is not None and accumulator.has_content():
             accumulator.enrich_tool_arguments_from_response(response)
-            await accumulator.persist(self._messages, chat_id)
+            turn_rows = await accumulator.persist(self._messages, chat_id)
         else:
-            await self._persist_agent_messages(chat_id, response, skip_tool_rows=False)
+            turn_rows = await self._persist_agent_messages(chat_id, response, skip_tool_rows=False)
         if run_ctx is not None:
             await run_plugin_finalize_success(run_ctx, accumulator=accumulator)
-        await self._sessions.append_completed_turn(
+        await self._sessions.finalize_turn(
             chat_id,
+            session,
             memory_config,
-            turn_start_sequence=turn_start_sequence,
+            turn_rows,
         )
-        await self._sessions.save_session(chat_id, session)
         await self._db.commit()
 
     async def _finalize_failure(
@@ -264,14 +265,18 @@ class ChatRunService:
         artifact_ctx = get_run_artifact_state()
         if artifact_ctx is not None:
             specs.extend(artifact_ctx.drain_pending_artifacts())
+        pending_rows: list[dict[str, Any]] = []
         for spec in specs:
-            await self._messages.insert(
-                chat_id=chat_id,
-                role="assistant",
-                message_type="artifact",
-                content=spec.title,
-                metadata={"spec": artifact_spec_payload(spec)},
+            pending_rows.append(
+                {
+                    "role": "assistant",
+                    "message_type": "artifact",
+                    "content": spec.title,
+                    "metadata": {"spec": artifact_spec_payload(spec)},
+                }
             )
+        if pending_rows:
+            await self._messages.insert_many(chat_id, pending_rows)
 
     async def run_message(
         self,
@@ -534,11 +539,11 @@ class ChatRunService:
         response: Any,
         *,
         skip_tool_rows: bool = False,
-    ) -> None:
-        saved = 0
+    ) -> list[dict[str, Any]]:
         call_names, call_arguments = _collect_call_context(getattr(response, "messages", None) or [])
+        rows_to_insert: list[dict[str, Any]] = []
+        next_seq = await self._messages.next_sequence(chat_id)
         for message in getattr(response, "messages", None) or []:
-            next_seq = await self._messages.next_sequence(chat_id)
             for row in maf_message_to_rows(
                 str(chat_id),
                 message,
@@ -548,24 +553,30 @@ class ChatRunService:
             ):
                 if skip_tool_rows and row["message_type"] in _TOOL_ROW_TYPES:
                     continue
-                await self._messages.insert(
-                    chat_id=chat_id,
-                    role=row["role"],
-                    message_type=row["message_type"],
-                    content=row.get("content"),
-                    metadata=row.get("metadata"),
-                    sequence=row["sequence"],
+                rows_to_insert.append(
+                    {
+                        "role": row["role"],
+                        "message_type": row["message_type"],
+                        "content": row.get("content"),
+                        "metadata": row.get("metadata"),
+                        "sequence": row["sequence"],
+                    }
                 )
-                saved += 1
+                next_seq = row["sequence"] + 1
         text = getattr(response, "text", None)
-        if text and saved == 0:
-            await self._messages.insert(
-                chat_id=chat_id,
-                role="assistant",
-                message_type="text",
-                content=text,
+        if text and not rows_to_insert:
+            rows_to_insert.append(
+                {
+                    "role": "assistant",
+                    "message_type": "text",
+                    "content": text,
+                    "metadata": {},
+                }
             )
-        await self._db.flush()
+        if not rows_to_insert:
+            return []
+        saved = await self._messages.insert_many(chat_id, rows_to_insert)
+        return [row_to_dict(row) for row in saved]
 
 
 def _json_safe(value: Any) -> Any:
@@ -882,27 +893,27 @@ class StreamTurnAccumulator:
     async def persist_tool_rows(self, repo: MessageRepository, chat_id: uuid.UUID) -> int:
         """Persist tool call/result rows captured during streaming (with full arguments)."""
         self.finalize()
-        saved = 0
-        for row in self._rows:
-            if row.get("message_type") not in _TOOL_ROW_TYPES:
-                continue
-            await repo.insert(
-                chat_id=chat_id,
-                role=row["role"],
-                message_type=row["message_type"],
-                content=row.get("content"),
-                metadata=row.get("metadata") or {},
-            )
-            saved += 1
-        return saved
+        tool_rows = [
+            {
+                "role": row["role"],
+                "message_type": row["message_type"],
+                "content": row.get("content"),
+                "metadata": row.get("metadata") or {},
+            }
+            for row in self._rows
+            if row.get("message_type") in _TOOL_ROW_TYPES
+        ]
+        if not tool_rows:
+            return 0
+        await repo.insert_many(chat_id, tool_rows)
+        return len(tool_rows)
 
-    async def persist(self, repo: MessageRepository, chat_id: uuid.UUID) -> int:
+    async def persist(self, repo: MessageRepository, chat_id: uuid.UUID) -> list[dict[str, Any]]:
         self.finalize()
-        saved = 0
-        for row in self._rows:
-            await repo.insert(chat_id=chat_id, **row)
-            saved += 1
-        return saved
+        if not self._rows:
+            return []
+        saved = await repo.insert_many(chat_id, self._rows)
+        return [row_to_dict(row) for row in saved]
 
     async def persist_cancelled(
         self,
@@ -913,34 +924,37 @@ class StreamTurnAccumulator:
         """Write partial turn output; incomplete assistant text/reasoning marked cancelled."""
         self.finalize()
         run_meta = {"run_id": str(run_id)}
-        saved = 0
+        rows_to_insert: list[dict[str, Any]] = []
         for row in self._rows:
             message_type = row["message_type"]
             meta = {**(row.get("metadata") or {}), **run_meta}
             if message_type in ("tool_call", "tool_result", "viz", "artifact"):
-                await repo.insert(
-                    chat_id=chat_id,
-                    role=row["role"],
-                    message_type=message_type,
-                    content=row.get("content"),
-                    metadata=meta,
+                rows_to_insert.append(
+                    {
+                        "role": row["role"],
+                        "message_type": message_type,
+                        "content": row.get("content"),
+                        "metadata": meta,
+                    }
                 )
-                saved += 1
                 continue
             if message_type in ("reasoning", "text"):
-                await repo.insert(
-                    chat_id=chat_id,
-                    role="assistant",
-                    message_type="cancelled",
-                    content=row.get("content"),
-                    metadata={
-                        **meta,
-                        "partial": True,
-                        "original_type": message_type,
-                    },
+                rows_to_insert.append(
+                    {
+                        "role": "assistant",
+                        "message_type": "cancelled",
+                        "content": row.get("content"),
+                        "metadata": {
+                            **meta,
+                            "partial": True,
+                            "original_type": message_type,
+                        },
+                    }
                 )
-                saved += 1
-        return saved
+        if not rows_to_insert:
+            return 0
+        await repo.insert_many(chat_id, rows_to_insert)
+        return len(rows_to_insert)
 
 
 # Backward-compatible alias for tests and legacy imports.
