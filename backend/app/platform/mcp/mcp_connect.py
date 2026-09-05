@@ -23,6 +23,8 @@ async def iter_mcp_connect_keepalive(
     connects two remote MCP servers sequentially, which can take 10–30s before
     the first model token — emit periodic pings during that window.
     """
+    if bundle.mcp_pool_handle is not None:
+        return
     servers = [getattr(tool, "name", type(tool).__name__) for tool in bundle.agent.mcp_tools]
     if servers:
         yield {

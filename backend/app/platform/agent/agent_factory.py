@@ -10,6 +10,7 @@ from app.platform.memory.long_term.context_provider import LongTermMemoryProvide
 from app.platform.memory.memory_config import parse_memory_config
 from app.platform.memory.postgres_history import PostgresHistoryProvider
 from app.platform.agent.agent_bundle import AgentBundle
+from app.platform.mcp.mcp_pool import McpPoolHandle
 from app.platform.hooks.hook_config import normalize_hooks
 from app.platform.hooks.hook_registry import resolve_middleware
 from app.platform.mcp.mcp_registry import McpRegistry
@@ -48,6 +49,8 @@ class AgentFactory:
         stop_event: asyncio.Event | None = None,
         turn_start_sequence: int | None = None,
         session_store: SessionStore | None = None,
+        mcp_tools: list | None = None,
+        mcp_pool_handle: McpPoolHandle | None = None,
     ) -> AgentBundle:
         row = await self.get_agent_row(agent_id)
         model_entry = resolve_agent_model(row, model_id)
@@ -93,7 +96,8 @@ class AgentFactory:
         )
 
         function_tools = await self._tools.resolve_for_agent(agent_id)
-        mcp_tools = await self._mcp.resolve_for_agent(agent_id, agent_config=row.config)
+        if mcp_tools is None:
+            mcp_tools = await self._mcp.resolve_for_agent(agent_id, agent_config=row.config)
         allowed = list((row.config or {}).get("allowed_tools") or [])
 
         has_sql_viz_hook = any(
@@ -120,4 +124,4 @@ class AgentFactory:
             tools=combined_tools or None,
             require_per_service_call_history_persistence=False,
         )
-        return AgentBundle(agent=agent)
+        return AgentBundle(agent=agent, mcp_pool_handle=mcp_pool_handle)

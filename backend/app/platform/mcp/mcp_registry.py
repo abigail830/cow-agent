@@ -1,3 +1,5 @@
+import hashlib
+import json
 import logging
 import os
 import uuid
@@ -44,14 +46,8 @@ class McpRegistry:
         agent_config: dict | None = None,
     ) -> list[Any]:
         profile_allowed = list((agent_config or {}).get("allowed_tools") or [])
-        result = await self._db.execute(
-            select(McpServer)
-            .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
-            .where(AgentMcpServer.agent_id == agent_id)
-            .order_by(McpServer.name)
-        )
         tools: list[Any] = []
-        for row in result.scalars().all():
+        for row in await self._agent_mcp_server_rows(agent_id):
             tool = self._build_tool(row, profile_allowed=profile_allowed)
             if tool is None:
                 continue
@@ -60,6 +56,26 @@ class McpRegistry:
             else:
                 tools.append(tool)
         return tools
+
+    async def config_fingerprint(self, agent_id: uuid.UUID) -> str:
+        rows = await self._agent_mcp_server_rows(agent_id)
+        if not rows:
+            return "none"
+        parts: list[str] = []
+        for row in rows:
+            connection = row.connection if isinstance(row.connection, dict) else {}
+            parts.append(f"{row.id}:{row.name}:{json.dumps(connection, sort_keys=True, default=str)}")
+        digest = hashlib.sha256("\n".join(parts).encode()).hexdigest()
+        return digest[:32]
+
+    async def _agent_mcp_server_rows(self, agent_id: uuid.UUID) -> list[McpServer]:
+        result = await self._db.execute(
+            select(McpServer)
+            .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
+            .where(AgentMcpServer.agent_id == agent_id)
+            .order_by(McpServer.name)
+        )
+        return list(result.scalars().all())
 
     def _build_tool(
         self,

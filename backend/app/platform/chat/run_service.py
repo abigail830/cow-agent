@@ -20,6 +20,7 @@ from app.platform.memory.maf_mapping import maf_message_to_rows, row_to_dict
 from app.platform.memory.memory_config import MemoryConfig, parse_memory_config
 from app.platform.agent.agent_factory import AgentFactory
 from app.platform.mcp.mcp_connect import disconnect_bundle, iter_mcp_connect_keepalive
+from app.platform.mcp.mcp_pool import McpPoolKey, get_mcp_connection_pool
 from app.platform.agent.platform_instructions import RUN_CANCELLED_USER_TEXT
 from app.platform.session.session_store import SessionStore
 from app.platform.session.user_message_input import build_user_run_input, link_attachments_metadata
@@ -147,6 +148,56 @@ class ChatRunService:
             raise ValueError("Agent not found for chat")
         model_entry = resolve_agent_model(agent, preference_id)
         return model_entry.id, model_entry.provider
+
+    async def _build_pooled_bundle(
+        self,
+        chat: Chat,
+        *,
+        model_id: str | None,
+        stop_event: asyncio.Event | None = None,
+        turn_start_sequence: int | None = None,
+        session_store: SessionStore | None = None,
+    ) -> Any:
+        agent_row = await self._factory.get_agent_row(chat.agent_id)
+        pool = get_mcp_connection_pool()
+        pool_key = McpPoolKey(
+            user_id=chat.user_id,
+            chat_id=chat.id,
+            agent_id=chat.agent_id,
+            config_fingerprint=await self._factory._mcp.config_fingerprint(chat.agent_id),
+        )
+
+        async def factory() -> list[Any]:
+            return await self._factory._mcp.resolve_for_agent(chat.agent_id, agent_config=agent_row.config)
+
+        handle = await pool.acquire(pool_key, factory)
+        try:
+            return await self._factory.build(
+                chat.agent_id,
+                chat_id=chat.id,
+                user_id=chat.user_id,
+                model_id=model_id,
+                stop_event=stop_event,
+                turn_start_sequence=turn_start_sequence,
+                session_store=session_store,
+                mcp_tools=handle.tools,
+                mcp_pool_handle=handle,
+            )
+        except Exception:
+            await pool.release(handle)
+            await pool.invalidate(pool_key)
+            raise
+
+    async def _release_bundle(self, bundle: Any, *, invalidate_on_error: bool = False) -> None:
+        handle = getattr(bundle, "mcp_pool_handle", None)
+        if handle is None:
+            await disconnect_bundle(bundle)
+            return
+        pool = get_mcp_connection_pool()
+        if invalidate_on_error:
+            await pool.invalidate(handle.key)
+            return
+        await pool.release(handle)
 
     async def _commit_user_turn(
         self,
@@ -370,10 +421,8 @@ class ChatRunService:
                 await run_plugin_end(run_ctx)
                 return memory_result.confirmation
 
-        bundle = await self._factory.build(
-            chat.agent_id,
-            chat_id=chat_id,
-            user_id=chat.user_id,
+        bundle = await self._build_pooled_bundle(
+            chat,
             model_id=model_id,
             turn_start_sequence=user_row.sequence,
             session_store=self._sessions,
@@ -501,10 +550,8 @@ class ChatRunService:
             }
 
         try:
-            bundle = await self._factory.build(
-                chat.agent_id,
-                chat_id=chat_id,
-                user_id=chat.user_id,
+            bundle = await self._build_pooled_bundle(
+                chat,
                 model_id=model_id,
                 stop_event=run.stop_event,
                 turn_start_sequence=user_row.sequence,
@@ -541,7 +588,7 @@ class ChatRunService:
 
                 final = await stream.get_final_response()
             finally:
-                await disconnect_bundle(bundle)
+                await self._release_bundle(bundle)
 
             # Unlock client UI before DB/session persistence (can take seconds on tool-heavy turns).
             yield {
