@@ -49,9 +49,11 @@ import {
   applyStreamToolCall,
   applyStreamToolResult,
   applyStreamViz,
+  applyDoneTurnMessages,
   finalizeStreamLocalMessages,
   finalizeStreamReasoning,
   mergeMessagesFromApi,
+  parseDoneTurnMessages,
 } from '../lib/messageActivity'
 import { turnSyncStatusLabel } from '../lib/turnSync'
 import type { ArtifactSpec } from '../types/artifact'
@@ -987,6 +989,9 @@ export function ChatPage() {
       isProposalComposer: composer,
       isYlWorker2: ylWorker,
       fulfillmentFormsFromStream: false,
+      doneTurnMessages: null,
+      turnStartSequence: null,
+      messagesSyncedFromDone: false,
     }
     streamRegistryRef.current.set(activeChatId, streamHandle)
 
@@ -1012,20 +1017,34 @@ export function ChatPage() {
           patchStreamSession({
             loading: false,
             activeRunId: null,
-            turnSyncPhase: 'saving-messages',
-            proposalTurnSyncing: composer && !handle.previewFreshFromStream,
           })
           patchStreamSession((prev) => ({
             messages: finalizeStreamLocalMessages(prev.messages),
           }))
         }
-        patchStreamSession({ turnSyncPhase: 'saving-messages' })
-        await reloadMessagesAfterStream(agentId, activeChatId)
-        if (composer && !handle.previewFreshFromStream) {
-          patchStreamSession({ turnSyncPhase: 'updating-preview' })
-          await fetchProposalPreview(agentId, activeChatId)
+
+        if (!handle.messagesSyncedFromDone) {
+          const canPatchFromDone =
+            handle.doneTurnMessages != null && handle.turnStartSequence != null
+          if (canPatchFromDone) {
+            patchStreamSession((prev) => ({
+              messages: applyDoneTurnMessages(
+                prev.messages,
+                handle.doneTurnMessages!,
+                handle.turnStartSequence!,
+              ),
+            }))
+          } else {
+            patchStreamSession({ turnSyncPhase: 'saving-messages' })
+            await reloadMessagesAfterStream(agentId, activeChatId)
+            patchStreamSession({ turnSyncPhase: null })
+          }
         }
-        await fulfillment.afterStreamTurn(handle, agentId, activeChatId)
+
+        if (composer && !handle.previewFreshFromStream) {
+          void fetchProposalPreview(agentId, activeChatId)
+        }
+        void fulfillment.afterStreamTurn(handle, agentId, activeChatId)
       } finally {
         if (streamRegistryRef.current.isActive(activeChatId, generation)) {
           patchStreamSession({
@@ -1159,10 +1178,28 @@ export function ChatPage() {
             patchStreamSession((prev) => ({
               loading: false,
               activeRunId: null,
-              turnSyncPhase: 'saving-messages',
-              proposalTurnSyncing: composer && !handle.previewFreshFromStream,
               messages: finalizeStreamLocalMessages(prev.messages),
             }))
+          }
+          if (ev.event === 'done') {
+            const doneMessages = parseDoneTurnMessages(ev.data.messages)
+            const turnStartSequence =
+              typeof ev.data.turn_start_sequence === 'number'
+                ? ev.data.turn_start_sequence
+                : null
+            if (doneMessages != null) {
+              handle.doneTurnMessages = doneMessages
+            }
+            if (turnStartSequence != null) {
+              handle.turnStartSequence = turnStartSequence
+            }
+            if (doneMessages != null && turnStartSequence != null) {
+              handle.messagesSyncedFromDone = true
+              patchStreamSession((prev) => ({
+                turnSyncPhase: null,
+                messages: applyDoneTurnMessages(prev.messages, doneMessages, turnStartSequence),
+              }))
+            }
           }
           if (ev.event === 'error') {
             throw new Error(formatUserFacingError(ev.data.error ?? ev.data, 'stream error'))

@@ -42,12 +42,16 @@ class AgentPlugin(ABC):
     async def on_run_end(self, ctx: RunContext) -> None:
         return None
 
-    async def on_finalize_success(self, ctx: RunContext, *, accumulator: Any | None = None) -> None:
+    async def on_finalize_success(
+        self, ctx: RunContext, *, accumulator: Any | None = None
+    ) -> dict[str, Any] | None:
         return None
 
     def stream_emitters(self) -> list:
         return []
 
-    async def on_finalize_failure(self, ctx: RunContext, *, accumulator: Any | None = None) -> None:
+    async def on_finalize_failure(
+        self, ctx: RunContext, *, accumulator: Any | None = None
+    ) -> dict[str, Any] | None:
         return None
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.agent_specific.proposal.plugin import ProposalPlugin
 from app.agent_specific.slide.plugin import SlidePlugin
 from app.agent_specific.viz.plugin import VIZ_TOOL_NAMES, VizCapabilityPlugin
@@ -48,11 +50,19 @@ async def run_plugin_end(ctx) -> None:
         await plugin.on_run_end(ctx)
 
 
-async def run_plugin_finalize_success(ctx, *, accumulator=None) -> None:
+async def run_plugin_finalize_success(ctx, *, accumulator=None) -> dict[str, Any]:
+    extensions: dict[str, Any] = {}
     for plugin in iter_plugins_for_slug(ctx.agent_slug):
-        await plugin.on_finalize_success(ctx, accumulator=accumulator)
+        payload = await plugin.on_finalize_success(ctx, accumulator=accumulator)
+        if payload:
+            extensions.update(payload)
+    return extensions
 
 
-async def run_plugin_finalize_failure(ctx, *, accumulator=None) -> None:
+async def run_plugin_finalize_failure(ctx, *, accumulator=None) -> dict[str, Any]:
+    extensions: dict[str, Any] = {}
     for plugin in iter_plugins_for_slug(ctx.agent_slug):
-        await plugin.on_finalize_failure(ctx, accumulator=accumulator)
+        payload = await plugin.on_finalize_failure(ctx, accumulator=accumulator)
+        if payload:
+            extensions.update(payload)
+    return extensions

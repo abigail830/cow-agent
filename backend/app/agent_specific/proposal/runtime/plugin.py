@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from app.agent_specific.proposal.runtime.context import init_run_proposal_state, reset_run_proposal_state
+from app.agent_specific.proposal.runtime.context import get_run_proposal_state, init_run_proposal_state, reset_run_proposal_state
 from app.agent_specific.proposal.runtime.store import (
+    PROPOSAL_DRAFT_KEY,
     load_proposal_draft_from_payload,
-    persist_proposal_draft_if_dirty,
 )
 from app.agent_specific.proposal.runtime.stream_emitter import ProposalStreamEmitter
 from app.platform.runtime.plugin import AgentPlugin, RunContext
@@ -44,11 +44,19 @@ class ProposalPlugin(AgentPlugin):
     async def on_run_end(self, ctx: RunContext) -> None:
         reset_run_proposal_state()
 
-    async def on_finalize_success(self, ctx: RunContext, *, accumulator=None) -> None:
-        await persist_proposal_draft_if_dirty(ctx.session_store, ctx.chat_id)
+    async def on_finalize_success(self, ctx: RunContext, *, accumulator=None) -> dict[str, object] | None:
+        state = get_run_proposal_state()
+        if state is None or not state.draft_dirty or state.draft is None:
+            return None
+        state.draft_dirty = False
+        return {PROPOSAL_DRAFT_KEY: state.draft}
 
-    async def on_finalize_failure(self, ctx: RunContext, *, accumulator=None) -> None:
-        await persist_proposal_draft_if_dirty(ctx.session_store, ctx.chat_id)
+    async def on_finalize_failure(self, ctx: RunContext, *, accumulator=None) -> dict[str, object] | None:
+        state = get_run_proposal_state()
+        if state is None or not state.draft_dirty or state.draft is None:
+            return None
+        state.draft_dirty = False
+        return {PROPOSAL_DRAFT_KEY: state.draft}
 
     def stream_emitters(self) -> list:
         return [ProposalStreamEmitter()]

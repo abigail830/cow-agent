@@ -1,3 +1,5 @@
+import type { Message } from '../types'
+
 export type ActiveStream = {
   chatId: string
   agentId: string
@@ -12,6 +14,9 @@ export type ActiveStream = {
   isProposalComposer: boolean
   isYlWorker2: boolean
   fulfillmentFormsFromStream: boolean
+  doneTurnMessages: Message[] | null
+  turnStartSequence: number | null
+  messagesSyncedFromDone: boolean
 }
 
 export class StreamRegistry {

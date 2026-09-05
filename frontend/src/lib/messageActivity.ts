@@ -447,6 +447,76 @@ export function mergeMessagesFromApi(persisted: Message[], local: Message[]): Me
   return Array.from(merged.values()).sort((a, b) => a.sequence - b.sequence)
 }
 
+function isEphemeralLocalMessage(message: Message): boolean {
+  if (message.id === LOCAL_STREAM_TEXT_ID || message.id === LOCAL_STREAM_REASONING_ID) {
+    return true
+  }
+  if (message.id.startsWith('local-')) return true
+  if (message.metadata?.local === true) return true
+  return false
+}
+
+/** Patch persisted turn rows from done SSE; drop streaming placeholders for this turn. */
+export function applyDoneTurnMessages(
+  local: Message[],
+  doneMessages: Message[],
+  turnStartSequence: number,
+): Message[] {
+  const merged = new Map<string, Message>()
+
+  for (const message of local) {
+    if (message.sequence < turnStartSequence && !isEphemeralLocalMessage(message)) {
+      merged.set(message.id, message)
+    }
+  }
+  for (const message of doneMessages) {
+    merged.set(message.id, message)
+  }
+
+  let maxSequence = Array.from(merged.values()).reduce((max, row) => Math.max(max, row.sequence), 0)
+  const persisted = Array.from(merged.values())
+
+  for (const message of local) {
+    if (!message.id.startsWith('tmp-') || message.role !== 'user' || message.message_type !== 'text') {
+      continue
+    }
+    const content = (message.content ?? '').trim()
+    const hasAttachments = attachmentIds(message.metadata).length > 0
+    if (!content && !hasAttachments) continue
+    if (!userMessageConfirmed(persisted, message)) {
+      maxSequence += 1
+      merged.set(message.id, { ...message, sequence: maxSequence })
+    }
+  }
+
+  return Array.from(merged.values()).sort((a, b) => a.sequence - b.sequence)
+}
+
+export function parseDoneTurnMessages(raw: unknown): Message[] | null {
+  if (!Array.isArray(raw)) return null
+  const messages: Message[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') return null
+    const row = item as Record<string, unknown>
+    if (typeof row.id !== 'string' || typeof row.sequence !== 'number') return null
+    messages.push({
+      id: row.id,
+      chat_id: typeof row.chat_id === 'string' ? row.chat_id : '',
+      role: typeof row.role === 'string' ? row.role : '',
+      message_type: typeof row.message_type === 'string' ? row.message_type : '',
+      content: row.content == null ? null : String(row.content),
+      metadata:
+        row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+          ? (row.metadata as Record<string, unknown>)
+          : {},
+      parent_id: row.parent_id == null ? null : String(row.parent_id),
+      sequence: row.sequence,
+      created_at: row.created_at == null ? null : String(row.created_at),
+    })
+  }
+  return messages
+}
+
 export function applyStreamText(messages: Message[], chatId: string, text: string): Message[] {
   if (!text.trim()) return messages
   const existing = messages.find((message) => message.id === LOCAL_STREAM_TEXT_ID)

@@ -110,9 +110,13 @@ class SessionStore:
         session: AgentSession,
         memory_config: MemoryConfig,
         turn_rows: list[dict[str, Any]],
+        *,
+        payload_extensions: dict[str, Any] | None = None,
     ) -> None:
         """Merge persisted turn rows into working set and save MAF session in one payload write."""
         payload = await self._load_payload(chat_id) or {}
+        if payload_extensions:
+            payload.update(payload_extensions)
         if turn_rows:
             payload = await self._merge_turn_rows_into_payload(
                 chat_id,
