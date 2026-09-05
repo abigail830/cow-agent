@@ -565,12 +565,41 @@ export function ChatPage() {
 
   const createAndOpenChat = useCallback(
     async (agentId: string) => {
-      const chat = await api.createChat(agentId)
-      await openChatById(agentId, chat.id)
-      await refreshChatHistory(agentId)
-      return chat.id
+      const current = getAgentSession(sessionsRef.current, agentId)
+      if (current.chatId) {
+        streamRegistryRef.current.abort(current.chatId)
+      }
+      patchSession(agentId, {
+        error: null,
+        chatSessionLoading: true,
+        messages: [],
+        input: '',
+        pendingAttachments: [],
+        expandedArtifact: null,
+      })
+      resetProposalPanel(agentId)
+      try {
+        const chat = await api.createChat(agentId)
+        setStoredChatId(agentId, chat.id)
+        streamRegistryRef.current.bindChat(chat.id, agentId)
+        patchSession(agentId, {
+          chatId: chat.id,
+          messages: [],
+          chatSessionLoading: false,
+          initialized: true,
+          error: null,
+        })
+        void refreshChatHistory(agentId)
+        return chat.id
+      } catch (e) {
+        patchSession(agentId, {
+          chatSessionLoading: false,
+          error: e instanceof Error ? e.message : 'Failed to start new conversation',
+        })
+        throw e
+      }
     },
-    [openChatById, refreshChatHistory],
+    [patchSession, refreshChatHistory, resetProposalPanel],
   )
 
   const loadChat = useCallback(
@@ -1238,7 +1267,6 @@ export function ChatPage() {
     setHistoryOpen(false)
     proposalFetchKeyRef.current = null
     fulfillment.resetFetchKey()
-    patchSession(selectedId, { error: null })
     try {
       await createAndOpenChat(selectedId)
       patchSession(selectedId, {
@@ -1246,10 +1274,8 @@ export function ChatPage() {
         proposalPanelCollapsed: isProposalComposer ? false : true,
         ...fulfillment.newChatPatch(),
       })
-    } catch (e) {
-      patchSession(selectedId, {
-        error: e instanceof Error ? e.message : 'Failed to start new conversation',
-      })
+    } catch {
+      /* error patched in createAndOpenChat */
     }
   }
 
