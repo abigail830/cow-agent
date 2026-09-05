@@ -208,6 +208,10 @@ def load_agent_profile(agent_dir: Path) -> AgentProfile:
             model_name = settings.claude_azure_foundry_model or "claude-sonnet-4-6"
         elif model_provider == ModelProvider.SILICONFLOW.value:
             model_name = settings.siliconflow_default_model or ""
+        elif model_provider == ModelProvider.DASHSCOPE.value:
+            model_name = settings.dashscope_default_model or ""
+        elif model_provider == ModelProvider.DEEPSEEK.value:
+            model_name = settings.deepseek_default_model or ""
         else:
             model_name = settings.azure_openai_deployment
 

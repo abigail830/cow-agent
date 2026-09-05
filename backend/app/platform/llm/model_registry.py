@@ -29,6 +29,8 @@ class ModelProvider(str, Enum):
     AZURE_OPENAI = "azure_openai"
     AZURE_ANTHROPIC = "azure_anthropic"
     SILICONFLOW = "siliconflow"
+    DASHSCOPE = "dashscope"
+    DEEPSEEK = "deepseek"
 
 
 _FUNCTION_INVOCATION_CONFIG = {
@@ -74,18 +76,53 @@ class ModelProviderRegistry:
 
     def create_siliconflow_client(self, *, model: str | None = None) -> OpenAIChatCompletionClient:
         """SiliconFlow uses standard OpenAI Chat Completions, not Azure Responses API."""
-        s = self._settings
-        if not s.siliconflow_api_key:
-            raise ValueError("SiliconFlow is not configured (SILICONFLOW_API_KEY env var)")
-        resolved_model = model or s.siliconflow_default_model
-        if not resolved_model:
+        return self._create_openai_compatible_client(
+            api_key=self._settings.siliconflow_api_key,
+            base_url=self._settings.siliconflow_base_url,
+            model=model or self._settings.siliconflow_default_model,
+            provider_label="SiliconFlow",
+            api_key_env="SILICONFLOW_API_KEY",
+        )
+
+    def create_dashscope_client(self, *, model: str | None = None) -> OpenAIChatCompletionClient:
+        """Alibaba DashScope compatible-mode Chat Completions API."""
+        return self._create_openai_compatible_client(
+            api_key=self._settings.dashscope_api_key,
+            base_url=self._settings.dashscope_base_url,
+            model=model or self._settings.dashscope_default_model,
+            provider_label="DashScope",
+            api_key_env="DASHSCOPE_API_KEY",
+        )
+
+    def create_deepseek_client(self, *, model: str | None = None) -> OpenAIChatCompletionClient:
+        """DeepSeek OpenAI-compatible Chat Completions API."""
+        return self._create_openai_compatible_client(
+            api_key=self._settings.deepseek_api_key,
+            base_url=self._settings.deepseek_base_url,
+            model=model or self._settings.deepseek_default_model,
+            provider_label="DeepSeek",
+            api_key_env="DEEPSEEK_API_KEY",
+        )
+
+    def _create_openai_compatible_client(
+        self,
+        *,
+        api_key: str | None,
+        base_url: str,
+        model: str | None,
+        provider_label: str,
+        api_key_env: str,
+    ) -> OpenAIChatCompletionClient:
+        if not api_key:
+            raise ValueError(f"{provider_label} is not configured ({api_key_env} env var)")
+        if not model:
             raise ValueError(
-                "SiliconFlow model is required — set model in profile.yaml or SILICONFLOW_DEFAULT_MODEL"
+                f"{provider_label} model is required — set model in profile.yaml or catalog deployment"
             )
         return OpenAIChatCompletionClient(
-            model=resolved_model,
-            api_key=s.siliconflow_api_key,
-            base_url=_openai_compatible_base_url(s.siliconflow_base_url),
+            model=model,
+            api_key=api_key,
+            base_url=_openai_compatible_base_url(base_url),
             function_invocation_configuration=_FUNCTION_INVOCATION_CONFIG,
         )
 
@@ -108,6 +145,10 @@ class ModelProviderRegistry:
             client = self.create_azure_anthropic_client(model=model_name)
         elif model_provider == ModelProvider.SILICONFLOW:
             client = self.create_siliconflow_client(model=model_name)
+        elif model_provider == ModelProvider.DASHSCOPE:
+            client = self.create_dashscope_client(model=model_name)
+        elif model_provider == ModelProvider.DEEPSEEK:
+            client = self.create_deepseek_client(model=model_name)
         else:
             raise NotImplementedError(f"Provider {model_provider} not implemented")
 

@@ -92,5 +92,7 @@ def test_neutral_call_ids_kept_for_both_providers() -> None:
         ModelProvider.AZURE_OPENAI.value,
         ModelProvider.AZURE_ANTHROPIC.value,
         ModelProvider.SILICONFLOW.value,
+        ModelProvider.DASHSCOPE.value,
+        ModelProvider.DEEPSEEK.value,
     ):
         assert len(sanitize_rows_for_provider(rows, provider=provider)) == 2

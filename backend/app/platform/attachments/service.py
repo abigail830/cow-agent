@@ -58,10 +58,14 @@ class AttachmentService:
                 provider=ModelProvider.AZURE_OPENAI.value,
             )
 
-        if agent.model_provider == ModelProvider.SILICONFLOW.value:
+        if agent.model_provider in {
+            ModelProvider.SILICONFLOW.value,
+            ModelProvider.DASHSCOPE.value,
+            ModelProvider.DEEPSEEK.value,
+        }:
             if not mime_type.startswith("image/"):
                 raise ValueError(
-                    "SiliconFlow agents only support image attachments (inline); "
+                    "This model provider only supports image attachments (inline); "
                     "PDF and other files are not supported yet."
                 )
             return await self._upload_inline_image(
@@ -69,7 +73,7 @@ class AttachmentService:
                 filename=filename,
                 mime_type=mime_type,
                 data=data,
-                provider=ModelProvider.SILICONFLOW.value,
+                provider=agent.model_provider,
             )
 
         adapter = get_attachment_upload_adapter(agent.model_provider)

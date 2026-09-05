@@ -22,7 +22,7 @@ agents/
 |-------|----------|-------------|
 | `id` | yes | Slug，与目录名一致 |
 | `name` | yes | 显示名 |
-| `model_provider` | yes | `azure_openai` / `azure_anthropic` / `siliconflow` |
+| `model_provider` | yes | `azure_openai` / `azure_anthropic` / `siliconflow` / `dashscope` / `deepseek` |
 | `model` | yes | Deployment；支持 `${ENV_VAR}` |
 | `mcp_servers` | no | 引用 `mcp_servers.yaml` 中的 key；可在 profile 内联 `env`（见下） |
 | `allowed_tools` | no | MAF 工具名，如 `postgres_query_data`（对应 mcp-postgres 的 `query_data`） |
@@ -111,6 +111,46 @@ SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
 ```
 
 附件：仅支持**图片** inline；PDF 等文件暂不支持。
+
+### DashScope（阿里云百炼）
+
+OpenAI **Chat Completions** 兼容模式：
+
+```yaml
+model_provider: dashscope
+model: qwen3.7-plus
+default_model: qwen3.7-plus   # 可选，对应 config/models.yaml 的 id
+```
+
+后端 / Vercel 环境变量：
+
+```bash
+DASHSCOPE_API_KEY=sk-...
+DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+# DASHSCOPE_DEFAULT_MODEL=qwen3.7-plus   # profile 未写 model 时的默认值
+```
+
+可选模型见 `backend/config/models.yaml`（如 `qwen3.7-plus`、`qwen3.8-max`）。附件规则同 SiliconFlow：仅图片 inline。
+
+### DeepSeek
+
+OpenAI **Chat Completions** 兼容接口：
+
+```yaml
+model_provider: deepseek
+model: deepseek-v4-flash
+default_model: deepseek-v4-flash
+```
+
+后端 / Vercel 环境变量：
+
+```bash
+DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+# DEEPSEEK_DEFAULT_MODEL=deepseek-v4-flash
+```
+
+附件规则同 SiliconFlow：仅图片 inline。
 
 ### mcp_servers.yaml vs profile
 

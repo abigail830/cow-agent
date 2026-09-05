@@ -6,6 +6,10 @@ providers:
     base_url: ${CLAUDE_AZURE_FOUNDRY_ENDPOINT}
   siliconflow:
     base_url: ${SILICONFLOW_BASE_URL}
+  dashscope:
+    base_url: ${DASHSCOPE_BASE_URL}
+  deepseek:
+    base_url: ${DEEPSEEK_BASE_URL}
 
 models:
   - id: gpt-5.4
@@ -24,4 +28,22 @@ models:
     label: GLM-5.2
     provider: siliconflow
     deployment: ${SILICONFLOW_DEFAULT_MODEL}
+    enabled: true
+
+  - id: qwen3.7-plus
+    label: Qwen 3.7 Plus
+    provider: dashscope
+    deployment: qwen3.7-plus
+    enabled: true
+
+  - id: qwen3.8-max
+    label: Qwen 3.8 Max
+    provider: dashscope
+    deployment: qwen3.8-max
+    enabled: true
+
+  - id: deepseek-v4-flash
+    label: DeepSeek V4 Flash
+    provider: deepseek
+    deployment: deepseek-v4-flash
     enabled: true

@@ -63,3 +63,71 @@ def test_siliconflow_requires_api_key():
             assert False, "expected ValueError"
         except ValueError as exc:
             assert "SILICONFLOW_API_KEY" in str(exc)
+
+
+def test_dashscope_client_uses_chat_completions_api():
+    registry = ModelProviderRegistry()
+    with patch("app.platform.llm.model_registry.OpenAIChatCompletionClient") as mock_cls:
+        with patch.object(
+            registry,
+            "_settings",
+            type(
+                "S",
+                (),
+                {
+                    "dashscope_api_key": "sk-test",
+                    "dashscope_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                    "dashscope_default_model": None,
+                },
+            )(),
+        ):
+            registry.create_dashscope_client(model="qwen3.7-plus")
+    _, kwargs = mock_cls.call_args
+    assert kwargs["model"] == "qwen3.7-plus"
+    assert kwargs["api_key"] == "sk-test"
+    assert kwargs["base_url"] == "https://dashscope.aliyuncs.com/compatible-mode/v1/"
+    assert kwargs["function_invocation_configuration"] == {"include_detailed_errors": True}
+
+
+def test_dashscope_requires_api_key():
+    registry = ModelProviderRegistry()
+    with patch.object(registry._settings, "dashscope_api_key", None):
+        try:
+            registry.create_dashscope_client(model="qwen3.7-plus")
+            assert False, "expected ValueError"
+        except ValueError as exc:
+            assert "DASHSCOPE_API_KEY" in str(exc)
+
+
+def test_deepseek_client_uses_chat_completions_api():
+    registry = ModelProviderRegistry()
+    with patch("app.platform.llm.model_registry.OpenAIChatCompletionClient") as mock_cls:
+        with patch.object(
+            registry,
+            "_settings",
+            type(
+                "S",
+                (),
+                {
+                    "deepseek_api_key": "sk-test",
+                    "deepseek_base_url": "https://api.deepseek.com",
+                    "deepseek_default_model": None,
+                },
+            )(),
+        ):
+            registry.create_deepseek_client(model="deepseek-v4-flash")
+    _, kwargs = mock_cls.call_args
+    assert kwargs["model"] == "deepseek-v4-flash"
+    assert kwargs["api_key"] == "sk-test"
+    assert kwargs["base_url"] == "https://api.deepseek.com/v1/"
+    assert kwargs["function_invocation_configuration"] == {"include_detailed_errors": True}
+
+
+def test_deepseek_requires_api_key():
+    registry = ModelProviderRegistry()
+    with patch.object(registry._settings, "deepseek_api_key", None):
+        try:
+            registry.create_deepseek_client(model="deepseek-v4-flash")
+            assert False, "expected ValueError"
+        except ValueError as exc:
+            assert "DEEPSEEK_API_KEY" in str(exc)

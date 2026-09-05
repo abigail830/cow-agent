@@ -74,6 +74,28 @@ class Settings(BaseSettings):
         validation_alias="SILICONFLOW_DEFAULT_MODEL",
     )
 
+    # Alibaba DashScope (OpenAI-compatible — https://dashscope.aliyuncs.com/compatible-mode/v1)
+    dashscope_api_key: str | None = Field(default=None, validation_alias="DASHSCOPE_API_KEY")
+    dashscope_base_url: str = Field(
+        default="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        validation_alias="DASHSCOPE_BASE_URL",
+    )
+    dashscope_default_model: str | None = Field(
+        default=None,
+        validation_alias="DASHSCOPE_DEFAULT_MODEL",
+    )
+
+    # DeepSeek (OpenAI-compatible — https://api.deepseek.com)
+    deepseek_api_key: str | None = Field(default=None, validation_alias="DEEPSEEK_API_KEY")
+    deepseek_base_url: str = Field(
+        default="https://api.deepseek.com",
+        validation_alias="DEEPSEEK_BASE_URL",
+    )
+    deepseek_default_model: str | None = Field(
+        default=None,
+        validation_alias="DEEPSEEK_DEFAULT_MODEL",
+    )
+
     database_url: str = Field(validation_alias="DATABASE_URL")
     redis_url: str = Field(validation_alias="REDIS_URL")
     yl_database_url: str | None = Field(default=None, validation_alias="YL_DATABASE_URL")

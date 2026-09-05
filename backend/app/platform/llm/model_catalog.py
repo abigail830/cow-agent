@@ -24,7 +24,11 @@ class ModelEntry:
 
     @property
     def supports_attachments(self) -> bool:
-        return self.provider != ModelProvider.SILICONFLOW.value
+        return self.provider not in {
+            ModelProvider.SILICONFLOW.value,
+            ModelProvider.DASHSCOPE.value,
+            ModelProvider.DEEPSEEK.value,
+        }
 
 
 @dataclass(frozen=True)
@@ -86,6 +90,10 @@ def _provider_configured(provider: str, settings: Settings) -> bool:
         return bool(settings.claude_azure_api_key and settings.claude_azure_foundry_endpoint)
     if provider == ModelProvider.SILICONFLOW.value:
         return bool(settings.siliconflow_api_key)
+    if provider == ModelProvider.DASHSCOPE.value:
+        return bool(settings.dashscope_api_key)
+    if provider == ModelProvider.DEEPSEEK.value:
+        return bool(settings.deepseek_api_key)
     return False
 
 
