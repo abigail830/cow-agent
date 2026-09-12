@@ -21,6 +21,8 @@ from app.platform.session.session_store import SessionStore
 from app.platform.agent.skill_registry import SkillRegistry
 from app.platform.agent.tool_registry import ToolRegistry
 from app.platform.agent.plugin_registry import tool_names_for_slug, viz_tool_names
+from app.platform.agent.builtin_registry import BUILTIN_TOOLS
+from app.platform.agent.platform_time import PLATFORM_ALWAYS_BUILTIN_TOOL_NAMES
 from app.platform.agent.tool_groups import resolve_builtin_tools
 
 
@@ -86,12 +88,14 @@ class AgentFactory:
             context_providers.append(skills_provider)
             skill_tools.update({"load_skill", "read_skill_resource"})
 
+        extra_allowed_tools = set(PLATFORM_ALWAYS_BUILTIN_TOOL_NAMES) | skill_tools
+
         middleware = resolve_middleware(
             row.config,
             self._db,
             chat_id=chat_id,
             session_store=store,
-            extra_allowed_tools=skill_tools or None,
+            extra_allowed_tools=extra_allowed_tools or None,
             stop_event=stop_event,
         )
 
@@ -112,7 +116,13 @@ class AgentFactory:
         if has_sql_viz_hook:
             builtin_tools.extend(resolve_builtin_tools(allowed, viz_tool_names()))
 
+        always_builtin = [
+            BUILTIN_TOOLS[name]
+            for name in PLATFORM_ALWAYS_BUILTIN_TOOL_NAMES
+            if name in BUILTIN_TOOLS
+        ]
         combined_tools = [
+            *always_builtin,
             *builtin_tools,
             *list(function_tools or []),
             *mcp_tools,
