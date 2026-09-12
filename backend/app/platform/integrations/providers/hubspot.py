@@ -23,6 +23,7 @@ class HubSpotIntegrationProvider:
     """Stub-ready provider mirroring the ascentium-omni HubSpot MCP OAuth shape."""
 
     id = HUBSPOT_PROVIDER_ID
+    auth_kind = "oauth"
     display_name = "HubSpot"
     description = "Connect HubSpot CRM via remote MCP (OAuth)."
     mcp_url = HUBSPOT_MCP_URL

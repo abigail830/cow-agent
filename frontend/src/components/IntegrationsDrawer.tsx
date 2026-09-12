@@ -17,11 +17,13 @@ const PROVIDER_DOCS: Record<string, string> = {
 }
 
 function providerInitial(provider: string): string {
+  if (provider === 'hybrid-search') return 'KB'
   return provider.slice(0, 1).toUpperCase()
 }
 
 function statusLabel(item: IntegrationStatus): string {
   if (item.connected) return 'Connected'
+  if (item.auth_kind === 'api_key') return item.configured ? 'Not set' : 'Unavailable'
   if (item.configured) return 'Available'
   return 'Not configured'
 }
@@ -33,6 +35,7 @@ export function IntegrationsDrawer({ open, onClose }: Props) {
   const [busyProvider, setBusyProvider] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [apiKeyDrafts, setApiKeyDrafts] = useState<Record<string, string>>({})
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -107,6 +110,27 @@ export function IntegrationsDrawer({ open, onClose }: Props) {
     }
   }
 
+  const handleSaveApiKey = async (provider: string) => {
+    const apiKey = apiKeyDrafts[provider]?.trim()
+    if (!apiKey) {
+      setError('Enter an API key before saving.')
+      return
+    }
+    setBusyProvider(provider)
+    setError(null)
+    setNotice(null)
+    try {
+      await api.saveIntegrationCredentials(provider, apiKey)
+      setApiKeyDrafts((prev) => ({ ...prev, [provider]: '' }))
+      setNotice(`${provider} API key saved.`)
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save API key')
+    } finally {
+      setBusyProvider(null)
+    }
+  }
+
   const handleDisconnect = async (provider: string) => {
     setBusyProvider(provider)
     setError(null)
@@ -155,6 +179,8 @@ export function IntegrationsDrawer({ open, onClose }: Props) {
                 const docsUrl = PROVIDER_DOCS[item.provider]
                 const busy = busyProvider === item.provider
                 const connected = item.connected
+                const isApiKey = item.auth_kind === 'api_key'
+                const draft = apiKeyDrafts[item.provider] ?? ''
 
                 return (
                   <li key={item.provider}>
@@ -184,7 +210,30 @@ export function IntegrationsDrawer({ open, onClose }: Props) {
                             <p className="integration-tile-account">{item.account_label}</p>
                           ) : null}
                           {!item.configured ? (
-                            <p className="integration-tile-hint">OAuth credentials not configured on server.</p>
+                            <p className="integration-tile-hint">
+                              {isApiKey
+                                ? 'Service endpoint is not configured on this deployment.'
+                                : 'OAuth credentials not configured on server.'}
+                            </p>
+                          ) : null}
+                          {isApiKey && item.configured && !connected ? (
+                            <label className="integration-api-key-field">
+                              <span className="integration-api-key-label">API key</span>
+                              <input
+                                type="password"
+                                className="integration-api-key-input"
+                                value={draft}
+                                autoComplete="off"
+                                placeholder="Paste your API key"
+                                disabled={busy}
+                                onChange={(event) =>
+                                  setApiKeyDrafts((prev) => ({
+                                    ...prev,
+                                    [item.provider]: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
                           ) : null}
                         </div>
                       </div>
@@ -197,7 +246,16 @@ export function IntegrationsDrawer({ open, onClose }: Props) {
                             disabled={busy}
                             onClick={() => void handleDisconnect(item.provider)}
                           >
-                            Disconnect
+                            {isApiKey ? 'Remove key' : 'Disconnect'}
+                          </button>
+                        ) : isApiKey ? (
+                          <button
+                            type="button"
+                            className="integration-tile-btn integration-tile-btn-primary"
+                            disabled={!item.configured || busy || !draft.trim()}
+                            onClick={() => void handleSaveApiKey(item.provider)}
+                          >
+                            Save key
                           </button>
                         ) : (
                           <button

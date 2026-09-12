@@ -10,7 +10,8 @@ default_model: claude-sonnet-4-6
 prompt_file: system_prompt.md
 skills_dir: skills
 
-mcp_servers: {}
+mcp_servers:
+  - hubspot
 
 allowed_tools:
   - list_templates
@@ -29,6 +30,14 @@ allowed_tools:
   - render_preview
   - generate_document
   - generate_word_document
+  - hubspot_get_user_details
+  - hubspot_search_crm_objects
+  - hubspot_get_crm_objects
+  - hubspot_manage_crm_objects
+  - hubspot_search_properties
+  - hubspot_get_properties
+  - hubspot_search_owners
+  - hubspot_get_tool_instructions
 
 hooks:
   proposal_persist: {}

@@ -8,6 +8,7 @@ export interface IntegrationStatus {
   provider: string
   display_name: string
   description: string
+  auth_kind: 'oauth' | 'api_key'
   configured: boolean
   connected: boolean
   account_label?: string | null

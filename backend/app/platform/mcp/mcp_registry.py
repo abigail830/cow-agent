@@ -32,12 +32,12 @@ def _mcp_http_client(headers: dict[str, str] | None = None) -> AsyncClient:
     )
 
 
-def _integration_provider_from_config(config: dict[str, Any]) -> str | None:
+def _integration_auth_from_config(config: dict[str, Any]) -> tuple[str | None, str | None]:
     auth_mode = str(config.get("auth") or "").strip().lower()
     integration = str(config.get("integration") or "").strip().lower()
-    if auth_mode == "oauth" and integration:
-        return integration
-    return None
+    if integration and auth_mode in ("oauth", "api_key"):
+        return integration, auth_mode
+    return None, None
 
 
 class McpRegistry:
@@ -81,10 +81,10 @@ class McpRegistry:
                     config = resolve_runtime_config_safe(connection)
                 except SecretStoreError:
                     continue
-                provider = _integration_provider_from_config(config)
+                provider = _integration_auth_from_config(config)[0]
                 if provider:
                     version = await token_service.connection_version(user_id=user_id, provider=provider)
-                    parts.append(f"oauth:{provider}:{version}")
+                    parts.append(f"integration:{provider}:{version}")
         digest = hashlib.sha256("\n".join(parts).encode()).hexdigest()
         return digest[:32]
 
@@ -114,7 +114,7 @@ class McpRegistry:
         tool_name = mcp_tool_name(row.name, row.connection)
         description = row.description or f"MCP server: {tool_name}"
         mcp_allowed = mcp_remote_tools_for_server(profile_allowed or [], tool_name)
-        integration_provider = _integration_provider_from_config(config)
+        integration_id, integration_auth = _integration_auth_from_config(config)
 
         if transport == "http" or config.get("url"):
             url = config.get("url")
@@ -123,21 +123,22 @@ class McpRegistry:
                 return None
             request_timeout = get_settings().mcp_http_request_timeout
 
-            if integration_provider:
+            if integration_id:
                 if user_id is None:
-                    logger.warning("Skipping OAuth MCP server %s — missing user_id", tool_name)
+                    logger.warning("Skipping integration MCP server %s — missing user_id", tool_name)
                     return None
                 token_service = IntegrationTokenService(self._db)
-                access_token = await token_service.get_valid_access_token(
+                access_token = await token_service.get_mcp_bearer_token(
                     user_id=user_id,
-                    provider=integration_provider,
+                    provider=integration_id,
+                    auth_kind=integration_auth or "oauth",
                 )
                 if not access_token:
                     logger.info(
-                        "Skipping OAuth MCP server %s — user %s not connected to %s",
+                        "Skipping integration MCP server %s — user %s not connected to %s",
                         tool_name,
                         user_id,
-                        integration_provider,
+                        integration_id,
                     )
                     return None
                 static_headers = {"Authorization": f"Bearer {access_token}"}

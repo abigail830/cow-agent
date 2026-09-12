@@ -25,6 +25,7 @@ class IntegrationStatusOut(BaseModel):
     provider: str
     display_name: str
     description: str
+    auth_kind: str
     configured: bool
     connected: bool
     account_label: str | None = None
@@ -33,6 +34,15 @@ class IntegrationStatusOut(BaseModel):
 
 class ConnectOut(BaseModel):
     authorize_url: str
+
+
+class SaveCredentialsIn(BaseModel):
+    api_key: str
+
+
+class SaveCredentialsOut(BaseModel):
+    connected: bool
+    account_label: str | None = None
 
 
 class DisconnectOut(BaseModel):
@@ -75,6 +85,30 @@ async def connect_integration(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ConnectOut(authorize_url=authorize_url)
+
+
+@router.put("/{provider_id}/credentials", response_model=SaveCredentialsOut)
+async def save_integration_credentials(
+    provider_id: str,
+    body: SaveCredentialsIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SaveCredentialsOut:
+    if get_integration_provider(provider_id) is None:
+        raise HTTPException(status_code=404, detail=f"Unknown integration provider: {provider_id}")
+
+    service = IntegrationService(db)
+    try:
+        account_label = await service.save_api_key(
+            user_id=user.id,
+            provider_id=provider_id,
+            api_key=body.api_key,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    await get_mcp_connection_pool().invalidate_user(user.id)
+    return SaveCredentialsOut(connected=True, account_label=account_label)
 
 
 @router.get("/{provider_id}/callback")

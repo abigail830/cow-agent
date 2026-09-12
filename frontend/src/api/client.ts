@@ -74,6 +74,14 @@ export const api = {
     request<{ disconnected: boolean }>(`/integrations/${encodeURIComponent(provider)}/disconnect`, {
       method: 'POST',
     }),
+  saveIntegrationCredentials: (provider: string, apiKey: string) =>
+    request<{ connected: boolean; account_label?: string | null }>(
+      `/integrations/${encodeURIComponent(provider)}/credentials`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ api_key: apiKey }),
+      },
+    ),
   getCurrentUser: () => request<User>('/auth/me'),
   listAgents: () => request<Agent[]>('/agents'),
   getAgent: (id: string) => request<Agent>(`/agents/${id}`),

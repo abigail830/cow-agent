@@ -183,6 +183,8 @@ class Settings(BaseSettings):
         validation_alias="INTEGRATION_SUCCESS_REDIRECT",
     )
 
+    hybrid_search_mcp_url: str | None = Field(default=None, validation_alias="HYBRID_SEARCH_MCP_URL")
+
     app_name: str = "agent-platform"
     debug: bool = False
     cors_origins: Annotated[list[str], NoDecode] = Field(

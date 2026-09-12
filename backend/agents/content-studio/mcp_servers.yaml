@@ -2,8 +2,8 @@
 servers:
   hybrid-search:
     url: ${HYBRID_SEARCH_MCP_URL}
-    headers:
-      Authorization: Bearer ${HYBRID_SEARCH_MCP_API_KEY}
+    auth: api_key
+    integration: hybrid-search
   zhipu-web-search:
     url: ${ZHIPU_WEB_SEARCH_MCP_URL}
     headers:
@@ -12,7 +12,3 @@ servers:
     url: https://mcp.notion.com/mcp
     auth: oauth
     integration: notion
-  hubspot:
-    url: https://mcp.hubspot.com
-    auth: oauth
-    integration: hubspot

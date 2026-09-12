@@ -1,4 +1,4 @@
-"""Encrypt, refresh, and resolve per-user OAuth tokens for integration MCP servers."""
+"""Encrypt, refresh, and resolve per-user integration credentials for MCP servers."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories.user_integrations import UserIntegrationRepository
 from app.platform.auth.secret_store import SecretStoreError, decrypt_secrets, encrypt_secrets
-from app.platform.integrations.registry import get_integration_provider
+from app.platform.integrations.registry import get_integration_provider, integration_auth_kind
 from app.platform.integrations.types import OAuthTokenBundle
 
 logger = logging.getLogger(__name__)
@@ -86,6 +86,46 @@ class IntegrationTokenService:
         )
         await self._db.commit()
 
+    async def save_api_key(
+        self,
+        *,
+        user_id: uuid.UUID,
+        provider: str,
+        api_key: str,
+        account_label: str | None = None,
+    ) -> None:
+        trimmed = api_key.strip()
+        if not trimmed:
+            raise ValueError("API key is required")
+        bundle = OAuthTokenBundle(
+            access_token=trimmed,
+            refresh_token=None,
+            expires_at_ms=4_102_444_800_000,
+            scopes=[],
+            account_label=account_label,
+            metadata={"auth_kind": "api_key"},
+        )
+        await self.save_tokens(user_id=user_id, provider=provider, bundle=bundle)
+
+    async def get_api_key(self, *, user_id: uuid.UUID, provider: str) -> str | None:
+        if integration_auth_kind(provider) != "api_key":
+            return None
+        stored = await self.load_tokens(user_id=user_id, provider=provider)
+        if stored is None:
+            return None
+        return stored.access_token
+
+    async def get_mcp_bearer_token(
+        self,
+        *,
+        user_id: uuid.UUID,
+        provider: str,
+        auth_kind: str,
+    ) -> str | None:
+        if auth_kind == "api_key":
+            return await self.get_api_key(user_id=user_id, provider=provider)
+        return await self.get_valid_access_token(user_id=user_id, provider=provider)
+
     async def disconnect(self, *, user_id: uuid.UUID, provider: str) -> bool:
         row = await self._repo.disconnect(user_id, provider)
         if row is None:
@@ -150,7 +190,7 @@ class IntegrationTokenService:
             return None
 
         oauth_provider = get_integration_provider(provider)
-        if oauth_provider is None:
+        if oauth_provider is None or getattr(oauth_provider, "auth_kind", "oauth") != "oauth":
             return None
 
         try:

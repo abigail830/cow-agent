@@ -1,2 +1,6 @@
-# MCP servers for proposal-composer — unused; MDM catalog is queried via builtin tools.
-# See profile.yaml allowed_tools: list_mdm_packages, get_mdm_package_services, etc.
+# MCP servers for proposal-composer.
+servers:
+  hubspot:
+    url: https://mcp.hubspot.com
+    auth: oauth
+    integration: hubspot

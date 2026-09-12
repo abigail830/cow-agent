@@ -12,7 +12,7 @@ from app.platform.integrations.oauth.pkce import (
     generate_code_challenge,
     generate_code_verifier,
 )
-from app.platform.integrations.registry import get_integration_provider, list_integration_providers
+from app.platform.integrations.registry import get_integration_provider, integration_auth_kind, list_integration_providers
 from app.platform.integrations.token_service import IntegrationTokenService
 from app.platform.integrations.types import IntegrationPublicStatus
 
@@ -38,17 +38,23 @@ class IntegrationService:
         statuses: list[IntegrationPublicStatus] = []
         for provider in list_integration_providers():
             row = rows.get(provider.id)
+            auth_kind = provider.auth_kind
+            configured = provider.is_platform_configured()
             connected = bool(row and row.status == "connected" and row.secrets_encrypted)
             token_valid = False
             if connected:
-                token = await self._tokens.get_valid_access_token(user_id=user_id, provider=provider.id)
-                token_valid = token is not None
+                if auth_kind == "api_key":
+                    token_valid = await self._tokens.get_api_key(user_id=user_id, provider=provider.id) is not None
+                else:
+                    token = await self._tokens.get_valid_access_token(user_id=user_id, provider=provider.id)
+                    token_valid = token is not None
             statuses.append(
                 IntegrationPublicStatus(
                     provider=provider.id,
                     display_name=provider.display_name,
                     description=provider.description,
-                    configured=provider.is_platform_configured(),
+                    auth_kind=auth_kind,
+                    configured=configured,
                     connected=connected and token_valid,
                     account_label=row.account_label if row else None,
                     token_valid=token_valid,
@@ -57,6 +63,8 @@ class IntegrationService:
         return statuses
 
     async def begin_oauth(self, *, user_id: uuid.UUID, provider_id: str) -> str:
+        if integration_auth_kind(provider_id) != "oauth":
+            raise ValueError("This integration uses an API key — save credentials instead of OAuth connect")
         provider = get_integration_provider(provider_id)
         if provider is None:
             raise ValueError(f"Unknown integration provider: {provider_id}")
@@ -72,6 +80,24 @@ class IntegrationService:
             signing_key=_oauth_signing_key(),
         )
         return provider.build_authorize_url(state=state, code_challenge=code_challenge)
+
+    async def save_api_key(self, *, user_id: uuid.UUID, provider_id: str, api_key: str) -> str | None:
+        provider = get_integration_provider(provider_id)
+        if provider is None:
+            raise ValueError(f"Unknown integration provider: {provider_id}")
+        if integration_auth_kind(provider_id) != "api_key":
+            raise ValueError(f"{provider.display_name} does not accept API keys")
+        if not provider.is_platform_configured():
+            raise ValueError(f"{provider.display_name} is not configured on this deployment")
+
+        mask_label = provider.mask_api_key_label(api_key)
+        await self._tokens.save_api_key(
+            user_id=user_id,
+            provider=provider.id,
+            api_key=api_key,
+            account_label=mask_label,
+        )
+        return mask_label
 
     async def complete_oauth(
         self,

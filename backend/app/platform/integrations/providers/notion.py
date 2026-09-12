@@ -21,6 +21,7 @@ NOTION_TOKEN_URL = "https://mcp.notion.com/token"
 
 class NotionIntegrationProvider:
     id = NOTION_PROVIDER_ID
+    auth_kind = "oauth"
     display_name = "Notion"
     description = "Connect Notion to search, read, and create workspace content via MCP."
     mcp_url = NOTION_MCP_URL
