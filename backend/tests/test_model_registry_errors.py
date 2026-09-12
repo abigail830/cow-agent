@@ -115,9 +115,9 @@ def test_deepseek_client_uses_chat_completions_api():
                 },
             )(),
         ):
-            registry.create_deepseek_client(model="deepseek-v4-flash")
+            registry.create_deepseek_client(model="deepseek-flash")
     _, kwargs = mock_cls.call_args
-    assert kwargs["model"] == "deepseek-v4-flash"
+    assert kwargs["model"] == "deepseek-flash"
     assert kwargs["api_key"] == "sk-test"
     assert kwargs["base_url"] == "https://api.deepseek.com/v1/"
     assert kwargs["function_invocation_configuration"] == {"include_detailed_errors": True}
@@ -127,7 +127,7 @@ def test_deepseek_requires_api_key():
     registry = ModelProviderRegistry()
     with patch.object(registry._settings, "deepseek_api_key", None):
         try:
-            registry.create_deepseek_client(model="deepseek-v4-flash")
+            registry.create_deepseek_client(model="deepseek-flash")
             assert False, "expected ValueError"
         except ValueError as exc:
             assert "DEEPSEEK_API_KEY" in str(exc)

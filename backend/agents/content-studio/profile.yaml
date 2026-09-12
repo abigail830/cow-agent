@@ -3,7 +3,6 @@ name: "Content Studio"
 description: "Knowledge Q&A (hybrid search + web) and content generation (Word, PowerPoint, HTML slides)."
 
 model_provider: azure_anthropic
-model: ${CLAUDE_AZURE_FOUNDRY_MODEL}
 default_model: claude-sonnet-4-6
 
 prompt_file: system_prompt.md

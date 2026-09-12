@@ -202,6 +202,18 @@ def load_agent_profile(agent_dir: Path) -> AgentProfile:
         else:
             model_provider = ModelProvider.AZURE_OPENAI.value
     model_name = _resolve_env(str(raw.get("model") or ""))
+
+    default_model_id = raw.get("default_model")
+    if default_model_id is not None:
+        default_model_id = str(default_model_id).strip() or None
+
+    if not model_name and default_model_id:
+        from app.platform.llm.model_catalog import get_model_catalog
+
+        catalog_entry = get_model_catalog().get(default_model_id)
+        if catalog_entry is not None:
+            model_name = catalog_entry.deployment
+
     if not model_name:
         settings = get_settings()
         if model_provider == ModelProvider.AZURE_ANTHROPIC.value:
@@ -226,10 +238,6 @@ def load_agent_profile(agent_dir: Path) -> AgentProfile:
     )
 
     mcp_servers, mcp_server_overrides = _parse_profile_mcp_servers(raw)
-
-    default_model_id = raw.get("default_model")
-    if default_model_id is not None:
-        default_model_id = str(default_model_id).strip() or None
 
     reserved = {
         "id",

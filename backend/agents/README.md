@@ -23,7 +23,8 @@ agents/
 | `id` | yes | Slug，与目录名一致 |
 | `name` | yes | 显示名 |
 | `model_provider` | yes | `azure_openai` / `azure_anthropic` / `siliconflow` / `dashscope` / `deepseek` |
-| `model` | yes | Deployment；支持 `${ENV_VAR}` |
+| `default_model` | recommended | Catalog id in `backend/config/models.yaml`（如 `claude-sonnet-4-6`、`glm-5.3`） |
+| `model` | no | 可选 override；deployment 字符串，支持 `${ENV_VAR}`。未写时从 `default_model` 查 catalog |
 | `mcp_servers` | no | 引用 `mcp_servers.yaml` 中的 key；可在 profile 内联 `env`（见下） |
 | `allowed_tools` | no | MAF 工具名，如 `postgres_query_data`（对应 mcp-postgres 的 `query_data`） |
 | `hooks` | no | 平台 hook 及参数（见下） |
@@ -62,9 +63,9 @@ hooks:
 id: yl-worker1
 name: "YL-Worker-001"
 model_provider: azure_anthropic
-model: ${CLAUDE_AZURE_FOUNDRY_MODEL}
+default_model: claude-sonnet-4-6
 
-# 推荐：在 profile 配置各 agent 的 MCP 环境变量（与 model 一样支持 ${ENV_VAR}）
+# 推荐：在 profile 配置各 agent 的 MCP 环境变量（支持 ${ENV_VAR}）
 mcp_servers:
   postgres:
     env:
@@ -93,13 +94,19 @@ hooks:
     max_observation_bytes: 50000
 ```
 
+### 模型目录（`backend/config/models.yaml`）
+
+所有可选模型的 **deployment 名称** 统一维护在 `config/models.yaml`（如 `gpt-5.4`、`claude-sonnet-4-6`、`zai-org/GLM-5.3`）。`.env` 只放 **API Key 和 base URL**，不再用 `*_DEFAULT_MODEL` 指定聊天模型。
+
+Agent profile 写 `default_model: <catalog-id>` 即可；若某环境的 Azure deployment 名与 catalog 不同，可在 profile 加 `model: your-custom-deployment` 覆盖。
+
 ### SiliconFlow（硅基流动）
 
 OpenAI **Chat Completions** 兼容接口（不是 Azure Responses API）：
 
 ```yaml
 model_provider: siliconflow
-model: zai-org/GLM-5.2   # 从 https://cloud.siliconflow.cn/me/models 复制完整 id
+default_model: glm-5.3
 ```
 
 后端 / Vercel 环境变量：
@@ -107,7 +114,6 @@ model: zai-org/GLM-5.2   # 从 https://cloud.siliconflow.cn/me/models 复制完�
 ```bash
 SILICONFLOW_API_KEY=sk-...
 SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
-# SILICONFLOW_DEFAULT_MODEL=zai-org/GLM-5.2   # profile 未写 model 时的默认值
 ```
 
 附件：仅支持**图片** inline；PDF 等文件暂不支持。
@@ -118,8 +124,7 @@ OpenAI **Chat Completions** 兼容模式：
 
 ```yaml
 model_provider: dashscope
-model: qwen3.7-plus
-default_model: qwen3.7-plus   # 可选，对应 config/models.yaml 的 id
+default_model: qwen3.7-plus
 ```
 
 后端 / Vercel 环境变量：
@@ -127,7 +132,6 @@ default_model: qwen3.7-plus   # 可选，对应 config/models.yaml 的 id
 ```bash
 DASHSCOPE_API_KEY=sk-...
 DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-# DASHSCOPE_DEFAULT_MODEL=qwen3.7-plus   # profile 未写 model 时的默认值
 ```
 
 可选模型见 `backend/config/models.yaml`（如 `qwen3.7-plus`、`qwen3.8-max`）。附件规则同 SiliconFlow：仅图片 inline。
@@ -138,8 +142,7 @@ OpenAI **Chat Completions** 兼容接口：
 
 ```yaml
 model_provider: deepseek
-model: deepseek-v4-flash
-default_model: deepseek-v4-flash
+default_model: deepseek-flash
 ```
 
 后端 / Vercel 环境变量：
@@ -147,7 +150,6 @@ default_model: deepseek-v4-flash
 ```bash
 DEEPSEEK_API_KEY=sk-...
 DEEPSEEK_BASE_URL=https://api.deepseek.com
-# DEEPSEEK_DEFAULT_MODEL=deepseek-v4-flash
 ```
 
 附件规则同 SiliconFlow：仅图片 inline。

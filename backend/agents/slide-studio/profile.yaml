@@ -3,12 +3,11 @@ name: "Z Slide Studio"
 description: "Executive-ready presentations (16:9) — consulting reports, solution decks, and roadmaps via html-ppt or Slidev."
 
 model_provider: azure_openai
-model: ${AZURE_OPENAI_DEPLOYMENT}
 default_model: gpt-5.4
 # model_provider: azure_anthropic
-# model: ${CLAUDE_AZURE_FOUNDRY_MODEL_4_7}
+# default_model: claude-sonnet-4-6
 # model_provider: siliconflow
-# model: ${SILICONFLOW_DEFAULT_MODEL} 
+# default_model: glm-5.3
 
 prompt_file: system_prompt.md
 skills_dir: skills

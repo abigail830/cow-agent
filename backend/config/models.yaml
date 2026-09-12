@@ -1,4 +1,4 @@
-# Platform model catalog — provider credentials stay in .env; entries reference deployments.
+# Platform model catalog — API keys and base URLs stay in .env; model deployment names live here.
 providers:
   azure_openai:
     base_url: ${AZURE_OPENAI_BASE_URL}
@@ -15,19 +15,19 @@ models:
   - id: gpt-5.4
     label: GPT-5.4
     provider: azure_openai
-    deployment: ${AZURE_OPENAI_DEPLOYMENT}
+    deployment: gpt-5.4
     enabled: true
 
   - id: claude-sonnet-4-6
     label: Claude Sonnet 4.6
     provider: azure_anthropic
-    deployment: ${CLAUDE_AZURE_FOUNDRY_MODEL}
+    deployment: claude-sonnet-4-6
     enabled: true
 
-  - id: glm-5.2
-    label: GLM-5.2
+  - id: glm-5.3
+    label: GLM-5.3
     provider: siliconflow
-    deployment: ${SILICONFLOW_DEFAULT_MODEL}
+    deployment: zai-org/GLM-5.3
     enabled: true
 
   - id: qwen3.7-plus
@@ -42,8 +42,8 @@ models:
     deployment: qwen3.8-max
     enabled: true
 
-  - id: deepseek-v4-flash
-    label: DeepSeek V4 Flash
+  - id: deepseek-flash
+    label: DeepSeek Flash
     provider: deepseek
-    deployment: deepseek-v4-flash
+    deployment: deepseek-flash
     enabled: true
