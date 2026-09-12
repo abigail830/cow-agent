@@ -18,11 +18,16 @@ skills:
 mcp_servers:
   - hybrid-search
   - zhipu-web-search
+  - notion
 
 allowed_tools:
   - hybrid-search_list_knowledge_bases
   - hybrid-search_hybrid_search
   - zhipu-web-search_web_search_prime
+  - notion_notion-search
+  - notion_notion-fetch
+  - notion_notion-create-pages
+  - notion_notion-update-page
   - sandbox_run_command
   - sandbox_read_file
   - sandbox_write_file

@@ -4,6 +4,16 @@ export interface User {
   name: string | null
 }
 
+export interface IntegrationStatus {
+  provider: string
+  display_name: string
+  description: string
+  configured: boolean
+  connected: boolean
+  account_label?: string | null
+  token_valid: boolean
+}
+
 export interface Agent {
   id: string
   slug: string | null

@@ -103,6 +103,11 @@ class McpConnectionPool:
         for key in keys:
             await self.invalidate(key)
 
+    async def invalidate_user(self, user_id: uuid.UUID) -> None:
+        keys = [key for key in self._entries if key.user_id == user_id]
+        for key in keys:
+            await self.invalidate(key)
+
     async def _lock_for(self, key: McpPoolKey) -> asyncio.Lock:
         async with self._global_lock:
             lock = self._locks.get(key)

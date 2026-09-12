@@ -97,7 +97,11 @@ class AgentFactory:
 
         function_tools = await self._tools.resolve_for_agent(agent_id)
         if mcp_tools is None:
-            mcp_tools = await self._mcp.resolve_for_agent(agent_id, agent_config=row.config)
+            mcp_tools = await self._mcp.resolve_for_agent(
+                agent_id,
+                agent_config=row.config,
+                user_id=user_id,
+            )
         allowed = list((row.config or {}).get("allowed_tools") or [])
 
         has_sql_viz_hook = any(

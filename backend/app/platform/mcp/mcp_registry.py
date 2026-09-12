@@ -16,6 +16,7 @@ from app.platform.agent.allowed_tools import mcp_remote_tools_for_server
 from app.platform.mcp.mcp_config import resolve_runtime_config_safe
 from app.platform.agent.profile_loader import mcp_tool_name
 from app.platform.auth.secret_store import SecretStoreError
+from app.platform.integrations.token_service import IntegrationTokenService
 from app.platform.mcp.native_db import build_mysql_tools, build_postgres_tools
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,14 @@ def _mcp_http_client(headers: dict[str, str] | None = None) -> AsyncClient:
     )
 
 
+def _integration_provider_from_config(config: dict[str, Any]) -> str | None:
+    auth_mode = str(config.get("auth") or "").strip().lower()
+    integration = str(config.get("integration") or "").strip().lower()
+    if auth_mode == "oauth" and integration:
+        return integration
+    return None
+
+
 class McpRegistry:
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
@@ -44,11 +53,12 @@ class McpRegistry:
         agent_id: uuid.UUID,
         *,
         agent_config: dict | None = None,
+        user_id: uuid.UUID | None = None,
     ) -> list[Any]:
         profile_allowed = list((agent_config or {}).get("allowed_tools") or [])
         tools: list[Any] = []
         for row in await self._agent_mcp_server_rows(agent_id):
-            tool = self._build_tool(row, profile_allowed=profile_allowed)
+            tool = await self._build_tool(row, profile_allowed=profile_allowed, user_id=user_id)
             if tool is None:
                 continue
             if isinstance(tool, list):
@@ -57,14 +67,24 @@ class McpRegistry:
                 tools.append(tool)
         return tools
 
-    async def config_fingerprint(self, agent_id: uuid.UUID) -> str:
+    async def config_fingerprint(self, agent_id: uuid.UUID, *, user_id: uuid.UUID | None = None) -> str:
         rows = await self._agent_mcp_server_rows(agent_id)
         if not rows:
             return "none"
         parts: list[str] = []
+        token_service = IntegrationTokenService(self._db) if user_id is not None else None
         for row in rows:
             connection = row.connection if isinstance(row.connection, dict) else {}
             parts.append(f"{row.id}:{row.name}:{json.dumps(connection, sort_keys=True, default=str)}")
+            if token_service is not None:
+                try:
+                    config = resolve_runtime_config_safe(connection)
+                except SecretStoreError:
+                    continue
+                provider = _integration_provider_from_config(config)
+                if provider:
+                    version = await token_service.connection_version(user_id=user_id, provider=provider)
+                    parts.append(f"oauth:{provider}:{version}")
         digest = hashlib.sha256("\n".join(parts).encode()).hexdigest()
         return digest[:32]
 
@@ -77,11 +97,12 @@ class McpRegistry:
         )
         return list(result.scalars().all())
 
-    def _build_tool(
+    async def _build_tool(
         self,
         row: McpServer,
         *,
         profile_allowed: list[str] | None = None,
+        user_id: uuid.UUID | None = None,
     ) -> MCPStdioTool | MCPStreamableHTTPTool | list[Any] | None:
         try:
             config = resolve_runtime_config_safe(row.connection or {})
@@ -93,6 +114,7 @@ class McpRegistry:
         tool_name = mcp_tool_name(row.name, row.connection)
         description = row.description or f"MCP server: {tool_name}"
         mcp_allowed = mcp_remote_tools_for_server(profile_allowed or [], tool_name)
+        integration_provider = _integration_provider_from_config(config)
 
         if transport == "http" or config.get("url"):
             url = config.get("url")
@@ -100,6 +122,36 @@ class McpRegistry:
                 logger.warning("MCP server %s missing url", row.name)
                 return None
             request_timeout = get_settings().mcp_http_request_timeout
+
+            if integration_provider:
+                if user_id is None:
+                    logger.warning("Skipping OAuth MCP server %s — missing user_id", tool_name)
+                    return None
+                token_service = IntegrationTokenService(self._db)
+                access_token = await token_service.get_valid_access_token(
+                    user_id=user_id,
+                    provider=integration_provider,
+                )
+                if not access_token:
+                    logger.info(
+                        "Skipping OAuth MCP server %s — user %s not connected to %s",
+                        tool_name,
+                        user_id,
+                        integration_provider,
+                    )
+                    return None
+                static_headers = {"Authorization": f"Bearer {access_token}"}
+                http_client = _mcp_http_client(static_headers)
+                return MCPStreamableHTTPTool(
+                    name=tool_name,
+                    url=url,
+                    description=description,
+                    allowed_tools=mcp_allowed,
+                    request_timeout=request_timeout,
+                    http_client=http_client,
+                    header_provider=lambda _kwargs, h=static_headers: dict(h),
+                )
+
             headers = config.get("headers")
             if headers:
                 static_headers = dict(headers)

@@ -170,6 +170,19 @@ class Settings(BaseSettings):
         validation_alias="UNIFY_LITE_MAX_CHARS_PER_MESSAGE",
     )
 
+    notion_mcp_client_id: str | None = Field(default=None, validation_alias="NOTION_MCP_CLIENT_ID")
+    notion_mcp_client_secret: str | None = Field(default=None, validation_alias="NOTION_MCP_CLIENT_SECRET")
+    notion_mcp_redirect_uri: str | None = Field(default=None, validation_alias="NOTION_MCP_REDIRECT_URI")
+
+    hubspot_mcp_client_id: str | None = Field(default=None, validation_alias="HUBSPOT_MCP_CLIENT_ID")
+    hubspot_mcp_client_secret: str | None = Field(default=None, validation_alias="HUBSPOT_MCP_CLIENT_SECRET")
+    hubspot_mcp_redirect_uri: str | None = Field(default=None, validation_alias="HUBSPOT_MCP_REDIRECT_URI")
+
+    integration_success_redirect: str | None = Field(
+        default=None,
+        validation_alias="INTEGRATION_SUCCESS_REDIRECT",
+    )
+
     app_name: str = "agent-platform"
     debug: bool = False
     cors_origins: Annotated[list[str], NoDecode] = Field(

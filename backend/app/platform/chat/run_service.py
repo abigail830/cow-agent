@@ -186,11 +186,18 @@ class ChatRunService:
             user_id=chat.user_id,
             chat_id=chat.id,
             agent_id=chat.agent_id,
-            config_fingerprint=await self._factory._mcp.config_fingerprint(chat.agent_id),
+            config_fingerprint=await self._factory._mcp.config_fingerprint(
+                chat.agent_id,
+                user_id=chat.user_id,
+            ),
         )
 
         async def factory() -> list[Any]:
-            return await self._factory._mcp.resolve_for_agent(chat.agent_id, agent_config=agent_row.config)
+            return await self._factory._mcp.resolve_for_agent(
+                chat.agent_id,
+                agent_config=agent_row.config,
+                user_id=chat.user_id,
+            )
 
         handle = await pool.acquire(pool_key, factory)
         try:

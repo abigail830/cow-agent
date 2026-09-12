@@ -8,6 +8,7 @@ import type {
   ModelOption,
   StreamEvent,
   User,
+  IntegrationStatus,
 } from '../types'
 import type { AttachmentProcessingMode } from '../lib/attachmentMode'
 import type { AttachmentLimits } from '../lib/attachments'
@@ -34,7 +35,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(text || res.statusText)
+    if (text) {
+      try {
+        const parsed = JSON.parse(text) as { detail?: unknown }
+        if (typeof parsed.detail === 'string') {
+          throw new Error(parsed.detail)
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message !== text) {
+          throw error
+        }
+      }
+      throw new Error(text)
+    }
+    throw new Error(res.statusText)
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
@@ -49,6 +63,15 @@ export const api = {
     }),
   logout: () =>
     request<void>('/auth/logout', {
+      method: 'POST',
+    }),
+  listIntegrations: () => request<IntegrationStatus[]>('/integrations'),
+  connectIntegration: (provider: string) =>
+    request<{ authorize_url: string }>(`/integrations/${encodeURIComponent(provider)}/connect`, {
+      method: 'POST',
+    }),
+  disconnectIntegration: (provider: string) =>
+    request<{ disconnected: boolean }>(`/integrations/${encodeURIComponent(provider)}/disconnect`, {
       method: 'POST',
     }),
   getCurrentUser: () => request<User>('/auth/me'),

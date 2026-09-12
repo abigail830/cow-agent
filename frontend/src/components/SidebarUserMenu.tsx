@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { UserIcon } from './UserIcon'
 import type { User } from '../types'
 
@@ -14,6 +15,7 @@ interface SidebarUserMenuProps {
 }
 
 export function SidebarUserMenu({ user, collapsed, onLogout }: SidebarUserMenuProps) {
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -49,6 +51,17 @@ export function SidebarUserMenu({ user, collapsed, onLogout }: SidebarUserMenuPr
       </button>
       {open ? (
         <div className="agent-sidebar-user-menu" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            className="agent-sidebar-user-menu-item agent-sidebar-user-menu-item-neutral"
+            onClick={() => {
+              setOpen(false)
+              navigate('/settings/integrations')
+            }}
+          >
+            Integrations
+          </button>
           <button
             type="button"
             role="menuitem"
