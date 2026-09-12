@@ -12,3 +12,7 @@ servers:
     url: https://mcp.notion.com/mcp
     auth: oauth
     integration: notion
+  hubspot:
+    url: https://mcp.hubspot.com
+    auth: oauth
+    integration: hubspot
