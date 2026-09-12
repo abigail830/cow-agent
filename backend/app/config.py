@@ -161,6 +161,15 @@ class Settings(BaseSettings):
     sandbox_slidev_cache: bool = Field(default=True, validation_alias="SANDBOX_SLIDEV_CACHE")
     sandbox_async_build: bool = Field(default=False, validation_alias="SANDBOX_ASYNC_BUILD")
 
+    unify_lite_max_chars_per_file: int = Field(
+        default=32_000,
+        validation_alias="UNIFY_LITE_MAX_CHARS_PER_FILE",
+    )
+    unify_lite_max_chars_per_message: int = Field(
+        default=80_000,
+        validation_alias="UNIFY_LITE_MAX_CHARS_PER_MESSAGE",
+    )
+
     app_name: str = "agent-platform"
     debug: bool = False
     cors_origins: Annotated[list[str], NoDecode] = Field(

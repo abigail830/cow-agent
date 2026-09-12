@@ -8,6 +8,16 @@ from typing import Any
 from agent_framework import Content, Message
 
 from app.platform.attachments.attachment_adapters import attachment_metadata, attachments_to_maf_contents
+from app.platform.attachments.unify_lite.message_builder import build_user_run_input_lite
+from app.platform.attachments.unify_lite.types import ExtractedAttachment
+
+
+__all__ = [
+    "build_user_run_input",
+    "build_user_run_input_lite",
+    "link_attachments_metadata",
+    "user_message_attachment_metadata",
+]
 
 
 def build_user_run_input(content: str, attachments: list[Any]) -> str | Message:

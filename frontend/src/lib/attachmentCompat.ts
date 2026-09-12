@@ -1,3 +1,5 @@
+import type { AttachmentProcessingMode } from './attachmentMode'
+import { isAttachmentReady } from './attachmentUpload'
 import type { ChatAttachment } from '../types'
 
 export type AttachmentCompatResult = {
@@ -11,7 +13,10 @@ export function isNativeAttachmentCompatible(
   currentProvider: string,
 ): AttachmentCompatResult {
   if (att.processing_mode === 'unify_lite' || att.provider === 'unify_lite') {
-    return { compatible: false, reason: 'Unify-lite attachments cannot be referenced yet' }
+    return {
+      compatible: false,
+      reason: 'Unify-lite attachment; switch to Unify-lite mode to reference',
+    }
   }
   if (att.provider !== currentProvider) {
     return {
@@ -41,6 +46,33 @@ export function isNativeAttachmentCompatible(
   }
 
   return { compatible: true }
+}
+
+export function isAttachmentReferenceCompatible(
+  att: ChatAttachment,
+  mode: AttachmentProcessingMode,
+  currentProvider: string,
+): AttachmentCompatResult {
+  if (!isAttachmentReady(att)) {
+    return { compatible: false, reason: 'Upload in progress' }
+  }
+  const isLite = att.processing_mode === 'unify_lite' || att.provider === 'unify_lite'
+  if (mode === 'unify_lite') {
+    if (!isLite) {
+      return {
+        compatible: false,
+        reason: 'Native attachment; switch to Native mode or re-upload in Unify-lite',
+      }
+    }
+    return { compatible: true }
+  }
+  if (isLite) {
+    return {
+      compatible: false,
+      reason: 'Unify-lite attachment; switch to Unify-lite mode or re-upload in Native',
+    }
+  }
+  return isNativeAttachmentCompatible(att, currentProvider)
 }
 
 export function filterNativeCompatibleAttachments(

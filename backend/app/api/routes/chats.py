@@ -293,7 +293,7 @@ async def list_attachments(
 @router.post("/{chat_id}/attachments", response_model=AttachmentOut, status_code=201)
 async def upload_attachment(
     file: UploadFile = File(...),
-    processing_mode: str = Form("native"),
+    processing_mode: str = Form("unify_lite"),
     chat: Chat = Depends(get_owned_chat),
     db: AsyncSession = Depends(get_db),
 ) -> AttachmentOut:

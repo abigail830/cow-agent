@@ -1,9 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { AtSign, FileText, Paperclip, Plus, Search, Trash2 } from 'lucide-react'
-import type { ChatAttachment } from '../types'
-import { isNativeAttachmentCompatible } from '../lib/attachmentCompat'
+import type { AttachmentProcessingMode } from '../lib/attachmentMode'
+import { UNIFY_LITE_ATTACHMENT_LABEL } from '../lib/attachmentMode'
+import type { ChatAttachmentListItem } from '../lib/attachmentUpload'
+import { isAttachmentReferenceCompatible } from '../lib/attachmentCompat'
 import { formatAttachmentTimestamp } from '../lib/attachmentMentions'
+import { AttachmentModeToggle } from './AttachmentModeToggle'
 import { LoadingSpinner } from './LoadingSpinner'
 
 function formatFileSize(sizeBytes: number): string {
@@ -16,17 +19,18 @@ interface ReferenceMaterialsDropupProps {
   open: boolean
   onClose: () => void
   anchorRef: RefObject<HTMLElement | null>
-  attachments: ChatAttachment[]
+  attachments: ChatAttachmentListItem[]
   loading: boolean
-  uploading: boolean
   deletingAttachmentId: string | null
   searchQuery: string
   onSearchChange: (query: string) => void
   onUploadClick: () => void
-  onReferenceAttachment: (attachment: ChatAttachment) => void
-  onDeleteAttachment: (attachment: ChatAttachment) => void
+  onReferenceAttachment: (attachment: ChatAttachmentListItem) => void
+  onDeleteAttachment: (attachment: ChatAttachmentListItem) => void
   referencedAttachmentIds?: string[]
   recentlyReferencedId?: string | null
+  attachmentMode: AttachmentProcessingMode
+  onAttachmentModeChange: (mode: AttachmentProcessingMode) => void
   currentProvider: string
   disabled?: boolean
 }
@@ -37,7 +41,6 @@ export function ReferenceMaterialsDropup({
   anchorRef,
   attachments,
   loading,
-  uploading,
   deletingAttachmentId,
   searchQuery,
   onSearchChange,
@@ -46,6 +49,8 @@ export function ReferenceMaterialsDropup({
   onDeleteAttachment,
   referencedAttachmentIds = [],
   recentlyReferencedId = null,
+  attachmentMode,
+  onAttachmentModeChange,
   currentProvider,
   disabled = false,
 }: ReferenceMaterialsDropupProps) {
@@ -109,15 +114,20 @@ export function ReferenceMaterialsDropup({
           <Paperclip size={14} strokeWidth={1.75} aria-hidden="true" />
           <span>Attachments</span>
         </div>
+        <AttachmentModeToggle
+          value={attachmentMode}
+          onChange={onAttachmentModeChange}
+          disabled={disabled}
+        />
         <button
           type="button"
           className="ref-materials-add"
           onClick={onUploadClick}
-          disabled={disabled || uploading}
+          disabled={disabled}
           aria-label="Upload attachment"
           title="Upload attachment"
         >
-          {uploading ? <LoadingSpinner size="sm" /> : <Plus size={16} strokeWidth={2} aria-hidden="true" />}
+          <Plus size={16} strokeWidth={2} aria-hidden="true" />
         </button>
       </div>
 
@@ -144,7 +154,13 @@ export function ReferenceMaterialsDropup({
           </p>
         ) : (
           filtered.map((att) => {
-            const compat = isNativeAttachmentCompatible(att, currentProvider)
+            const compat = isAttachmentReferenceCompatible(att, attachmentMode, currentProvider)
+            const modeLabel =
+              att.processing_mode === 'unify_lite' || att.provider === 'unify_lite'
+                ? 'Unify-lite'
+                : 'Native'
+            const isUploading = att.upload_status === 'uploading'
+            const isFailed = att.upload_status === 'failed'
             const isDeleting = deletingAttachmentId === att.id
             const isReferenced = referencedSet.has(att.id)
             const isJustReferenced = recentlyReferencedId === att.id
@@ -153,7 +169,9 @@ export function ReferenceMaterialsDropup({
                 key={att.id}
                 className={[
                   'ref-materials-item',
-                  !compat.compatible ? 'ref-materials-item-disabled' : '',
+                  isUploading ? 'ref-materials-item-uploading' : '',
+                  isFailed ? 'ref-materials-item-failed' : '',
+                  !compat.compatible && !isUploading ? 'ref-materials-item-disabled' : '',
                   isReferenced ? 'ref-materials-item-referenced' : '',
                   isJustReferenced ? 'ref-materials-item-just-referenced' : '',
                 ]
@@ -164,42 +182,56 @@ export function ReferenceMaterialsDropup({
                 <div className="ref-materials-item-body">
                   <span className="ref-materials-item-name">{att.filename}</span>
                   <span className="ref-materials-item-meta">
-                    Attachment · {formatFileSize(att.size_bytes)}
-                    {att.created_at ? ` · ${formatAttachmentTimestamp(att.created_at)}` : ''}
-                    {!compat.compatible ? ` · ${compat.reason}` : ''}
+                    {isUploading
+                      ? 'Uploading…'
+                      : isFailed
+                        ? 'Upload failed'
+                        : `${modeLabel} · ${formatFileSize(att.size_bytes)}`}
+                    {!isUploading && !isFailed && att.created_at
+                      ? ` · ${formatAttachmentTimestamp(att.created_at)}`
+                      : ''}
+                    {!isUploading && !compat.compatible ? ` · ${compat.reason}` : ''}
                   </span>
                 </div>
                 <div className="ref-materials-item-actions">
-                  <button
-                    type="button"
-                    className={[
-                      'ref-materials-item-action',
-                      isReferenced ? 'ref-materials-item-action-referenced' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    disabled={disabled || !compat.compatible}
-                    aria-label={`Reference @${att.filename}`}
-                    title={`Reference @${att.filename}`}
-                    aria-pressed={isReferenced}
-                    onClick={() => onReferenceAttachment(att)}
-                  >
-                    <AtSign size={14} strokeWidth={1.75} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className="ref-materials-item-action ref-materials-item-action-delete"
-                    disabled={disabled || isDeleting}
-                    aria-label={`Delete ${att.filename}`}
-                    title={`Delete ${att.filename}`}
-                    onClick={() => onDeleteAttachment(att)}
-                  >
-                    {isDeleting ? (
+                  {isUploading ? (
+                    <span className="ref-materials-item-upload-spinner" aria-label="Uploading">
                       <LoadingSpinner size="sm" />
-                    ) : (
-                      <Trash2 size={14} strokeWidth={1.75} aria-hidden="true" />
-                    )}
-                  </button>
+                    </span>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className={[
+                          'ref-materials-item-action',
+                          isReferenced ? 'ref-materials-item-action-referenced' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        disabled={disabled || !compat.compatible}
+                        aria-label={`Reference @${att.filename}`}
+                        title={`Reference @${att.filename}`}
+                        aria-pressed={isReferenced}
+                        onClick={() => onReferenceAttachment(att)}
+                      >
+                        <AtSign size={14} strokeWidth={1.75} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className="ref-materials-item-action ref-materials-item-action-delete"
+                        disabled={disabled || isDeleting}
+                        aria-label={`Delete ${att.filename}`}
+                        title={`Delete ${att.filename}`}
+                        onClick={() => onDeleteAttachment(att)}
+                      >
+                        {isDeleting ? (
+                          <LoadingSpinner size="sm" />
+                        ) : (
+                          <Trash2 size={14} strokeWidth={1.75} aria-hidden="true" />
+                        )}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )
@@ -208,7 +240,17 @@ export function ReferenceMaterialsDropup({
       </div>
 
       <div className="ref-materials-footer">
-        {attachments.length === 1 ? '1 item' : `${attachments.length} items`}
+        <span>
+          {attachments.length === 1 ? '1 item' : `${attachments.length} items`}
+          {attachments.some((att) => att.upload_status === 'uploading')
+            ? ` · ${attachments.filter((att) => att.upload_status === 'uploading').length} uploading`
+            : ''}
+        </span>
+        {attachmentMode === 'unify_lite' ? (
+          <span className="ref-materials-footer-hint">
+            {UNIFY_LITE_ATTACHMENT_LABEL} — extracted on send
+          </span>
+        ) : null}
       </div>
     </div>
   )

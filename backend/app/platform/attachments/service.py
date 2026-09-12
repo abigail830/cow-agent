@@ -12,6 +12,7 @@ from app.platform.attachments.attachment_storage import (
 from app.platform.attachments.native.maf_content import attachment_metadata
 from app.platform.attachments.native.upload import NativeAttachmentUploader
 from app.platform.attachments.unify_lite.handler import UnifyLiteAttachmentHandler
+from app.platform.attachments.unify_lite.types import ExtractedAttachment
 
 class AttachmentService:
     def __init__(self, db: AsyncSession) -> None:
@@ -62,9 +63,7 @@ class AttachmentService:
             else parse_attachment_mode(processing_mode)
         )
         if mode == AttachmentProcessingMode.UNIFY_LITE:
-            rows = await self._unify_lite.resolve_for_message(chat_id, attachment_ids)
-            self._unify_lite.ensure_run_input_supported()
-            return rows
+            return await self._unify_lite.resolve_for_message(chat_id, attachment_ids)
 
         return await self._native.resolve_for_message(
             chat_id,
@@ -97,6 +96,9 @@ class AttachmentService:
                 payload["created_at"] = row.created_at.isoformat()
             result.append(payload)
         return result
+
+    def extract_unify_lite(self, chat_id: uuid.UUID, rows: list) -> list[ExtractedAttachment]:
+        return self._unify_lite.extract_for_message(chat_id, rows)
 
     @staticmethod
     def default_processing_mode() -> AttachmentProcessingMode:

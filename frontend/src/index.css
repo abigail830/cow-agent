@@ -2043,9 +2043,42 @@ body {
 .ref-materials-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.5rem;
   padding: 0.625rem 0.75rem 0.375rem;
   background: #fff;
+}
+
+.attachment-mode-toggle {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.attachment-mode-toggle-btn {
+  border: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  line-height: 1.2;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s, box-shadow 0.12s;
+}
+
+.attachment-mode-toggle-btn-active {
+  background: #fff;
+  color: var(--color-brand-700);
+  box-shadow: 0 0 0 1px var(--color-brand-200);
+}
+
+.attachment-mode-toggle-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .ref-materials-title {
@@ -2063,6 +2096,7 @@ body {
   justify-content: center;
   width: 1.5rem;
   height: 1.5rem;
+  margin-left: auto;
   border: none;
   background: transparent;
   color: var(--color-muted);
@@ -2155,6 +2189,30 @@ body {
   }
 }
 
+.ref-materials-item-uploading {
+  opacity: 0.85;
+}
+
+.ref-materials-item-uploading .ref-materials-item-actions {
+  opacity: 1;
+  pointer-events: none;
+}
+
+.ref-materials-item-failed {
+  outline: 1px solid #fecdca;
+  outline-offset: -1px;
+}
+
+.ref-materials-item-upload-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-left: auto;
+  color: var(--color-brand-600);
+}
+
 .ref-materials-item-disabled {
   opacity: 0.55;
 }
@@ -2240,12 +2298,21 @@ body {
 }
 
 .ref-materials-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
   padding: 0.5rem 0.75rem;
   font-size: 10px;
   color: var(--color-muted);
   text-align: center;
   border-top: 1px solid var(--color-border);
   background: #fff;
+}
+
+.ref-materials-footer-hint {
+  font-size: 9px;
+  color: var(--color-subtle);
+  line-height: 1.35;
 }
 
 .attachment-mention-popup {
@@ -2420,24 +2487,22 @@ body {
   padding: 0 0.125rem;
 }
 
-.msg-user-attachments {
-  margin: 0 0 0.375rem;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+.msg-user-body {
+  margin: 0;
+  word-break: break-word;
 }
 
-.msg-user-attachments li {
-  font-size: 11px;
+.msg-user-attachment-chip {
+  display: inline-block;
+  max-width: min(100%, 18rem);
+  border-radius: 4px;
+  background-color: var(--color-brand-50);
   color: var(--color-brand-800);
-  background: var(--color-brand-100);
-  border: 1px solid var(--color-brand-200);
-  border-radius: 999px;
-  padding: 0.125rem 0.5rem;
-  width: fit-content;
-  max-width: 100%;
+  box-shadow: 0 0 0 1px var(--color-brand-200);
+  font-size: 11px;
+  padding: 0 0.3em;
+  margin: 0 1px;
+  vertical-align: baseline;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

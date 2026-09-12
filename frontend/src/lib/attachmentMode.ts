@@ -15,11 +15,15 @@ export const ATTACHMENT_MODE_OPTIONS: {
   {
     value: 'unify_lite',
     label: 'Unify-lite',
-    description: 'Platform extracts text/descriptions into the message (coming soon)',
+    description: 'Extract txt/md/docx into the message; works with any model',
   },
 ]
 
-export const DEFAULT_ATTACHMENT_MODE: AttachmentProcessingMode = 'native'
+export const UNIFY_LITE_ATTACHMENT_ACCEPT = '.txt,.md,.docx'
+
+export const UNIFY_LITE_ATTACHMENT_LABEL = 'Text (.txt, .md) and Word (.docx)'
+
+export const DEFAULT_ATTACHMENT_MODE: AttachmentProcessingMode = 'unify_lite'
 
 const STORAGE_PREFIX = 'agent-platform:attachment-mode:'
 

@@ -1,5 +1,6 @@
+import type { AttachmentProcessingMode } from './attachmentMode'
 import type { ChatAttachment } from '../types'
-import { isNativeAttachmentCompatible } from './attachmentCompat'
+import { isAttachmentReferenceCompatible } from './attachmentCompat'
 
 export type MentionTrigger = {
   start: number
@@ -20,11 +21,12 @@ export function detectMentionTrigger(value: string, cursorPos: number): MentionT
 export function filterAttachmentsForMention(
   attachments: ChatAttachment[],
   query: string,
+  mode: AttachmentProcessingMode,
   currentProvider: string,
 ): ChatAttachment[] {
   const normalized = query.trim().toLowerCase()
   return attachments.filter((att) => {
-    if (!isNativeAttachmentCompatible(att, currentProvider).compatible) return false
+    if (!isAttachmentReferenceCompatible(att, mode, currentProvider).compatible) return false
     if (!normalized) return true
     return att.filename.toLowerCase().includes(normalized)
   })

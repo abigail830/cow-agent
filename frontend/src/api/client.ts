@@ -90,7 +90,7 @@ export const api = {
   uploadChatAttachment: async (
     chatId: string,
     file: File,
-    processingMode: AttachmentProcessingMode = 'native',
+    processingMode: AttachmentProcessingMode = 'unify_lite',
   ): Promise<ChatAttachment> => {
     const form = new FormData()
     form.append('file', file)
@@ -185,7 +185,7 @@ export async function streamChat(
   onEvent: (ev: StreamEvent) => void,
   signal?: AbortSignal,
   attachmentIds: string[] = [],
-  attachmentMode: AttachmentProcessingMode = 'native',
+  attachmentMode: AttachmentProcessingMode = 'unify_lite',
 ): Promise<void> {
   const res = await fetch(`${API}/chats/${chatId}/stream`, {
     ...defaultFetchInit,

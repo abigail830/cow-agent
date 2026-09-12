@@ -1,4 +1,4 @@
-"""Unify-lite attachment handler (stub — upload storage only; extraction TBD)."""
+"""Unify-lite attachment handler — platform blob storage + text extraction on send."""
 
 from __future__ import annotations
 
@@ -13,13 +13,16 @@ from app.platform.attachments.attachment_storage import (
 )
 from app.platform.attachments.modes import AttachmentProcessingMode
 from app.platform.attachments.native.maf_content import attachment_metadata
-from app.platform.attachments.validation import validate_attachment_file, validate_message_attachments
+from app.platform.attachments.unify_lite.pipeline import extract_attachments
+from app.platform.attachments.unify_lite.types import ExtractedAttachment
+from app.platform.attachments.unify_lite.validation import validate_unify_lite_attachment_file
+from app.platform.attachments.validation import validate_message_attachments
 
 UNIFY_LITE_PROVIDER = AttachmentProcessingMode.UNIFY_LITE.value
 
 
 class UnifyLiteAttachmentHandler:
-    """Platform-owned attachment storage; message assembly deferred to unify-lite pipeline."""
+    """Platform-owned attachment storage; extraction runs at message send time."""
 
     def __init__(self, db: AsyncSession, attachments: AttachmentRepository) -> None:
         self._db = db
@@ -33,7 +36,11 @@ class UnifyLiteAttachmentHandler:
         mime_type: str,
         data: bytes,
     ) -> dict:
-        validate_attachment_file(filename=filename, mime_type=mime_type, size_bytes=len(data))
+        validate_unify_lite_attachment_file(
+            filename=filename,
+            mime_type=mime_type,
+            size_bytes=len(data),
+        )
         attachment_id = uuid.uuid4()
         save_inline_attachment(chat_id, attachment_id, data)
         row = await self._attachments.insert(
@@ -68,8 +75,5 @@ class UnifyLiteAttachmentHandler:
         validate_message_attachments(size_bytes_list=[row.size_bytes for row in rows])
         return rows
 
-    def ensure_run_input_supported(self) -> None:
-        raise ValueError(
-            "Unify-lite attachment processing is not available yet. "
-            "Switch to Native mode or wait for the upcoming release."
-        )
+    def extract_for_message(self, chat_id: uuid.UUID, rows: list) -> list[ExtractedAttachment]:
+        return extract_attachments(chat_id, rows)

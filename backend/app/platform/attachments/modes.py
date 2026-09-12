@@ -10,7 +10,7 @@ class AttachmentProcessingMode(str, Enum):
     UNIFY_LITE = "unify_lite"
 
 
-DEFAULT_ATTACHMENT_MODE = AttachmentProcessingMode.NATIVE
+DEFAULT_ATTACHMENT_MODE = AttachmentProcessingMode.UNIFY_LITE
 
 
 def parse_attachment_mode(value: str | None) -> AttachmentProcessingMode:

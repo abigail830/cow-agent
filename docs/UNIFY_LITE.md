@@ -49,10 +49,11 @@ sequenceDiagram
 
 ### 3.1 按 MIME / 扩展名路由
 
-| 类型 | 解析方式 | 依赖库（候选） | 输出 |
-|------|---------|---------------|------|
-| txt / md / csv / json | UTF-8 解码，失败则 chardet | stdlib + chardet | 原文 |
-| docx | 段落 + 表格文本 | python-docx | 纯文本 |
+| 类型 | 解析方式 | 依赖库（候选） | 输出 | 阶段 |
+|------|---------|---------------|------|------|
+| txt / md | UTF-8 等多编码解码 | stdlib | 原文 | **P1a ✅** |
+| docx | 段落 + 表格文本 | python-docx | 纯文本 | **P1a ✅** |
+| csv / json | UTF-8 解码 | stdlib | 原文 | P1b |
 | doc（legacy） | LibreOffice headless 或 KMS 转换 | 外部服务 | 纯文本 |
 | xlsx | 按 sheet 导出 CSV 风格文本 | openpyxl | 表格文本 |
 | xls（legacy） | xlrd 或 KMS 转换 | xlrd / 外部 | 表格文本 |
@@ -180,8 +181,9 @@ platform/attachments/
 
 | 阶段 | 内容 | 产出 |
 |------|------|------|
-| **P0（当前）** | 前端模式切换 + 后端分层 + unify_lite upload | ✅ 本 PR |
-| **P1** | txt/md/pdf/docx/xlsx 本地提取 + 文本注入 | 可用 unify-lite 发消息 |
+| **P0** | 前端模式切换 + 后端分层 + unify_lite upload | ✅ |
+| **P1a（当前）** | txt / md / docx 本地提取 + 文本注入 + dropup toggle | ✅ 本阶段 |
+| **P1b** | pdf / xlsx 本地提取 | 待做 |
 | **P2** | 图片 OCR/描述 + 提取缓存 | 全类型覆盖 |
 | **P3** | KMS adapter + 大文件异步 | 生产级 |
 | **P4（可选）** | RAG 索引附件 chunk | 超出 lite 范围 |

@@ -23,7 +23,12 @@ from app.platform.mcp.mcp_connect import disconnect_bundle, iter_mcp_connect_kee
 from app.platform.mcp.mcp_pool import McpPoolKey, get_mcp_connection_pool
 from app.platform.agent.platform_instructions import RUN_CANCELLED_USER_TEXT
 from app.platform.session.session_store import SessionStore
-from app.platform.session.user_message_input import build_user_run_input, link_attachments_metadata
+from app.platform.session.user_message_input import (
+    build_user_run_input,
+    build_user_run_input_lite,
+    link_attachments_metadata,
+)
+from app.platform.attachments.modes import AttachmentProcessingMode, parse_attachment_mode
 from app.platform.attachments.service import AttachmentService
 from app.platform.llm.chat_model import resolve_chat_model
 from app.platform.llm.stream_errors import user_facing_stream_error
@@ -141,6 +146,26 @@ class ChatRunService:
             expected_provider=expected_provider,
             processing_mode=attachment_mode,
         )
+
+    async def _build_run_input(
+        self,
+        chat: Chat,
+        content: str,
+        attachments: list,
+        *,
+        attachment_mode: str | None = None,
+    ):
+        mode = parse_attachment_mode(attachment_mode)
+        if mode == AttachmentProcessingMode.UNIFY_LITE:
+            service = AttachmentService(self._db)
+            extracted = service.extract_unify_lite(chat.id, attachments)
+            size_bytes_by_id = {row.id: row.size_bytes for row in attachments}
+            return build_user_run_input_lite(
+                content,
+                extracted,
+                size_bytes_by_id=size_bytes_by_id,
+            )
+        return build_user_run_input(content, attachments)
 
     async def _resolve_run_model(self, chat: Chat) -> tuple[str, str]:
         model_entry = await resolve_chat_model(self._db, chat)
@@ -409,7 +434,12 @@ class ChatRunService:
             attachment_ids=attachment_ids,
             attachment_mode=attachment_mode,
         )
-        run_input = build_user_run_input(content, attachments)
+        run_input = await self._build_run_input(
+            chat,
+            content,
+            attachments,
+            attachment_mode=attachment_mode,
+        )
         memory_result = await try_handle_memory_command(
             self._db,
             user_id=chat.user_id,
@@ -496,7 +526,12 @@ class ChatRunService:
             attachment_ids=attachment_ids,
             attachment_mode=attachment_mode,
         )
-        run_input = build_user_run_input(content, attachments)
+        run_input = await self._build_run_input(
+            chat,
+            content,
+            attachments,
+            attachment_mode=attachment_mode,
+        )
         memory_result = await try_handle_memory_command(
             self._db,
             user_id=chat.user_id,
