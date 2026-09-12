@@ -44,9 +44,12 @@ def _integration_success_redirect(*, provider: str, status: str, error: str | No
     base = settings.integration_success_redirect or settings.cors_origins[0]
     parsed = urlparse(base)
     path = parsed.path or "/"
-    if not path.endswith("/settings/integrations"):
-        path = "/settings/integrations"
-    query = urlencode({"provider": provider, "status": status, **({"error": error} if error else {})})
+    if path.endswith("/settings/integrations"):
+        path = "/"
+    query_params = {"integrations": "1", "provider": provider, "status": status}
+    if error:
+        query_params["error"] = error
+    query = urlencode(query_params)
     return urlunparse(parsed._replace(path=path, query=query, fragment=""))
 
 

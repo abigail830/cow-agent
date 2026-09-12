@@ -8,10 +8,12 @@ import {
   type ClipboardEvent,
 } from 'react'
 import { Paperclip } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { api, streamChat } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { AgentIcon } from '../components/AgentIcon'
 import { ChatHistoryPanel } from '../components/ChatHistoryPanel'
+import { IntegrationsDrawer } from '../components/IntegrationsDrawer'
 import { MemoryPanel } from '../components/MemoryPanel'
 import { ProposalLivePanel } from '../components/ProposalLivePanel'
 import { ProposalPanelShell, readProposalPanelWidth, type ProposalPanelTab } from '../components/ProposalPanelShell'
@@ -189,6 +191,7 @@ function readSidebarCollapsed(): boolean {
 
 export function ChatPage() {
   const { user, logout } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [agents, setAgents] = useState<Agent[]>([])
   const [agentsLoading, setAgentsLoading] = useState(true)
   const [agentsError, setAgentsError] = useState<string | null>(null)
@@ -211,6 +214,7 @@ export function ChatPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [memoryOpen, setMemoryOpen] = useState(false)
+  const [integrationsOpen, setIntegrationsOpen] = useState(() => searchParams.get('integrations') === '1')
   const [proposalPanelWidth, setProposalPanelWidth] = useState(readProposalPanelWidth)
   const streamRegistryRef = useRef(new StreamRegistry())
   const reloadInFlightRef = useRef(new Map<string, Promise<void>>())
@@ -476,7 +480,29 @@ export function ChatPage() {
   const closeOverlayPanels = useCallback(() => {
     setHistoryOpen(false)
     setMemoryOpen(false)
+    setIntegrationsOpen(false)
   }, [])
+
+  const openIntegrations = useCallback(() => {
+    setIntegrationsOpen(true)
+    setHistoryOpen(false)
+    setMemoryOpen(false)
+  }, [])
+
+  useEffect(() => {
+    if (searchParams.get('integrations') !== '1') return
+    setIntegrationsOpen(true)
+    setHistoryOpen(false)
+    setMemoryOpen(false)
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('integrations')
+        return next
+      },
+      { replace: true },
+    )
+  }, [searchParams, setSearchParams])
 
   const {
     handleExpandArtifact,
@@ -1698,7 +1724,12 @@ export function ChatPage() {
 
         <div className="agent-sidebar-footer">
           {!sidebarCollapsed ? (
-            <SidebarUserMenu user={user} collapsed={sidebarCollapsed} onLogout={logout} />
+            <SidebarUserMenu
+              user={user}
+              collapsed={sidebarCollapsed}
+              onOpenIntegrations={openIntegrations}
+              onLogout={logout}
+            />
           ) : null}
           <button
             type="button"
@@ -2050,6 +2081,7 @@ export function ChatPage() {
               onClose={() => setHistoryOpen(false)}
               onSelect={(id) => void openHistoryChat(id)}
             />
+            <IntegrationsDrawer open={integrationsOpen} onClose={() => setIntegrationsOpen(false)} />
           </div>
         ) : (
           <div className="chat-main-placeholder">
