@@ -191,7 +191,11 @@ export function IntegrationsDrawer({ open, onClose }: Props) {
                       }`}
                     >
                       <div className="integration-tile-main">
-                        <span className={`integration-tile-icon integration-tile-icon-${item.provider}`}>
+                        <span
+                          className={`integration-tile-icon integration-tile-icon-${
+                            item.auth_kind === 'oauth' ? 'oauth' : 'api-key'
+                          }${item.provider === 'hybrid-search' ? ' integration-tile-icon-compact' : ''}`}
+                        >
                           {providerInitial(item.provider)}
                         </span>
                         <div className="integration-tile-copy">

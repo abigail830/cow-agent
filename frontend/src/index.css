@@ -1469,26 +1469,19 @@ body {
   letter-spacing: -0.02em;
 }
 
-.integration-tile-icon-notion {
-  background: #111827;
-  color: #fff;
-}
-
-.integration-tile-icon-hubspot {
+.integration-tile-icon-oauth {
   background: #ff7a59;
   color: #fff;
 }
 
-.integration-tile-icon-hybrid-search {
-  background: #1d4ed8;
+.integration-tile-icon-api-key {
+  background: #004953;
   color: #fff;
-  font-size: 0.625rem;
-  letter-spacing: -0.04em;
 }
 
-.integration-tile-icon-zhipu-web-search {
-  background: #0f766e;
-  color: #fff;
+.integration-tile-icon-compact {
+  font-size: 0.625rem;
+  letter-spacing: -0.04em;
 }
 
 .integration-api-key-field {
