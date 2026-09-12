@@ -30,6 +30,7 @@ from app.platform.session.user_message_input import (
 )
 from app.platform.attachments.modes import AttachmentProcessingMode, parse_attachment_mode
 from app.platform.attachments.service import AttachmentService
+from app.platform.attachments.unify_lite.partition import partition_unify_lite_attachments
 from app.platform.llm.chat_model import resolve_chat_model
 from app.platform.llm.stream_errors import user_facing_stream_error
 from app.platform.chat.run_manager import get_run_manager
@@ -158,11 +159,13 @@ class ChatRunService:
         mode = parse_attachment_mode(attachment_mode)
         if mode == AttachmentProcessingMode.UNIFY_LITE:
             service = AttachmentService(self._db)
-            extracted = service.extract_unify_lite(chat.id, attachments)
+            text_rows, image_rows = partition_unify_lite_attachments(attachments)
+            extracted = service.extract_unify_lite(chat.id, text_rows) if text_rows else []
             size_bytes_by_id = {row.id: row.size_bytes for row in attachments}
             return build_user_run_input_lite(
                 content,
                 extracted,
+                image_attachments=image_rows,
                 size_bytes_by_id=size_bytes_by_id,
             )
         return build_user_run_input(content, attachments)

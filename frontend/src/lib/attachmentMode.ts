@@ -15,13 +15,14 @@ export const ATTACHMENT_MODE_OPTIONS: {
   {
     value: 'unify_lite',
     label: 'Unify-lite',
-    description: 'Extract txt/md/docx into the message; works with any model',
+    description: 'Extract txt/md/docx; images stay in library until @referenced (native vision)',
   },
 ]
 
-export const UNIFY_LITE_ATTACHMENT_ACCEPT = '.txt,.md,.docx'
+export const UNIFY_LITE_ATTACHMENT_ACCEPT = '.txt,.md,.docx,.png,.jpg,.jpeg,.gif,.webp'
 
-export const UNIFY_LITE_ATTACHMENT_LABEL = 'Text (.txt, .md) and Word (.docx)'
+export const UNIFY_LITE_ATTACHMENT_LABEL =
+  'Text (.txt, .md, .docx) and images (PNG/JPEG/GIF/WebP); @ to reference on send'
 
 export const DEFAULT_ATTACHMENT_MODE: AttachmentProcessingMode = 'unify_lite'
 

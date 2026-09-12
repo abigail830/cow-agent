@@ -23,7 +23,7 @@ agents/
 | `id` | yes | Slug，与目录名一致 |
 | `name` | yes | 显示名 |
 | `model_provider` | yes | `azure_openai` / `azure_anthropic` / `siliconflow` / `dashscope` / `deepseek` |
-| `default_model` | recommended | Catalog id in `backend/config/models.yaml`（如 `claude-sonnet-4-6`、`glm-5.3`） |
+| `default_model` | recommended | Catalog id in `backend/config/models.yaml`（如 `claude-sonnet-4-6`、`minimax-m3`） |
 | `model` | no | 可选 override；deployment 字符串，支持 `${ENV_VAR}`。未写时从 `default_model` 查 catalog |
 | `mcp_servers` | no | 引用 `mcp_servers.yaml` 中的 key；可在 profile 内联 `env`（见下） |
 | `allowed_tools` | no | MAF 工具名，如 `postgres_query_data`（对应 mcp-postgres 的 `query_data`） |
@@ -96,35 +96,17 @@ hooks:
 
 ### 模型目录（`backend/config/models.yaml`）
 
-所有可选模型的 **deployment 名称** 统一维护在 `config/models.yaml`（如 `gpt-5.4`、`claude-sonnet-4-6`、`zai-org/GLM-5.3`）。`.env` 只放 **API Key 和 base URL**，不再用 `*_DEFAULT_MODEL` 指定聊天模型。
+所有可选模型的 **deployment 名称** 统一维护在 `config/models.yaml`（如 `gpt-5.4`、`claude-sonnet-4-6`、`MiniMax/MiniMax-M3`）。`.env` 只放 **API Key 和 base URL**，不再用 `*_DEFAULT_MODEL` 指定聊天模型。
 
 Agent profile 写 `default_model: <catalog-id>` 即可；若某环境的 Azure deployment 名与 catalog 不同，可在 profile 加 `model: your-custom-deployment` 覆盖。
 
-### SiliconFlow（硅基流动）
-
-OpenAI **Chat Completions** 兼容接口（不是 Azure Responses API）：
-
-```yaml
-model_provider: siliconflow
-default_model: glm-5.3
-```
-
-后端 / Vercel 环境变量：
-
-```bash
-SILICONFLOW_API_KEY=sk-...
-SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
-```
-
-附件：仅支持**图片** inline；PDF 等文件暂不支持。
-
 ### DashScope（阿里云百炼）
 
-OpenAI **Chat Completions** 兼容模式：
+OpenAI **Chat Completions** 兼容模式（Qwen、MiniMax M3 等；thinking 可通过 OpenAI 兼容 `extra_body` 传递，无需单独 SDK）：
 
 ```yaml
 model_provider: dashscope
-default_model: qwen3.7-plus
+default_model: minimax-m3
 ```
 
 后端 / Vercel 环境变量：
@@ -134,7 +116,11 @@ DASHSCOPE_API_KEY=sk-...
 DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 ```
 
-可选模型见 `backend/config/models.yaml`（如 `qwen3.7-plus`、`qwen3.8-max`）。附件规则同 SiliconFlow：仅图片 inline。
+可选模型见 `backend/config/models.yaml`（如 `qwen3.7-plus`、`qwen3.8-max`、`minimax-m3`）。
+
+**Unify-lite 附件**：txt/md/docx 抽取为文本；图片上传至 blob，仅在消息中 `@filename` 引用时以 Native 多模态发送。
+
+**Native 附件**：PDF（Azure）/ 图片 inline 多模态。
 
 ### DeepSeek
 
@@ -152,7 +138,7 @@ DEEPSEEK_API_KEY=sk-...
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 ```
 
-附件规则同 SiliconFlow：仅图片 inline。
+附件：Native 模式下图片 inline 多模态；Unify-lite 下 `@` 引用图片时同样走 Native 多模态。
 
 ### mcp_servers.yaml vs profile
 

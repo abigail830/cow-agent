@@ -24,11 +24,8 @@ class ModelEntry:
 
     @property
     def supports_attachments(self) -> bool:
-        return self.provider not in {
-            ModelProvider.SILICONFLOW.value,
-            ModelProvider.DASHSCOPE.value,
-            ModelProvider.DEEPSEEK.value,
-        }
+        # All catalog chat models support vision (images). Document/PDF rules vary by mode.
+        return True
 
 
 @dataclass(frozen=True)

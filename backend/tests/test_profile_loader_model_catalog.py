@@ -14,18 +14,18 @@ def test_profile_uses_catalog_deployment_when_model_omitted():
     assert profile.model_provider == "azure_anthropic"
 
 
-def test_profile_catalog_deployment_for_siliconflow(tmp_path: Path, monkeypatch):
+def test_profile_catalog_deployment_for_dashscope_minimax(tmp_path: Path, monkeypatch):
     catalog_path = tmp_path / "models.yaml"
     catalog_path.write_text(
         yaml.dump(
             {
-                "providers": {"siliconflow": {"base_url": "https://api.siliconflow.cn/v1"}},
+                "providers": {"dashscope": {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}},
                 "models": [
                     {
-                        "id": "glm-5.3",
-                        "label": "GLM-5.3",
-                        "provider": "siliconflow",
-                        "deployment": "zai-org/GLM-5.3",
+                        "id": "minimax-m3",
+                        "label": "MiniMax M3",
+                        "provider": "dashscope",
+                        "deployment": "MiniMax/MiniMax-M3",
                         "enabled": True,
                     }
                 ],
@@ -45,8 +45,8 @@ def test_profile_catalog_deployment_for_siliconflow(tmp_path: Path, monkeypatch)
             {
                 "id": "test-agent",
                 "name": "Test",
-                "model_provider": "siliconflow",
-                "default_model": "glm-5.3",
+                "model_provider": "dashscope",
+                "default_model": "minimax-m3",
                 "prompt_file": "system_prompt.md",
             }
         ),
@@ -55,6 +55,6 @@ def test_profile_catalog_deployment_for_siliconflow(tmp_path: Path, monkeypatch)
     (agent_dir / "system_prompt.md").write_text("You are a test agent.", encoding="utf-8")
 
     profile = load_agent_profile(agent_dir)
-    assert profile.model_name == "zai-org/GLM-5.3"
+    assert profile.model_name == "MiniMax/MiniMax-M3"
 
     model_catalog.reload_model_catalog()

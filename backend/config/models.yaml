@@ -24,12 +24,6 @@ models:
     deployment: claude-sonnet-4-6
     enabled: true
 
-  - id: glm-5.3
-    label: GLM-5.3
-    provider: siliconflow
-    deployment: zai-org/GLM-5.3
-    enabled: true
-
   - id: qwen3.7-plus
     label: Qwen 3.7 Plus
     provider: dashscope
@@ -40,6 +34,12 @@ models:
     label: Qwen 3.8 Max
     provider: dashscope
     deployment: qwen3.8-max
+    enabled: true
+
+  - id: minimax-m3
+    label: MiniMax M3
+    provider: dashscope
+    deployment: MiniMax/MiniMax-M3
     enabled: true
 
   - id: deepseek-flash

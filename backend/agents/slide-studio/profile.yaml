@@ -7,7 +7,7 @@ default_model: gpt-5.4
 # model_provider: azure_anthropic
 # default_model: claude-sonnet-4-6
 # model_provider: siliconflow
-# default_model: glm-5.3
+# default_model: minimax-m3
 
 prompt_file: system_prompt.md
 skills_dir: skills
