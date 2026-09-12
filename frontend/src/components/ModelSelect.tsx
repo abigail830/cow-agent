@@ -31,7 +31,7 @@ export function ModelSelect({ value, options, onChange, disabled }: ModelSelectP
           disabled={option.available === false}
         >
           {option.label}
-          {option.available === false ? ' (未配置)' : ''}
+          {option.available === false ? ' (not configured)' : ''}
         </option>
       ))}
     </select>

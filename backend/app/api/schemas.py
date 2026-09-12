@@ -62,6 +62,7 @@ class ChatListOut(BaseModel):
 class MessageCreate(BaseModel):
     content: str = ""
     attachment_ids: list[uuid.UUID] = Field(default_factory=list)
+    attachment_mode: str | None = None
 
 
 class AttachmentOut(BaseModel):
@@ -72,6 +73,7 @@ class AttachmentOut(BaseModel):
     size_bytes: int
     provider: str
     provider_file_id: str
+    processing_mode: str | None = None
     created_at: str | None = None
 
 

@@ -29,8 +29,18 @@ def user_message_attachment_metadata(attachments: list[Any]) -> dict[str, Any]:
     return {"attachments": [attachment_metadata(att) for att in attachments]}
 
 
-def link_attachments_metadata(metadata: dict[str, Any], attachments: list[Any]) -> dict[str, Any]:
+def link_attachments_metadata(
+    metadata: dict[str, Any],
+    attachments: list[Any],
+    *,
+    attachment_mode: str | None = None,
+) -> dict[str, Any]:
     attachment_meta = user_message_attachment_metadata(attachments)
-    if not attachment_meta:
+    if not attachment_meta and not attachment_mode:
         return metadata
-    return {**metadata, **attachment_meta}
+    merged = {**metadata}
+    if attachment_meta:
+        merged.update(attachment_meta)
+    if attachment_mode:
+        merged["attachment_mode"] = attachment_mode
+    return merged

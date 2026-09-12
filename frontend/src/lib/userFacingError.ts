@@ -33,18 +33,18 @@ function messageFromObject(value: Record<string, unknown>): string | null {
 function friendlyMessage(text: string): string {
   const lower = text.toLowerCase()
   if (lower.includes('overloaded_error') || lower.includes('overloaded')) {
-    return 'Claude 模型服务繁忙（Overloaded），请稍后重试；若持续失败请检查 Azure 部署与容量。'
+    return 'Claude is overloaded. Please retry shortly; if it persists, check your Azure deployment and capacity.'
   }
   if (lower.includes('internal server error') || lower.includes('api_error')) {
-    return 'Claude 模型服务异常（500），请确认 CLAUDE_AZURE_FOUNDRY_MODEL 与 Azure 部署名称一致并稍后重试。'
+    return 'Claude returned a server error (500). Verify CLAUDE_AZURE_FOUNDRY_MODEL matches your Azure deployment name and retry.'
   }
   if (lower.includes('rate_limit') || lower.includes('rate limit')) {
-    return '请求过于频繁，请稍后重试。'
+    return 'Too many requests. Please wait and try again.'
   }
   return text
 }
 
-export function formatUserFacingError(raw: unknown, fallback = '请求失败，请稍后重试。'): string {
+export function formatUserFacingError(raw: unknown, fallback = 'Request failed. Please try again.'): string {
   if (raw instanceof Error) {
     return formatUserFacingError(raw.message, fallback)
   }

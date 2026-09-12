@@ -4,7 +4,7 @@ export function formatApiError(raw: unknown, fallback: string): string {
     const parsed = JSON.parse(text) as { detail?: unknown }
     if (typeof parsed.detail === 'string') {
       if (parsed.detail === 'Not Found') {
-        return 'API 未找到该资源。若刚更新过代码，请重启 backend（./scripts/stop.sh && ./scripts/start.sh）。'
+        return 'API resource not found. If you recently updated the code, restart the backend (./scripts/stop.sh && ./scripts/start.sh).'
       }
       return parsed.detail
     }
@@ -13,6 +13,9 @@ export function formatApiError(raw: unknown, fallback: string): string {
     }
   } catch {
     /* keep text */
+  }
+  if (text === 'Failed to fetch') {
+    return 'Could not reach the server. Check that the backend is running and try again.'
   }
   return text || fallback
 }

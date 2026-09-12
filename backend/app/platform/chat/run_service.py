@@ -25,8 +25,7 @@ from app.platform.agent.platform_instructions import RUN_CANCELLED_USER_TEXT
 from app.platform.session.session_store import SessionStore
 from app.platform.session.user_message_input import build_user_run_input, link_attachments_metadata
 from app.platform.attachments.service import AttachmentService
-from app.platform.llm.model_catalog import resolve_agent_model
-from app.platform.llm.model_preference import get_model_preference
+from app.platform.llm.chat_model import resolve_chat_model
 from app.platform.llm.stream_errors import user_facing_stream_error
 from app.platform.chat.run_manager import get_run_manager
 from app.platform.agent.plugin_registry import (
@@ -131,6 +130,7 @@ class ChatRunService:
         attachment_ids: list[uuid.UUID],
         *,
         expected_provider: str,
+        attachment_mode: str | None = None,
     ) -> list:
         if not attachment_ids:
             return []
@@ -139,14 +139,11 @@ class ChatRunService:
             chat.id,
             attachment_ids,
             expected_provider=expected_provider,
+            processing_mode=attachment_mode,
         )
 
     async def _resolve_run_model(self, chat: Chat) -> tuple[str, str]:
-        preference_id = await get_model_preference(chat.user_id, chat.agent_id)
-        agent = await self._db.get(AgentModel, chat.agent_id)
-        if agent is None:
-            raise ValueError("Agent not found for chat")
-        model_entry = resolve_agent_model(agent, preference_id)
+        model_entry = await resolve_chat_model(self._db, chat)
         return model_entry.id, model_entry.provider
 
     async def _build_pooled_bundle(
@@ -206,14 +203,21 @@ class ChatRunService:
         *,
         attachments: list | None = None,
         attachment_ids: list[uuid.UUID] | None = None,
+        attachment_mode: str | None = None,
+        expected_provider: str | None = None,
     ) -> Message:
         """Persist the user message immediately so it survives agent failures."""
         resolved = (
             attachments
             if attachments is not None
-            else await self._resolve_attachments(chat, attachment_ids or [])
+            else await self._resolve_attachments(
+                chat,
+                attachment_ids or [],
+                expected_provider=expected_provider or "",
+                attachment_mode=attachment_mode,
+            )
         )
-        metadata = link_attachments_metadata({}, resolved)
+        metadata = link_attachments_metadata({}, resolved, attachment_mode=attachment_mode)
         row = await self._messages.insert(
             chat_id=chat.id,
             role="user",
@@ -383,6 +387,7 @@ class ChatRunService:
         content: str,
         *,
         attachment_ids: list[uuid.UUID] | None = None,
+        attachment_mode: str | None = None,
     ) -> str:
         chat = await self._get_chat(chat_id)
         memory_config = await self._memory_config_for_chat(chat)
@@ -393,11 +398,16 @@ class ChatRunService:
             chat,
             attachment_ids or [],
             expected_provider=model_provider,
+            attachment_mode=attachment_mode,
         )
         if not content.strip() and not attachments:
             raise ValueError("Message content or attachments required")
         user_row = await self._commit_user_turn(
-            chat, content, attachments=attachments, attachment_ids=attachment_ids
+            chat,
+            content,
+            attachments=attachments,
+            attachment_ids=attachment_ids,
+            attachment_mode=attachment_mode,
         )
         run_input = build_user_run_input(content, attachments)
         memory_result = await try_handle_memory_command(
@@ -464,6 +474,7 @@ class ChatRunService:
         content: str,
         *,
         attachment_ids: list[uuid.UUID] | None = None,
+        attachment_mode: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         chat = await self._get_chat(chat_id)
         memory_config = await self._memory_config_for_chat(chat)
@@ -474,11 +485,16 @@ class ChatRunService:
             chat,
             attachment_ids or [],
             expected_provider=model_provider,
+            attachment_mode=attachment_mode,
         )
         if not content.strip() and not attachments:
             raise ValueError("Message content or attachments required")
         user_row = await self._commit_user_turn(
-            chat, content, attachments=attachments, attachment_ids=attachment_ids
+            chat,
+            content,
+            attachments=attachments,
+            attachment_ids=attachment_ids,
+            attachment_mode=attachment_mode,
         )
         run_input = build_user_run_input(content, attachments)
         memory_result = await try_handle_memory_command(

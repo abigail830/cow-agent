@@ -2,27 +2,23 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
-from app.db.models import AgentModel, Chat
 from app.db.repositories.attachments import AttachmentRepository
-from app.platform.attachments.attachment_adapters import (
-    attachment_metadata,
-    get_attachment_upload_adapter,
-    should_use_azure_inline_image,
-    validate_attachment_file,
-    validate_message_attachments,
-)
+from app.platform.attachments.modes import AttachmentProcessingMode, DEFAULT_ATTACHMENT_MODE, parse_attachment_mode
 from app.platform.attachments.attachment_storage import (
-    format_inline_provider_file_id,
-    save_inline_attachment,
+    delete_inline_attachment,
+    is_inline_provider_file_id,
+    parse_inline_attachment_id,
 )
-from app.platform.llm.model_registry import ModelProvider
-
+from app.platform.attachments.native.maf_content import attachment_metadata
+from app.platform.attachments.native.upload import NativeAttachmentUploader
+from app.platform.attachments.unify_lite.handler import UnifyLiteAttachmentHandler
 
 class AttachmentService:
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
         self._attachments = AttachmentRepository(db)
+        self._native = NativeAttachmentUploader(db, self._attachments)
+        self._unify_lite = UnifyLiteAttachmentHandler(db, self._attachments)
 
     async def upload(
         self,
@@ -31,104 +27,25 @@ class AttachmentService:
         filename: str,
         mime_type: str,
         data: bytes,
+        processing_mode: str | AttachmentProcessingMode | None = None,
     ) -> dict:
-        chat = await self._db.get(Chat, chat_id)
-        if chat is None:
-            raise ValueError(f"Chat not found: {chat_id}")
-
-        agent = await self._db.get(AgentModel, chat.agent_id)
-        if agent is None:
-            raise ValueError("Agent not found for chat")
-
-        validate_attachment_file(filename=filename, mime_type=mime_type, size_bytes=len(data))
-
-        settings = get_settings()
-        if (
-            agent.model_provider == ModelProvider.AZURE_OPENAI.value
-            and should_use_azure_inline_image(
-                base_url=settings.azure_openai_base_url,
-                mime_type=mime_type,
-            )
-        ):
-            return await self._upload_inline_image(
-                chat_id=chat_id,
+        mode = (
+            processing_mode
+            if isinstance(processing_mode, AttachmentProcessingMode)
+            else parse_attachment_mode(processing_mode)
+        )
+        if mode == AttachmentProcessingMode.UNIFY_LITE:
+            return await self._unify_lite.upload(
+                chat_id,
                 filename=filename,
                 mime_type=mime_type,
                 data=data,
-                provider=ModelProvider.AZURE_OPENAI.value,
             )
-
-        if agent.model_provider in {
-            ModelProvider.SILICONFLOW.value,
-            ModelProvider.DASHSCOPE.value,
-            ModelProvider.DEEPSEEK.value,
-        }:
-            if not mime_type.startswith("image/"):
-                raise ValueError(
-                    "This model provider only supports image attachments (inline); "
-                    "PDF and other files are not supported yet."
-                )
-            return await self._upload_inline_image(
-                chat_id=chat_id,
-                filename=filename,
-                mime_type=mime_type,
-                data=data,
-                provider=agent.model_provider,
-            )
-
-        adapter = get_attachment_upload_adapter(agent.model_provider)
-        uploaded = await adapter.upload(filename=filename, mime_type=mime_type, data=data)
-
-        row = await self._attachments.insert(
-            chat_id=chat_id,
-            provider=uploaded.provider,
-            provider_file_id=uploaded.provider_file_id,
-            filename=uploaded.filename,
-            mime_type=uploaded.mime_type,
-            size_bytes=uploaded.size_bytes,
-        )
-        await self._db.commit()
-        await self._db.refresh(row)
-        return attachment_metadata(row)
-
-    async def _upload_inline_image(
-        self,
-        chat_id: uuid.UUID,
-        *,
-        filename: str,
-        mime_type: str,
-        data: bytes,
-        provider: str,
-    ) -> dict:
-        attachment_id = uuid.uuid4()
-        save_inline_attachment(chat_id, attachment_id, data)
-        row = await self._attachments.insert(
-            attachment_id=attachment_id,
-            chat_id=chat_id,
-            provider=provider,
-            provider_file_id=format_inline_provider_file_id(attachment_id),
-            filename=filename,
-            mime_type=mime_type,
-            size_bytes=len(data),
-        )
-        await self._db.commit()
-        await self._db.refresh(row)
-        return attachment_metadata(row)
-
-    async def _upload_azure_inline_image(
-        self,
-        chat_id: uuid.UUID,
-        *,
-        filename: str,
-        mime_type: str,
-        data: bytes,
-    ) -> dict:
-        return await self._upload_inline_image(
+        return await self._native.upload(
             chat_id,
             filename=filename,
             mime_type=mime_type,
             data=data,
-            provider=ModelProvider.AZURE_OPENAI.value,
         )
 
     async def resolve_for_message(
@@ -137,17 +54,50 @@ class AttachmentService:
         attachment_ids: list[uuid.UUID],
         *,
         expected_provider: str,
+        processing_mode: str | AttachmentProcessingMode | None = None,
     ) -> list:
-        if not attachment_ids:
-            return []
-        rows = await self._attachments.list_by_ids(chat_id, attachment_ids)
-        if len(rows) != len(set(attachment_ids)):
-            raise ValueError("One or more attachments were not found for this chat")
+        mode = (
+            processing_mode
+            if isinstance(processing_mode, AttachmentProcessingMode)
+            else parse_attachment_mode(processing_mode)
+        )
+        if mode == AttachmentProcessingMode.UNIFY_LITE:
+            rows = await self._unify_lite.resolve_for_message(chat_id, attachment_ids)
+            self._unify_lite.ensure_run_input_supported()
+            return rows
+
+        return await self._native.resolve_for_message(
+            chat_id,
+            attachment_ids,
+            expected_provider=expected_provider,
+        )
+
+    async def delete(self, chat_id: uuid.UUID, attachment_id: uuid.UUID) -> None:
+        row = await self._attachments.delete(chat_id, attachment_id)
+        if row is None:
+            raise ValueError("Attachment not found for this chat")
+        if is_inline_provider_file_id(row.provider_file_id):
+            try:
+                delete_inline_attachment(chat_id, parse_inline_attachment_id(row.provider_file_id))
+            except OSError:
+                pass
+        await self._db.commit()
+
+    async def list_for_chat(self, chat_id: uuid.UUID) -> list[dict]:
+        rows = await self._attachments.list_for_chat(chat_id)
+        result: list[dict] = []
         for row in rows:
-            if row.provider != expected_provider:
-                raise ValueError(
-                    f"Attachment {row.filename} was uploaded for {row.provider} "
-                    f"but this agent uses {expected_provider}. Please re-upload."
-                )
-        validate_message_attachments(size_bytes_list=[row.size_bytes for row in rows])
-        return rows
+            mode = (
+                AttachmentProcessingMode.UNIFY_LITE.value
+                if row.provider == AttachmentProcessingMode.UNIFY_LITE.value
+                else AttachmentProcessingMode.NATIVE.value
+            )
+            payload = attachment_metadata(row, processing_mode=mode)
+            if row.created_at is not None:
+                payload["created_at"] = row.created_at.isoformat()
+            result.append(payload)
+        return result
+
+    @staticmethod
+    def default_processing_mode() -> AttachmentProcessingMode:
+        return DEFAULT_ATTACHMENT_MODE

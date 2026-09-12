@@ -9,6 +9,7 @@ import type {
   StreamEvent,
   User,
 } from '../types'
+import type { AttachmentProcessingMode } from '../lib/attachmentMode'
 import type { AttachmentLimits } from '../lib/attachments'
 import { DEFAULT_ATTACHMENT_LIMITS } from '../lib/attachments'
 import type { ProposalExportResponse, ProposalPreview } from '../types/proposalPreview'
@@ -72,9 +73,28 @@ export const api = {
   getAttachmentConfig: () =>
     request<AttachmentLimits>('/config/attachments').catch(() => DEFAULT_ATTACHMENT_LIMITS),
 
-  uploadChatAttachment: async (chatId: string, file: File): Promise<ChatAttachment> => {
+  listChatAttachments: (chatId: string) =>
+    request<ChatAttachment[]>(`/chats/${chatId}/attachments`),
+
+  deleteChatAttachment: async (chatId: string, attachmentId: string): Promise<void> => {
+    const res = await fetch(`${API}/chats/${chatId}/attachments/${attachmentId}`, {
+      ...defaultFetchInit,
+      method: 'DELETE',
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(text || res.statusText)
+    }
+  },
+
+  uploadChatAttachment: async (
+    chatId: string,
+    file: File,
+    processingMode: AttachmentProcessingMode = 'native',
+  ): Promise<ChatAttachment> => {
     const form = new FormData()
     form.append('file', file)
+    form.append('processing_mode', processingMode)
     const res = await fetch(`${API}/chats/${chatId}/attachments`, {
       ...defaultFetchInit,
       method: 'POST',
@@ -165,12 +185,17 @@ export async function streamChat(
   onEvent: (ev: StreamEvent) => void,
   signal?: AbortSignal,
   attachmentIds: string[] = [],
+  attachmentMode: AttachmentProcessingMode = 'native',
 ): Promise<void> {
   const res = await fetch(`${API}/chats/${chatId}/stream`, {
     ...defaultFetchInit,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content, attachment_ids: attachmentIds }),
+    body: JSON.stringify({
+      content,
+      attachment_ids: attachmentIds,
+      attachment_mode: attachmentMode,
+    }),
     signal,
   })
   if (!res.ok || !res.body) {

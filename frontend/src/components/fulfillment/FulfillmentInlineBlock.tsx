@@ -39,17 +39,17 @@ export function FulfillmentInlineBlock({
   if (forms.length === 0 && !loading && !error) return null
 
   return (
-    <div className="ff-inline-block" aria-label="补录单草案">
+    <div className="ff-inline-block" aria-label="Fulfillment draft forms">
       <button
         type="button"
         className="ff-inline-header"
         onClick={() => setCollapsed((value) => !value)}
         aria-expanded={!collapsed}
       >
-        <span className="ff-inline-title">补录单草案</span>
+        <span className="ff-inline-title">Fulfillment drafts</span>
         {forms.length > 0 ? (
           <span className="proposal-draft-bagel ff-bagel-review">
-            {editingCount > 0 ? `${editingCount} 待审阅` : `${forms.length} 张`}
+            {editingCount > 0 ? `${editingCount} pending` : `${forms.length} forms`}
           </span>
         ) : null}
         <svg
@@ -69,10 +69,10 @@ export function FulfillmentInlineBlock({
       {!collapsed ? (
         <div className="ff-inline-body">
           <p className="ff-inline-subtitle">
-            方案暂存于会话；确认生效后写入履约中心并生成调拨单
+            Drafts stay in this chat until confirmed; activation writes to fulfillment and creates transfer orders.
           </p>
           {loading && forms.length === 0 ? (
-            <p className="ff-inline-placeholder">加载补录单表单…</p>
+            <p className="ff-inline-placeholder">Loading fulfillment forms…</p>
           ) : null}
           {error && !loading ? <p className="ff-form-error">{error}</p> : null}
           {forms.length > 0 ? (

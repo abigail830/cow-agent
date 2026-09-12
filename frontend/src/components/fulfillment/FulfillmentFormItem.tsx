@@ -75,7 +75,7 @@ export function FulfillmentFormItem({
       onUpdate(result.form)
       setDirty(false)
     } catch (e) {
-      setActionError(formatApiError(e, '保存失败'))
+      setActionError(formatApiError(e, 'Save failed'))
     } finally {
       setAction(null)
     }
@@ -93,7 +93,7 @@ export function FulfillmentFormItem({
       const result = await api.confirmFulfillmentForm(chatId, form.form_id)
       onUpdate(result.form)
     } catch (e) {
-      setActionError(formatApiError(e, '生效失败'))
+      setActionError(formatApiError(e, 'Activation failed'))
     } finally {
       setAction(null)
     }
@@ -107,7 +107,7 @@ export function FulfillmentFormItem({
       onUpdate(result.form)
       setDirty(false)
     } catch (e) {
-      setActionError(formatApiError(e, '取消失败'))
+      setActionError(formatApiError(e, 'Cancel failed'))
     } finally {
       setAction(null)
     }
@@ -135,11 +135,11 @@ export function FulfillmentFormItem({
         <p className="ff-form-route">{summary.subtitle}</p>
 
         <div className="ff-form-grid">
-          <FormField label="商品" required full>
+          <FormField label="Product" required full>
             <input className="input" value={productDisplayLabel(form)} readOnly disabled={busy} />
           </FormField>
 
-          <FormField label="SKU编码">
+          <FormField label="SKU code">
             <input
               className="input"
               value={draft.sku_code || draft.product_code}
@@ -148,7 +148,7 @@ export function FulfillmentFormItem({
             />
           </FormField>
 
-          <FormField label="事业部" required>
+          <FormField label="Business unit" required>
             {editable ? (
               <input
                 className="input"
@@ -161,14 +161,14 @@ export function FulfillmentFormItem({
             )}
           </FormField>
 
-          <FormField label="调拨数量" required>
+          <FormField label="Transfer quantity" required>
             {editable ? (
               <input
                 className="input"
                 type="number"
                 min={1}
                 value={draft.transfer_qty}
-                placeholder="补货数量"
+                placeholder="Quantity"
                 onChange={(e) => updateField('transfer_qty', Number(e.target.value) || 0)}
                 disabled={busy}
               />
@@ -177,7 +177,7 @@ export function FulfillmentFormItem({
             )}
           </FormField>
 
-          <FormField label="初始发货仓" required>
+          <FormField label="Initial ship warehouse" required>
             {editable ? (
               <input
                 className="input"
@@ -190,7 +190,7 @@ export function FulfillmentFormItem({
             )}
           </FormField>
 
-          <FormField label="调出逻辑仓" required>
+          <FormField label="Outbound logic warehouse" required>
             {editable ? (
               <input
                 className="input"
@@ -203,7 +203,7 @@ export function FulfillmentFormItem({
             )}
           </FormField>
 
-          <FormField label="调入逻辑仓" required>
+          <FormField label="Inbound logic warehouse" required>
             {editable ? (
               <input
                 className="input"
@@ -216,7 +216,7 @@ export function FulfillmentFormItem({
             )}
           </FormField>
 
-          <FormField label="拟定发货时间" required>
+          <FormField label="Planned ship time" required>
             {editable ? (
               <input
                 className="input"
@@ -230,7 +230,7 @@ export function FulfillmentFormItem({
             )}
           </FormField>
 
-          <FormField label="期望到货时间" required>
+          <FormField label="Expected arrival time" required>
             {editable ? (
               <input
                 className="input"
@@ -245,10 +245,10 @@ export function FulfillmentFormItem({
           </FormField>
         </div>
 
-        <p className="ff-form-section-label">选填项</p>
+        <p className="ff-form-section-label">Optional</p>
 
         <div className="ff-form-grid">
-          <FormField label="商家订单号">
+          <FormField label="Merchant order no.">
             {editable ? (
               <input
                 className="input"
@@ -261,7 +261,7 @@ export function FulfillmentFormItem({
             )}
           </FormField>
 
-          <FormField label="来源单号">
+          <FormField label="Source order no.">
             {editable ? (
               <input
                 className="input"
@@ -274,7 +274,7 @@ export function FulfillmentFormItem({
             )}
           </FormField>
 
-          <FormField label="中转仓">
+          <FormField label="Transit warehouse">
             {editable ? (
               <input
                 className="input"
@@ -287,11 +287,11 @@ export function FulfillmentFormItem({
             )}
           </FormField>
 
-          <FormField label="温区属性">
+          <FormField label="Temperature zone">
             {editable ? (
               <input
                 className="input"
-                value={draft.temp_zone || '常温'}
+                value={draft.temp_zone || 'Ambient'}
                 onChange={(e) => updateField('temp_zone', e.target.value)}
                 disabled={busy}
               />
@@ -300,13 +300,13 @@ export function FulfillmentFormItem({
             )}
           </FormField>
 
-          <FormField label="特殊运输备注" full>
+          <FormField label="Shipping notes" full>
             {editable ? (
               <textarea
                 className="textarea"
                 rows={3}
                 value={draft.shipping_remark || ''}
-                placeholder="如防潮、指定承运商等"
+                placeholder="e.g. moisture protection, preferred carrier"
                 onChange={(e) => updateField('shipping_remark', e.target.value)}
                 disabled={busy}
               />
@@ -317,18 +317,20 @@ export function FulfillmentFormItem({
         </div>
 
         <div className="ff-form-meta">
-          <span>调出 {form.context.from_site_code || '—'}</span>
-          <span>调入 {form.context.to_site_code || '—'}</span>
+          <span>From {form.context.from_site_code || '—'}</span>
+          <span>To {form.context.to_site_code || '—'}</span>
           {simulation?.stock_rate_before_pct != null && simulation?.stock_rate_after_pct != null ? (
             <span>
-              调后备货率 {simulation.stock_rate_before_pct.toFixed(1)}% →{' '}
+              Stock rate after transfer {simulation.stock_rate_before_pct.toFixed(1)}% →{' '}
               {simulation.stock_rate_after_pct.toFixed(1)}%
             </span>
           ) : null}
         </div>
 
         {form.fulfillment_item?.transfer_order_no ? (
-          <p className="ff-form-success">调拨单号：{String(form.fulfillment_item.transfer_order_no)}</p>
+          <p className="ff-form-success">
+            Transfer order: {String(form.fulfillment_item.transfer_order_no)}
+          </p>
         ) : null}
 
         {actionError ? <p className="ff-form-error">{actionError}</p> : null}
@@ -336,19 +338,19 @@ export function FulfillmentFormItem({
         {editable ? (
           <div className="ff-form-actions">
             <button type="button" className="btn btn-ghost" onClick={() => void handleSave()} disabled={busy || !dirty}>
-              {action === 'save' ? '保存中…' : '保存修改'}
+              {action === 'save' ? 'Saving…' : 'Save changes'}
             </button>
             <button type="button" className="btn btn-secondary" onClick={() => void handleCancel()} disabled={busy}>
-              {action === 'cancel' ? '处理中…' : '取消'}
+              {action === 'cancel' ? 'Working…' : 'Cancel'}
             </button>
             <button type="button" className="btn btn-primary" onClick={() => void handleConfirm()} disabled={busy}>
-              {action === 'confirm' ? '处理中…' : '确认生效'}
+              {action === 'confirm' ? 'Working…' : 'Confirm & activate'}
             </button>
           </div>
         ) : canCancel ? (
           <div className="ff-form-actions">
             <button type="button" className="btn btn-secondary" onClick={() => void handleCancel()} disabled={busy}>
-              {action === 'cancel' ? '处理中…' : '取消'}
+              {action === 'cancel' ? 'Working…' : 'Cancel'}
             </button>
           </div>
         ) : null}

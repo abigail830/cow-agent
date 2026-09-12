@@ -58,7 +58,7 @@ export function SidebarUserMenu({ user, collapsed, onLogout }: SidebarUserMenuPr
               void onLogout()
             }}
           >
-            退出登录
+            Sign out
           </button>
         </div>
       ) : null}

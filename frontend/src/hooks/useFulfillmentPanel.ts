@@ -54,7 +54,7 @@ export function useFulfillmentPanel({
         patchSession(agentId, (prev) => {
           if (prev.chatId !== id) return {}
           return {
-            fulfillmentFormsError: formatApiError(e, '加载补录单表单失败'),
+            fulfillmentFormsError: formatApiError(e, 'Failed to load fulfillment forms'),
             fulfillmentFormsLoading: false,
           }
         })

@@ -1,10 +1,10 @@
 import type { FulfillmentForm, FulfillmentFormStatus } from '../types/fulfillmentForms'
 
 export const FULFILLMENT_STATUS_LABELS: Record<FulfillmentFormStatus, string> = {
-  editing: '待审阅',
-  confirmed: '已确认',
-  rejected: '已取消',
-  activated: '已生效',
+  editing: 'Pending review',
+  confirmed: 'Confirmed',
+  rejected: 'Cancelled',
+  activated: 'Active',
 }
 
 export function parseFulfillmentForms(raw: unknown): FulfillmentForm[] {
@@ -43,20 +43,20 @@ export function fulfillmentFormSummary(form: FulfillmentForm, index: number): {
   qtyLabel: string
 } {
   const ctx = form.context
-  const fromName = ctx.from_site_name || ctx.from_site_code || '调出仓'
-  const toName = ctx.to_site_name || ctx.to_site_code || '调入仓'
-  const alloc = ctx.allocation_type === 'lateral' ? '横向调拨' : '正向补货'
+  const fromName = ctx.from_site_name || ctx.from_site_code || 'Source site'
+  const toName = ctx.to_site_name || ctx.to_site_code || 'Destination site'
+  const alloc = ctx.allocation_type === 'lateral' ? 'Lateral transfer' : 'Replenishment'
   const qty = form.payload.transfer_qty
   return {
-    title: `${index + 1}. ${toName}${alloc}`,
+    title: `${index + 1}. ${toName} ${alloc}`,
     subtitle: `${fromName} → ${toName}`,
-    qtyLabel: `${qty} 件`,
+    qtyLabel: `${qty} units`,
   }
 }
 
 export function productDisplayLabel(form: FulfillmentForm): string {
   const name = form.context.product_name
   const code = form.payload.product_code
-  if (name && code) return `${name}（${code}）`
+  if (name && code) return `${name} (${code})`
   return name || code || '—'
 }

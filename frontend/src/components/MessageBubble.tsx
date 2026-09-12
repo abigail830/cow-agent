@@ -1,6 +1,6 @@
 import type { Message, MessageAttachmentMeta } from '../types'
 import { MarkdownContent } from './MarkdownContent'
-
+import { stripAttachmentMentionsFromText } from '../lib/attachmentMentions'
 import { formatUserFacingError } from '../lib/userFacingError'
 
 interface Props {
@@ -21,6 +21,10 @@ function messageAttachments(message: Message): MessageAttachmentMeta[] {
 export function MessageBubble({ message }: Props) {
   const isUser = message.role === 'user'
   const attachments = messageAttachments(message)
+  const userDisplayContent =
+    isUser && attachments.length > 0
+      ? stripAttachmentMentionsFromText(message.content ?? '', attachments)
+      : (message.content ?? '')
 
   if (message.message_type === 'run_cancelled') {
     return (
@@ -72,7 +76,9 @@ export function MessageBubble({ message }: Props) {
                 ))}
               </ul>
             )}
-            {message.content ? <p className="whitespace-pre-wrap">{message.content}</p> : null}
+            {userDisplayContent ? (
+              <p className="whitespace-pre-wrap">{userDisplayContent}</p>
+            ) : null}
           </>
         ) : (
           <>

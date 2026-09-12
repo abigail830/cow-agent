@@ -137,7 +137,7 @@ function MemoryScopeBlock({
               <input
                 type="text"
                 className="memory-panel-add-input"
-                placeholder={draft.isConstraint ? 'e.g. 不要使用表格' : 'e.g. 回复用中文'}
+                placeholder={draft.isConstraint ? 'e.g. Do not use tables' : 'e.g. Reply in Chinese'}
                 value={draft.line}
                 onChange={(e) => onDraftChange({ ...draft, line: e.target.value })}
                 onKeyDown={(e) => {
@@ -303,7 +303,7 @@ export function MemoryPanel({ open, agents, activeAgentId, refreshKey = 0, onClo
         </div>
 
         <div className="memory-panel-hint">
-          Use <code>记住 …</code> or <code>不要总是 …</code> in chat. Only explicit commands are saved.
+          Use <code>remember …</code> or <code>never always …</code> in chat. Only explicit commands are saved.
         </div>
 
         {error && <p className="memory-panel-error">{error}</p>}

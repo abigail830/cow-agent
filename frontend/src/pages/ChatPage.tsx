@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ClipboardEvent,
+} from 'react'
+import { Paperclip } from 'lucide-react'
 import { api, streamChat } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { AgentIcon } from '../components/AgentIcon'
@@ -12,7 +21,10 @@ import { ChatHistoryIcon } from '../components/ChatHistoryIcon'
 import { ChatMessageList } from '../components/ChatMessageList'
 import { ArtifactPanelHost } from '../components/ArtifactPanelHost'
 import { useArtifactPanel } from '../hooks/useArtifactPanel'
+import { AttachmentMentionPopup } from '../components/AttachmentMentionPopup'
+import { ComposerMentionInput } from '../components/ComposerMentionInput'
 import { ModelSelect } from '../components/ModelSelect'
+import { ReferenceMaterialsDropup } from '../components/ReferenceMaterialsDropup'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { PanelLoadingState } from '../components/PanelLoadingState'
 import { NewChatIcon } from '../components/NewChatIcon'
@@ -29,17 +41,17 @@ import { StreamRegistry } from '../lib/streamRegistry'
 import {
   DEFAULT_ATTACHMENT_LIMITS,
   SUPPORTED_ATTACHMENT_ACCEPT,
-  SUPPORTED_ATTACHMENT_LABEL,
-  validatePendingAttachments,
-  pendingAttachmentFilename,
-  pendingAttachmentId,
-  pendingAttachmentSize,
-  pendingAttachmentsForValidation,
-  formatAttachmentLimitMb,
   readPastedAttachmentFiles,
   type AttachmentLimits,
-  type PendingAttachment,
 } from '../lib/attachments'
+import { isNativeAttachmentCompatible } from '../lib/attachmentCompat'
+import {
+  detectMentionTrigger,
+  filterAttachmentsForMention,
+  insertMentionIntoText,
+  parseAttachmentMentionIds,
+  type MentionTrigger,
+} from '../lib/attachmentMentions'
 import { formatApiError } from '../lib/apiErrorMessage'
 import { formatUserFacingError } from '../lib/userFacingError'
 import {
@@ -60,7 +72,7 @@ import type { ArtifactSpec } from '../types/artifact'
 import type { VizSpec } from '../types/viz'
 import type { ProposalPreview } from '../types/proposalPreview'
 import type { ProposalDraftResponse } from '../types/proposalDraft'
-import type { Agent, ChatSummary, Message, ModelOption } from '../types'
+import type { Agent, ChatAttachment, ChatSummary, Message, ModelOption } from '../types'
 
 const SIDEBAR_COLLAPSED_KEY = 'agent-platform:sidebar-collapsed'
 const PROPOSAL_COMPOSER_SLUG = 'proposal-composer'
@@ -163,12 +175,6 @@ function readSidebarCollapsed(): boolean {
   }
 }
 
-function formatAttachmentSize(sizeBytes: number): string {
-  if (sizeBytes < 1024) return `${sizeBytes} B`
-  if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`
-  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
 export function ChatPage() {
   const { user, logout } = useAuth()
   const [agents, setAgents] = useState<Agent[]>([])
@@ -180,6 +186,17 @@ export function ChatPage() {
   const [sessions, setSessions] = useState<Record<string, AgentChatSession>>({})
   const [attachmentUploading, setAttachmentUploading] = useState(false)
   const [attachmentLimits, setAttachmentLimits] = useState<AttachmentLimits>(DEFAULT_ATTACHMENT_LIMITS)
+  const [refMaterialsOpen, setRefMaterialsOpen] = useState(false)
+  const [refMaterialsSearch, setRefMaterialsSearch] = useState('')
+  const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([])
+  const [chatAttachmentsLoading, setChatAttachmentsLoading] = useState(false)
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null)
+  const [mentionTrigger, setMentionTrigger] = useState<MentionTrigger | null>(null)
+  const [recentlyReferencedAttachmentId, setRecentlyReferencedAttachmentId] = useState<string | null>(
+    null,
+  )
+  const [mentionHighlightIndex, setMentionHighlightIndex] = useState(0)
+  const composerMentionWrapRef = useRef<HTMLDivElement>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [memoryOpen, setMemoryOpen] = useState(false)
@@ -193,6 +210,9 @@ export function ChatPage() {
   const messagesScrollRef = useRef<HTMLDivElement>(null)
   const pinToBottomRef = useRef(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const attachButtonRef = useRef<HTMLButtonElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const chatAttachmentsRef = useRef<ChatAttachment[]>([])
   const openChatLoadGenRef = useRef(new Map<string, number>())
   const chatLoadTasksRef = useRef(new Map<string, Promise<void>>())
   const sessionsRef = useRef(sessions)
@@ -220,7 +240,6 @@ export function ChatPage() {
     chatId,
     messages,
     input,
-    pendingAttachments,
     loading,
     error,
     chatHistory,
@@ -263,6 +282,8 @@ export function ChatPage() {
 
   const selected = agents.find((a) => a.id === selectedId) ?? null
   const selectedModelId = selectedId ? selectedModelByAgent[selectedId] ?? null : null
+  const currentModel = modelOptions.find((option) => option.id === selectedModelId) ?? null
+  const currentProvider = currentModel?.provider ?? selected?.model_provider ?? 'azure_anthropic'
   const isProposalComposer = selected?.slug === PROPOSAL_COMPOSER_SLUG
   const isYlWorker2 = selected?.slug === YL_WORKER2_SLUG
   const showChat = !agentsLoading && selected != null
@@ -758,69 +779,230 @@ export function ChatPage() {
     [patchSession],
   )
 
-  const setInputForSelected = (value: string) => {
-    if (!selectedId) return
-    patchSession(selectedId, { input: value })
-  }
+  const loadChatAttachments = useCallback(
+    async (activeChatId: string, options?: { silent?: boolean }) => {
+      if (!options?.silent) {
+        setChatAttachmentsLoading(true)
+      }
+      try {
+        const rows = await api.listChatAttachments(activeChatId)
+        setChatAttachments(rows)
+        chatAttachmentsRef.current = rows
+      } catch (e) {
+        if (selectedId) {
+          patchSession(selectedId, {
+            error: formatApiError(e, 'Failed to load reference materials'),
+          })
+        }
+      } finally {
+        if (!options?.silent) {
+          setChatAttachmentsLoading(false)
+        }
+      }
+    },
+    [patchSession, selectedId],
+  )
 
-  const removePendingAttachment = (attachmentId: string) => {
-    if (!selectedId) return
-    patchSession(selectedId, (prev) => ({
-      pendingAttachments: prev.pendingAttachments.filter(
-        (item) => pendingAttachmentId(item) !== attachmentId,
-      ),
-    }))
-  }
+  useEffect(() => {
+    chatAttachmentsRef.current = chatAttachments
+  }, [chatAttachments])
 
-  const handleAttachmentPick = () => {
-    if (
-      loading ||
-      chatSessionLoading ||
-      attachmentUploading ||
-      pendingAttachments.length >= attachmentLimits.max_files_per_message
-    ) {
+  useEffect(() => {
+    setRefMaterialsOpen(false)
+    setRefMaterialsSearch('')
+    setMentionTrigger(null)
+    if (!chatId) {
+      setChatAttachments([])
+      chatAttachmentsRef.current = []
       return
     }
+    void loadChatAttachments(chatId)
+  }, [chatId, loadChatAttachments])
+
+  const refreshMentionTrigger = useCallback((value: string, cursorPos: number) => {
+    setMentionTrigger(detectMentionTrigger(value, cursorPos))
+  }, [])
+
+  const mentionFilteredAttachments = useMemo(() => {
+    if (!mentionTrigger) return []
+    return filterAttachmentsForMention(
+      chatAttachments,
+      mentionTrigger.query,
+      currentProvider,
+    )
+  }, [chatAttachments, currentProvider, mentionTrigger])
+
+  useEffect(() => {
+    if (!mentionTrigger) return
+    setMentionHighlightIndex(0)
+    if (chatId) {
+      void loadChatAttachments(chatId, { silent: chatAttachmentsRef.current.length > 0 })
+    }
+  }, [chatId, loadChatAttachments, mentionTrigger?.start])
+
+  useEffect(() => {
+    setMentionHighlightIndex((index) => {
+      if (mentionFilteredAttachments.length === 0) return 0
+      return Math.min(index, mentionFilteredAttachments.length - 1)
+    })
+  }, [mentionFilteredAttachments.length])
+
+  const updateMentionQuery = useCallback(
+    (query: string) => {
+      if (!selectedId || !mentionTrigger) return
+      const session = getAgentSession(sessionsRef.current, selectedId)
+      const textarea = textareaRef.current
+      const cursor = textarea?.selectionStart ?? session.input.length
+      const before = session.input.slice(0, mentionTrigger.start + 1)
+      const after = session.input.slice(cursor)
+      const nextValue = `${before}${query}${after}`
+      const nextCursor = before.length + query.length
+      patchSession(selectedId, { input: nextValue })
+      setMentionTrigger({ start: mentionTrigger.start, query })
+      requestAnimationFrame(() => {
+        textarea?.focus()
+        textarea?.setSelectionRange(nextCursor, nextCursor)
+      })
+    },
+    [mentionTrigger, patchSession, selectedId],
+  )
+
+  const setInputForSelected = (value: string, cursorPos?: number) => {
+    if (!selectedId) return
+    patchSession(selectedId, { input: value })
+    const pos = cursorPos ?? textareaRef.current?.selectionStart ?? value.length
+    refreshMentionTrigger(value, pos)
+  }
+
+  const insertAttachmentMention = useCallback(
+    (attachment: ChatAttachment) => {
+      if (!selectedId) return
+      const compat = isNativeAttachmentCompatible(attachment, currentProvider)
+      if (!compat.compatible) return
+
+      const session = getAgentSession(sessionsRef.current, selectedId)
+      const textarea = textareaRef.current
+      const cursor = textarea?.selectionStart ?? session.input.length
+
+      if (mentionTrigger) {
+        const { nextValue, nextCursor } = insertMentionIntoText(
+          session.input,
+          cursor,
+          mentionTrigger.start,
+          attachment.filename,
+        )
+        patchSession(selectedId, { input: nextValue })
+        setMentionTrigger(null)
+        requestAnimationFrame(() => {
+          textarea?.focus()
+          textarea?.setSelectionRange(nextCursor, nextCursor)
+        })
+      } else {
+        const needsSpace = session.input.length > 0 && !/\s$/.test(session.input)
+        const mention = `${needsSpace ? ' ' : ''}@${attachment.filename}`
+        patchSession(selectedId, { input: `${session.input}${mention}` })
+        setMentionTrigger(null)
+      }
+      setRecentlyReferencedAttachmentId(attachment.id)
+      requestAnimationFrame(() => textarea?.focus())
+    },
+    [currentProvider, mentionTrigger, patchSession, selectedId],
+  )
+
+  useEffect(() => {
+    if (!recentlyReferencedAttachmentId) return
+    const timer = window.setTimeout(() => setRecentlyReferencedAttachmentId(null), 1800)
+    return () => window.clearTimeout(timer)
+  }, [recentlyReferencedAttachmentId])
+
+  const handleDeleteAttachment = useCallback(
+    async (attachment: ChatAttachment) => {
+      if (!selectedId || deletingAttachmentId) return
+      const session = getAgentSession(sessionsRef.current, selectedId)
+      const activeChatId = session.chatId
+      if (!activeChatId) return
+
+      setDeletingAttachmentId(attachment.id)
+      patchSession(selectedId, { error: null })
+      try {
+        await api.deleteChatAttachment(activeChatId, attachment.id)
+        setChatAttachments((prev) => prev.filter((row) => row.id !== attachment.id))
+        chatAttachmentsRef.current = chatAttachmentsRef.current.filter(
+          (row) => row.id !== attachment.id,
+        )
+      } catch (e) {
+        patchSession(selectedId, {
+          error: formatApiError(e, 'Failed to delete attachment'),
+        })
+      } finally {
+        setDeletingAttachmentId(null)
+      }
+    },
+    [deletingAttachmentId, patchSession, selectedId],
+  )
+
+  const toggleRefMaterials = useCallback(() => {
+    if (!selectedId || loading || chatSessionLoading) return
+    if (refMaterialsOpen) {
+      setRefMaterialsOpen(false)
+      return
+    }
+
+    setRefMaterialsOpen(true)
+
+    const session = getAgentSession(sessionsRef.current, selectedId)
+    if (session.chatId) {
+      void loadChatAttachments(session.chatId, {
+        silent: chatAttachmentsRef.current.length > 0,
+      })
+      return
+    }
+
+    void (async () => {
+      try {
+        const activeChatId = await ensureChatId(selectedId)
+        await loadChatAttachments(activeChatId)
+      } catch (e) {
+        setRefMaterialsOpen(false)
+        patchSession(selectedId, {
+          error: e instanceof Error ? e.message : 'Failed to open reference materials',
+        })
+      }
+    })()
+  }, [
+    ensureChatId,
+    loadChatAttachments,
+    loading,
+    chatSessionLoading,
+    patchSession,
+    refMaterialsOpen,
+    selectedId,
+  ])
+
+  const handleRefMaterialsUpload = () => {
+    if (loading || chatSessionLoading || attachmentUploading) return
     fileInputRef.current?.click()
   }
 
-  const addPendingAttachmentFile = useCallback(
+  const uploadToLibrary = useCallback(
     async (file: File): Promise<boolean> => {
       if (!selectedId) return false
       if (loading || chatSessionLoading || attachmentUploading) return false
 
-      const session = getAgentSession(sessionsRef.current, selectedId)
-      const limitError = validatePendingAttachments(
-        pendingAttachmentsForValidation(session.pendingAttachments),
-        file.size,
-        attachmentLimits,
-      )
-      if (limitError) {
-        patchSession(selectedId, { error: limitError })
+      if (file.size > attachmentLimits.max_bytes_per_file) {
+        patchSession(selectedId, {
+          error: `Each file must be under ${attachmentLimits.max_bytes_per_file / (1024 * 1024)} MB`,
+        })
         return false
-      }
-
-      if (!session.chatId) {
-        patchSession(selectedId, (prev) => ({
-          pendingAttachments: [
-            ...prev.pendingAttachments,
-            {
-              kind: 'local',
-              localId: `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-              file,
-            },
-          ],
-        }))
-        return true
       }
 
       setAttachmentUploading(true)
       patchSession(selectedId, { error: null })
       try {
-        const uploaded = await api.uploadChatAttachment(session.chatId, file)
-        patchSession(selectedId, (prev) => ({
-          pendingAttachments: [...prev.pendingAttachments, { kind: 'uploaded', attachment: uploaded }],
-        }))
+        const activeChatId = await ensureChatId(selectedId)
+        await api.uploadChatAttachment(activeChatId, file, 'native')
+        await loadChatAttachments(activeChatId)
+        setRefMaterialsOpen(true)
         return true
       } catch (e) {
         patchSession(selectedId, {
@@ -832,12 +1014,14 @@ export function ChatPage() {
       }
     },
     [
-      selectedId,
-      loading,
-      chatSessionLoading,
+      attachmentLimits.max_bytes_per_file,
       attachmentUploading,
-      attachmentLimits,
+      chatSessionLoading,
+      ensureChatId,
+      loadChatAttachments,
+      loading,
       patchSession,
+      selectedId,
     ],
   )
 
@@ -845,7 +1029,7 @@ export function ChatPage() {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
-    await addPendingAttachmentFile(file)
+    await uploadToLibrary(file)
   }
 
   const handleComposerPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
@@ -854,27 +1038,22 @@ export function ChatPage() {
     event.preventDefault()
     void (async () => {
       for (const file of files) {
-        const added = await addPendingAttachmentFile(file)
+        const added = await uploadToLibrary(file)
         if (!added) break
       }
     })()
   }
 
-  const resolveAttachmentIds = useCallback(
-    async (activeChatId: string, items: PendingAttachment[]): Promise<string[]> => {
-      const ids: string[] = []
-      for (const item of items) {
-        if (item.kind === 'uploaded') {
-          ids.push(item.attachment.id)
-          continue
-        }
-        const uploaded = await api.uploadChatAttachment(activeChatId, item.file)
-        ids.push(uploaded.id)
-      }
-      return ids
-    },
-    [],
-  )
+  const handleComposerInputChange = (value: string) => {
+    setInputForSelected(value)
+  }
+
+  const handleComposerSelectionChange = () => {
+    if (!selectedId) return
+    const session = getAgentSession(sessionsRef.current, selectedId)
+    const cursor = textareaRef.current?.selectionStart ?? session.input.length
+    refreshMentionTrigger(session.input, cursor)
+  }
 
   const stopStreaming = async () => {
     if (!selectedId || !chatId) return
@@ -911,12 +1090,10 @@ export function ChatPage() {
     const ylWorker = agentSlug === YL_WORKER2_SLUG
     const currentSession = getAgentSession(sessionsRef.current, agentId)
     const text = currentSession.input.trim()
-    const sentAttachments = [...currentSession.pendingAttachments]
-    if (!text && sentAttachments.length === 0) return
+    if (!text) return
 
     patchSession(agentId, {
       input: '',
-      pendingAttachments: [],
       loading: true,
       proposalTurnSyncing: false,
       turnSyncPhase: null,
@@ -959,19 +1136,52 @@ export function ChatPage() {
       ),
     }))
 
-    let attachmentIds: string[] = []
-    try {
-      attachmentIds = await resolveAttachmentIds(activeChatId, sentAttachments)
-    } catch (e) {
+    let attachmentRows = chatAttachmentsRef.current
+    if (attachmentRows.length === 0) {
+      try {
+        attachmentRows = await api.listChatAttachments(activeChatId)
+        chatAttachmentsRef.current = attachmentRows
+        setChatAttachments(attachmentRows)
+      } catch (e) {
+        patchSession(agentId, {
+          loading: false,
+          error: formatApiError(e, 'Failed to load reference materials'),
+        })
+        return
+      }
+    }
+
+    const attachmentIds = parseAttachmentMentionIds(text, attachmentRows)
+    if (attachmentIds.length > attachmentLimits.max_files_per_message) {
       patchSession(agentId, {
         loading: false,
-        error: formatApiError(e, 'Failed to upload attachments'),
+        error: `At most ${attachmentLimits.max_files_per_message} attachments per message`,
       })
       return
     }
 
+    for (const attachmentId of attachmentIds) {
+      const att = attachmentRows.find((row) => row.id === attachmentId)
+      if (!att) {
+        patchSession(agentId, {
+          loading: false,
+          error: 'Referenced attachment was not found in this chat',
+        })
+        return
+      }
+      const compat = isNativeAttachmentCompatible(att, currentProvider)
+      if (!compat.compatible) {
+        patchSession(agentId, {
+          loading: false,
+          error: compat.reason ?? 'Referenced attachment is not compatible with the current model',
+        })
+        return
+      }
+    }
+
     patchSession(agentId, (prev) => {
       const nextSequence = prev.messages.reduce((max, row) => Math.max(max, row.sequence), 0) + 1
+      const referenced = attachmentRows.filter((row) => attachmentIds.includes(row.id))
       const optimistic: Message = {
         id: `tmp-${Date.now()}`,
         chat_id: activeChatId,
@@ -979,20 +1189,17 @@ export function ChatPage() {
         message_type: 'text',
         content: text,
         metadata:
-          sentAttachments.length > 0
+          referenced.length > 0
             ? {
-                attachments: sentAttachments.map((item) => ({
-                  id: pendingAttachmentId(item),
-                  filename: pendingAttachmentFilename(item),
-                  mime_type:
-                    item.kind === 'local'
-                      ? item.file.type || 'application/octet-stream'
-                      : item.attachment.mime_type,
-                  size_bytes: pendingAttachmentSize(item),
-                  provider: item.kind === 'uploaded' ? item.attachment.provider : '',
-                  provider_file_id:
-                    item.kind === 'uploaded' ? item.attachment.provider_file_id : '',
+                attachments: referenced.map((item) => ({
+                  id: item.id,
+                  filename: item.filename,
+                  mime_type: item.mime_type,
+                  size_bytes: item.size_bytes,
+                  provider: item.provider,
+                  provider_file_id: item.provider_file_id,
                 })),
+                attachment_mode: 'native',
               }
             : {},
         parent_id: null,
@@ -1236,6 +1443,7 @@ export function ChatPage() {
         },
         abortController.signal,
         attachmentIds,
+        'native',
       )
 
       if (!streamRegistryRef.current.isActive(activeChatId, generation)) return
@@ -1527,72 +1735,107 @@ export function ChatPage() {
                         accept={SUPPORTED_ATTACHMENT_ACCEPT}
                         onChange={(e) => void handleAttachmentSelected(e)}
                       />
-                      {pendingAttachments.length > 0 && (
-                        <div className="chat-composer-attachments">
-                          {pendingAttachments.map((item) => (
-                            <span
-                              key={pendingAttachmentId(item)}
-                              className="chat-composer-attachment-chip"
-                            >
-                              <span className="chat-composer-attachment-name">
-                                {pendingAttachmentFilename(item)}
-                              </span>
-                              <span className="chat-composer-attachment-size">
-                                {formatAttachmentSize(pendingAttachmentSize(item))}
-                              </span>
-                              <button
-                                type="button"
-                                className="chat-composer-attachment-remove"
-                                onClick={() => removePendingAttachment(pendingAttachmentId(item))}
-                                disabled={loading || attachmentUploading}
-                                aria-label={`Remove ${pendingAttachmentFilename(item)}`}
-                              >
-                                ×
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <textarea
-                        value={input}
-                        onChange={(e) => setInputForSelected(e.target.value)}
-                        onPaste={(e) => handleComposerPaste(e)}
-                        onKeyDown={(e) => {
-                          if (e.nativeEvent.isComposing || e.keyCode === 229) {
-                            return
-                          }
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault()
-                            if (!loading && !chatSessionLoading) void send()
-                          }
-                        }}
-                        placeholder="question"
-                        className="chat-composer-textarea"
-                        disabled={loading || chatSessionLoading}
-                      />
+                      <div ref={composerMentionWrapRef} className="chat-composer-mention-wrap">
+                        <AttachmentMentionPopup
+                          open={mentionTrigger !== null}
+                          anchorRef={composerMentionWrapRef}
+                          query={mentionTrigger?.query ?? ''}
+                          attachments={mentionFilteredAttachments}
+                          loading={chatAttachmentsLoading}
+                          highlightIndex={mentionHighlightIndex}
+                          onQueryChange={updateMentionQuery}
+                          onHighlightChange={setMentionHighlightIndex}
+                          onSelect={insertAttachmentMention}
+                        />
+                        <ComposerMentionInput
+                          textareaRef={textareaRef}
+                          value={input}
+                          attachments={chatAttachments}
+                          placeholder="question (type @ to reference attachments)"
+                          disabled={loading || chatSessionLoading}
+                          onChange={handleComposerInputChange}
+                          onSelect={handleComposerSelectionChange}
+                          onPaste={(e) => handleComposerPaste(e)}
+                          onKeyDown={(e) => {
+                            if (e.nativeEvent.isComposing || e.keyCode === 229) {
+                              return
+                            }
+                            if (mentionTrigger) {
+                              if (e.key === 'Escape') {
+                                e.preventDefault()
+                                setMentionTrigger(null)
+                                return
+                              }
+                              if (mentionFilteredAttachments.length > 0) {
+                                if (e.key === 'ArrowDown') {
+                                  e.preventDefault()
+                                  setMentionHighlightIndex((index) =>
+                                    Math.min(index + 1, mentionFilteredAttachments.length - 1),
+                                  )
+                                  return
+                                }
+                                if (e.key === 'ArrowUp') {
+                                  e.preventDefault()
+                                  setMentionHighlightIndex((index) => Math.max(index - 1, 0))
+                                  return
+                                }
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault()
+                                  insertAttachmentMention(
+                                    mentionFilteredAttachments[mentionHighlightIndex],
+                                  )
+                                  return
+                                }
+                                if (e.key === 'Tab') {
+                                  e.preventDefault()
+                                  insertAttachmentMention(
+                                    mentionFilteredAttachments[mentionHighlightIndex],
+                                  )
+                                  return
+                                }
+                              }
+                            }
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault()
+                              if (!loading && !chatSessionLoading) void send()
+                            }
+                          }}
+                        />
+                      </div>
                       <div className="chat-composer-footer">
-                        <button
-                          type="button"
-                          className={`chat-composer-add${attachmentUploading ? ' chat-composer-add-uploading' : ''}`}
-                          disabled={
-                            loading ||
-                            chatSessionLoading ||
-                            attachmentUploading ||
-                            pendingAttachments.length >= attachmentLimits.max_files_per_message
-                          }
-                          onClick={handleAttachmentPick}
-                          aria-busy={attachmentUploading}
-                          aria-label={attachmentUploading ? 'Uploading attachment' : 'Add attachment'}
-                          title={
-                            attachmentUploading
-                              ? 'Uploading…'
-                              : pendingAttachments.length >= attachmentLimits.max_files_per_message
-                                ? `Maximum ${attachmentLimits.max_files_per_message} files per message`
-                                : `Attach file or paste image (${SUPPORTED_ATTACHMENT_LABEL}, max ${attachmentLimits.max_files_per_message} files / ${formatAttachmentLimitMb(attachmentLimits.max_total_bytes_per_message)} MB total)`
-                          }
-                        >
-                          {attachmentUploading ? <LoadingSpinner size="sm" /> : '+'}
-                        </button>
+                        <div className="chat-composer-left chat-composer-ref-wrap">
+                          <button
+                            ref={attachButtonRef}
+                            type="button"
+                            data-ref-materials-trigger
+                            className={`chat-composer-attach-btn${refMaterialsOpen ? ' chat-composer-attach-btn-active' : ''}`}
+                            disabled={loading || chatSessionLoading}
+                            onClick={toggleRefMaterials}
+                            aria-label="Attachments"
+                            aria-expanded={refMaterialsOpen}
+                            title="Attachments"
+                          >
+                            <Paperclip size={16} strokeWidth={1.75} aria-hidden="true" />
+                          </button>
+                          <ReferenceMaterialsDropup
+                            open={refMaterialsOpen}
+                            onClose={() => setRefMaterialsOpen(false)}
+                            anchorRef={attachButtonRef}
+                            attachments={chatAttachments}
+                            loading={chatAttachmentsLoading}
+                            uploading={attachmentUploading}
+                            deletingAttachmentId={deletingAttachmentId}
+                            searchQuery={refMaterialsSearch}
+                            onSearchChange={setRefMaterialsSearch}
+                            onUploadClick={handleRefMaterialsUpload}
+                            onReferenceAttachment={insertAttachmentMention}
+                            onDeleteAttachment={(att) => void handleDeleteAttachment(att)}
+                            referencedAttachmentIds={parseAttachmentMentionIds(input, chatAttachments)}
+                            recentlyReferencedId={recentlyReferencedAttachmentId}
+                            currentProvider={currentProvider}
+                            disabled={loading || chatSessionLoading}
+                          />
+                        </div>
                         <div className="chat-composer-actions">
                           <ModelSelect
                             value={selectedModelId}
@@ -1603,10 +1846,7 @@ export function ChatPage() {
                           <button
                             type="button"
                             onClick={() => (loading ? void stopStreaming() : void send())}
-                            disabled={
-                              chatSessionLoading ||
-                              (!loading && !input.trim() && pendingAttachments.length === 0)
-                            }
+                            disabled={chatSessionLoading || (!loading && !input.trim())}
                             className={`chat-send-btn${loading ? ' chat-send-btn-stop' : ''}`}
                             aria-label={loading ? 'Stop generating' : 'Send'}
                             title={loading ? 'Stop' : 'Send'}

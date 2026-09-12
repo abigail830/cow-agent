@@ -69,6 +69,16 @@ def save_inline_attachment(chat_id: uuid.UUID, attachment_id: uuid.UUID, data: b
     return path
 
 
+def delete_inline_attachment(chat_id: uuid.UUID, attachment_id: uuid.UUID) -> None:
+    """Best-effort removal of inline attachment bytes (local disk only)."""
+    if blob_storage_enabled():
+        return
+
+    path = inline_attachment_path(chat_id, attachment_id)
+    if path.is_file():
+        path.unlink(missing_ok=True)
+
+
 def load_inline_attachment(chat_id: uuid.UUID, attachment_id: uuid.UUID) -> bytes:
     if blob_storage_enabled():
         raw = blob_get(_blob_object_name(chat_id, attachment_id))

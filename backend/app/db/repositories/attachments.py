@@ -17,7 +17,7 @@ class AttachmentRepository:
         result = await self._session.execute(
             select(ChatAttachment)
             .where(ChatAttachment.chat_id == chat_id)
-            .order_by(ChatAttachment.created_at)
+            .order_by(ChatAttachment.created_at.desc())
         )
         return list(result.scalars().all())
 
@@ -58,6 +58,14 @@ class AttachmentRepository:
             size_bytes=size_bytes,
         )
         self._session.add(row)
+        await self._session.flush()
+        return row
+
+    async def delete(self, chat_id: uuid.UUID, attachment_id: uuid.UUID) -> ChatAttachment | None:
+        row = await self.get(attachment_id)
+        if row is None or row.chat_id != chat_id:
+            return None
+        await self._session.delete(row)
         await self._session.flush()
         return row
 

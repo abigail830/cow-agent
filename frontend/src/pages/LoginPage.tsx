@@ -21,7 +21,7 @@ export function LoginPage() {
     try {
       await login(email.trim(), password)
     } catch (err) {
-      setError(formatApiError(err, '登录失败'))
+      setError(formatApiError(err, 'Sign in failed'))
     } finally {
       setSubmitting(false)
     }
@@ -34,11 +34,11 @@ export function LoginPage() {
         <div className="login-brand">
           <img src="/cow.png" alt="" className="login-brand-icon" width={56} height={56} />
           <h1 className="login-title">Agent Platform</h1>
-          <p className="login-subtitle">使用邮箱与密码登录</p>
+          <p className="login-subtitle">Sign in with your email and password</p>
         </div>
         <form className="login-form" onSubmit={handleSubmit}>
           <label className="login-label" htmlFor="email">
-            邮箱
+            Email
           </label>
           <input
             id="email"
@@ -50,7 +50,7 @@ export function LoginPage() {
             required
           />
           <label className="login-label" htmlFor="password">
-            密码
+            Password
           </label>
           <input
             id="password"
@@ -63,7 +63,7 @@ export function LoginPage() {
           />
           {error ? <p className="login-error">{error}</p> : null}
           <button type="submit" className="login-submit" disabled={submitting || loading}>
-            {submitting ? '登录中…' : '登录'}
+            {submitting ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
       </div>
