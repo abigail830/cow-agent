@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
-IntegrationProviderId = Literal["notion", "hubspot", "hybrid-search"]
+IntegrationProviderId = Literal["notion", "hubspot", "hybrid-search", "zhipu-web-search"]
 IntegrationAuthKind = Literal["oauth", "api_key"]
 IntegrationStatus = Literal["connected", "disconnected"]
 

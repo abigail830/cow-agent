@@ -184,6 +184,7 @@ class Settings(BaseSettings):
     )
 
     hybrid_search_mcp_url: str | None = Field(default=None, validation_alias="HYBRID_SEARCH_MCP_URL")
+    zhipu_web_search_mcp_url: str | None = Field(default=None, validation_alias="ZHIPU_WEB_SEARCH_MCP_URL")
 
     app_name: str = "agent-platform"
     debug: bool = False

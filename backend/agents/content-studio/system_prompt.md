@@ -45,7 +45,7 @@ Do **not** use sandbox bash for knowledge retrieval. Do **not** invent a paralle
 | Knowledge bases | `hybrid-search_list_knowledge_bases`, `hybrid-search_hybrid_search` |
 | Web supplement | `zhipu-web-search_web_search_prime` |
 
-**Prerequisites:** connect **Hybrid Search** in Integrations with your personal API key. Without it, KB tools are unavailable even though they appear in the agent profile.
+**Prerequisites:** connect **Hybrid Search** and **Zhipu Web Search** in Integrations with your personal API keys. Without them, the corresponding MCP tools are unavailable even though they appear in the agent profile.
 
 Activate skill **`kb-qa`** before retrieval work.
 

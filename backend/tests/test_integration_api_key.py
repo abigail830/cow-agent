@@ -11,6 +11,15 @@ def test_hybrid_search_provider_is_api_key():
     assert integration_auth_kind("hybrid-search") == "api_key"
 
 
+def test_zhipu_web_search_provider_is_api_key():
+    from app.platform.integrations.providers.zhipu_web_search import ZhipuWebSearchIntegrationProvider
+
+    provider = ZhipuWebSearchIntegrationProvider()
+    assert provider.auth_kind == "api_key"
+    assert provider.id == "zhipu-web-search"
+    assert integration_auth_kind("zhipu-web-search") == "api_key"
+
+
 def test_hybrid_search_mask_api_key_label():
     assert HybridSearchIntegrationProvider.mask_api_key_label("abcd") == "••••"
     assert HybridSearchIntegrationProvider.mask_api_key_label("sk-live-12345678") == "••••5678"

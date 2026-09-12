@@ -1486,6 +1486,11 @@ body {
   letter-spacing: -0.04em;
 }
 
+.integration-tile-icon-zhipu-web-search {
+  background: #0f766e;
+  color: #fff;
+}
+
 .integration-api-key-field {
   display: grid;
   gap: 0.25rem;

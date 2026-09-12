@@ -141,7 +141,11 @@ class McpRegistry:
                         integration_id,
                     )
                     return None
-                static_headers = {"Authorization": f"Bearer {access_token}"}
+                auth_scheme = str(config.get("auth_scheme") or "bearer").strip().lower()
+                if auth_scheme == "raw":
+                    static_headers = {"Authorization": access_token}
+                else:
+                    static_headers = {"Authorization": f"Bearer {access_token}"}
                 http_client = _mcp_http_client(static_headers)
                 return MCPStreamableHTTPTool(
                     name=tool_name,

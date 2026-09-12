@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.platform.integrations.providers.hybrid_search import HybridSearchIntegrationProvider
 from app.platform.integrations.providers.hubspot import HubSpotIntegrationProvider
 from app.platform.integrations.providers.notion import NotionIntegrationProvider
+from app.platform.integrations.providers.zhipu_web_search import ZhipuWebSearchIntegrationProvider
 from app.platform.integrations.types import IntegrationApiKeyProvider, IntegrationAuthKind, IntegrationOAuthProvider
 
 AnyIntegrationProvider = IntegrationOAuthProvider | IntegrationApiKeyProvider
@@ -11,6 +12,7 @@ _PROVIDERS: dict[str, AnyIntegrationProvider] = {
     NotionIntegrationProvider.id: NotionIntegrationProvider(),
     HubSpotIntegrationProvider.id: HubSpotIntegrationProvider(),
     HybridSearchIntegrationProvider.id: HybridSearchIntegrationProvider(),
+    ZhipuWebSearchIntegrationProvider.id: ZhipuWebSearchIntegrationProvider(),
 }
 
 

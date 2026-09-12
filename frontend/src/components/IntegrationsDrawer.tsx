@@ -18,6 +18,7 @@ const PROVIDER_DOCS: Record<string, string> = {
 
 function providerInitial(provider: string): string {
   if (provider === 'hybrid-search') return 'KB'
+  if (provider === 'zhipu-web-search') return 'Z'
   return provider.slice(0, 1).toUpperCase()
 }
 
