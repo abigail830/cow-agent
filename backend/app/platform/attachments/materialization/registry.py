@@ -61,6 +61,7 @@ class AttachmentMaterializationRegistry:
                 user_text=user_text,
                 turn_sequence=turn_sequence,
                 pull_config=pull,
+                attachment_budget=memory_config.attachment_budget if memory_config else None,
             )
             for item, plan_item in zip(_dedupe_items(items), plan):
                 if plan_item.action != MaterializationAction.FULL:

@@ -75,3 +75,34 @@ def release_e2b_session(session_key: str | None = None) -> None:
         held.sandbox.kill()
     except Exception:
         logger.debug("E2B sandbox kill failed on release", exc_info=True)
+
+
+def invalidate_e2b_sandbox(session_key: str | None = None) -> bool:
+    """Drop a cached sandbox handle after timeout / not-found errors."""
+    key = session_key or get_e2b_session_key()
+    if not key:
+        return False
+    with _lock:
+        held = _sessions.pop(key, None)
+    if held is None:
+        return False
+    try:
+        held.sandbox.kill()
+    except Exception:
+        logger.debug("E2B sandbox kill failed on invalidate", exc_info=True)
+    return True
+
+
+def is_e2b_stale_sandbox_error(exc: BaseException) -> bool:
+    """True when the cached sandbox handle is dead and should be recreated."""
+    message = str(exc).lower()
+    needles = (
+        "sandbox timeout",
+        "sandbox was not found",
+        "connection to sandbox",
+        "ended before the stream completed",
+        "not found",
+        "sandbox is not running",
+        "sandbox has been killed",
+    )
+    return any(needle in message for needle in needles)

@@ -9,6 +9,7 @@ from app.platform.memory.projector_registry import MemoryProjectorRegistry, get_
 from app.platform.memory.projectors.skill import SkillMemoryProjector
 from app.platform.memory.projectors.utils import ensure_dict
 from app.platform.attachments.materialization.compaction import strip_attachment_heavy_payload
+from app.platform.attachments.tool_result_slim import is_attachment_pull_tool
 
 
 class HistoryProjection:
@@ -73,12 +74,15 @@ class HistoryProjection:
             }
 
         if message_type in ("tool_result", "mcp_result"):
-            if not memory_config.slim.enabled:
-                return row
             call_id = str(metadata.get("call_id") or "")
             paired_args = call_args.get(call_id, {})
             if paired_args and "arguments" not in metadata:
                 metadata = {**metadata, "arguments": paired_args}
+            attachment_persist_slim = (
+                memory_config.attachment_pull.persist_summary_only and is_attachment_pull_tool(tool_name)
+            )
+            if not memory_config.slim.enabled and not attachment_persist_slim:
+                return row
             projector = self._registry.resolve(tool_name, message_type=message_type)
             slimmed = projector.slim_result(
                 tool_name=tool_name,

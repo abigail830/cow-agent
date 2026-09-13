@@ -21,9 +21,11 @@ _ATTACHMENT_PULL_INSTRUCTIONS = """
 
 Each chat may include uploaded files listed in the attachment catalog injected above.
 - The catalog is an **index only** (filename + short gist). It stays available across long conversations.
-- Use `read_attachment(attachment_id)` for document text when you need full content beyond the gist.
-- Use `analyze_image(attachment_id)` for images, diagrams, or screenshots.
+- Summarize or compare themes across files: use `map_attachment` per id (when available); do not pull full text for every id.
+- Verbatim document text, numbers, or line detail: `read_attachment(attachment_id)`.
+- Images, diagrams, or screenshots: `analyze_image(attachment_id)` (returns a text summary).
 - Use `search_attachments(query)` when many files exist and you need to find the right id.
+- Do not invent facts missing from a summary — pull the attachment again when needed.
 - Do not assume attachment content is in history unless you just loaded it in this turn.
 """.strip()
 

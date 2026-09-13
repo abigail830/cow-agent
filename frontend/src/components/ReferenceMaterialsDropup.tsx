@@ -180,7 +180,9 @@ export function ReferenceMaterialsDropup({
               >
                 <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
                 <div className="ref-materials-item-body">
-                  <span className="ref-materials-item-name">{att.filename}</span>
+                  <span className="ref-materials-item-name" title={att.filename}>
+                    {att.filename}
+                  </span>
                   <span className="ref-materials-item-meta">
                     {isUploading
                       ? 'Uploading…'
@@ -247,9 +249,7 @@ export function ReferenceMaterialsDropup({
             : ''}
         </span>
         {attachmentMode === 'unify_lite' ? (
-          <span className="ref-materials-footer-hint">
-            {UNIFY_LITE_ATTACHMENT_LABEL} — extracted on send
-          </span>
+          <span className="ref-materials-footer-hint">{UNIFY_LITE_ATTACHMENT_LABEL}</span>
         ) : null}
       </div>
     </div>

@@ -26,6 +26,7 @@ class AttachmentRunState:
     chat_id: uuid.UUID
     attachments: dict[str, AttachmentRecord] = field(default_factory=dict)
     read_cache: dict[str, str] = field(default_factory=dict)
+    map_cache: dict[str, dict[str, Any]] = field(default_factory=dict)
     page_in_ids: set[str] = field(default_factory=set)
 
     def record_read(self, cache_key: str, payload: str, *, attachment_id: str | None = None) -> None:

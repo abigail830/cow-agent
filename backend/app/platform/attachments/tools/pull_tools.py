@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import uuid
 from typing import Annotated, Any
@@ -10,6 +9,8 @@ from typing import Annotated, Any
 from agent_framework import tool
 
 from app.platform.attachments.attachment_storage import load_inline_attachment, parse_inline_attachment_id
+from app.platform.attachments.services.map import get_attachment_map_service
+from app.platform.attachments.services.vision import get_attachment_vision_service
 from app.platform.attachments.run_state import get_attachment_run_state
 from app.platform.attachments.unify_lite.extractors.registry import extract_bytes
 from app.platform.attachments.unify_lite.validation import is_unify_lite_image
@@ -18,6 +19,7 @@ ATTACHMENT_PULL_TOOL_NAMES = frozenset(
     {
         "read_attachment",
         "analyze_image",
+        "map_attachment",
         "search_attachments",
     }
 )
@@ -47,8 +49,10 @@ def _resolve_record(attachment_id: str):
     name="read_attachment",
     description=(
         "Load full text content of a chat attachment by id. "
-        "Use for documents (.txt, .docx, etc.) when the user references an attachment "
-        "or you need details beyond the catalog gist. Optional query filters lines containing the term."
+        "Use for documents (.txt, .docx, etc.) when you need verbatim text, specific numbers, "
+        "or line-level detail beyond a summary. Optional query filters lines containing the term. "
+        "Do NOT call this on multiple ids to summarize many documents — use map_attachment instead. "
+        "For images, use analyze_image instead."
     ),
 )
 def read_attachment_tool(
@@ -111,11 +115,13 @@ def read_attachment_tool(
 @tool(
     name="analyze_image",
     description=(
-        "Load a chat image attachment for visual analysis. Returns base64-encoded image data "
-        "for the model to inspect. Use when the user asks about an uploaded image or diagram."
+        "Analyze a chat image attachment and return a text summary (no raw image bytes). "
+        "Use for a single image, diagram, chart, or screenshot when visual detail is needed. "
+        "For summarizing many images, prefer map_attachment per id. "
+        "For documents, use read_attachment instead."
     ),
 )
-def analyze_image_tool(
+async def analyze_image_tool(
     attachment_id: Annotated[str, "Chat attachment UUID from the catalog index."],
     question: Annotated[str | None, "Optional focus question for the analysis."] = None,
 ) -> dict[str, Any]:
@@ -140,17 +146,50 @@ def analyze_image_tool(
     if state is not None:
         state.page_in_ids.add(attachment_id)
 
-    encoded = base64.b64encode(data).decode("ascii")
-    return {
+    vision = await get_attachment_vision_service().describe(
+        data=data,
+        mime_type=record.mime_type,
+        filename=record.filename,
+        question=question,
+    )
+    if vision.get("status") != "ok":
+        return dict(vision)
+
+    payload: dict[str, Any] = {
         "status": "ok",
         "attachment_id": attachment_id,
         "filename": record.filename,
-        "media_type": record.mime_type,
-        "size_bytes": len(data),
-        "data_base64": encoded,
-        "question": (question or "").strip() or None,
-        "note": "Image bytes returned for vision analysis in this turn.",
+        "summary": vision.get("summary"),
+        "confidence": vision.get("confidence", "ok"),
+        "full_available": True,
+        "media_type": vision.get("media_type") or record.mime_type,
+        "size_bytes": vision.get("size_bytes") or len(data),
     }
+    if question:
+        payload["question"] = (question or "").strip() or None
+    if vision.get("vision_resized"):
+        payload["vision_resized"] = True
+    return payload
+
+
+@tool(
+    name="map_attachment",
+    description=(
+        "Summarize one chat attachment by id. Use for multi-file tasks: summarize each relevant id "
+        "separately (optionally with focus, e.g. '违约条款'). Returns a text summary only — not full content. "
+        "For verbatim text, numbers, or line-level detail use read_attachment. For a single image detail "
+        "use analyze_image. Do NOT call read_attachment on every id just to summarize many files."
+    ),
+)
+async def map_attachment_tool(
+    attachment_id: Annotated[str, "Chat attachment UUID from the catalog index."],
+    focus: Annotated[
+        str | None,
+        "Optional scope, e.g. 'chapter 3', '违约条款', 'revenue table'.",
+    ] = None,
+) -> dict[str, Any]:
+    result = await get_attachment_map_service().map_one(attachment_id, focus)
+    return dict(result)
 
 
 @tool(
@@ -191,5 +230,6 @@ def search_attachments_tool(
 ATTACHMENT_PULL_BUILTIN_TOOLS: dict[str, Any] = {
     "read_attachment": read_attachment_tool,
     "analyze_image": analyze_image_tool,
+    "map_attachment": map_attachment_tool,
     "search_attachments": search_attachments_tool,
 }

@@ -9,7 +9,8 @@ from typing import Any
 from app.platform.attachments.materialization.registry import AttachmentMaterializationRegistry
 from app.platform.attachments.materialization.stub import user_requests_force_reread
 from app.platform.attachments.materialization.visibility import VisibilityIndex
-from app.platform.memory.memory_config import AttachmentPullConfig
+from app.platform.attachments.services.preflight import preflight_should_force_thin
+from app.platform.memory.memory_config import AttachmentBudgetConfig, AttachmentPullConfig
 
 
 class MaterializationAction(str, Enum):
@@ -34,10 +35,14 @@ def compute_attachment_plan(
     user_text: str,
     turn_sequence: int,
     pull_config: AttachmentPullConfig | None = None,
+    attachment_budget: AttachmentBudgetConfig | None = None,
 ) -> list[AttachmentPlanItem]:
     """Decide FULL / STUB / THIN for each attachment in one user turn."""
     pull = pull_config or AttachmentPullConfig()
+    budget = attachment_budget or AttachmentBudgetConfig()
     force_reread = user_requests_force_reread(user_text) if not pull.enabled else False
+    item_dicts = [item for item in items if isinstance(item, dict)]
+    force_thin = preflight_should_force_thin(item_dicts, budget) if pull.enabled else False
     seen_ids: set[str] = set()
     plans: list[AttachmentPlanItem] = []
 
@@ -61,11 +66,14 @@ def compute_attachment_plan(
 
         if pull.enabled:
             if entry is None:
-                action = (
-                    MaterializationAction.FULL
-                    if pull.first_turn_inline
-                    else MaterializationAction.THIN
-                )
+                if force_thin:
+                    action = MaterializationAction.THIN
+                else:
+                    action = (
+                        MaterializationAction.FULL
+                        if pull.first_turn_inline
+                        else MaterializationAction.THIN
+                    )
                 plans.append(AttachmentPlanItem(att_id, action))
                 continue
             if content_hash and entry.content_hash and entry.content_hash != content_hash:

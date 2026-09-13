@@ -8,6 +8,8 @@
 | 区域 | 路径 |
 |------|------|
 | 上传 / 解析 | `backend/app/platform/attachments/` |
+| 平台 instructions 尾部 | `backend/app/platform/agent/platform_instructions.py` |
+| Pull / map tool 文案 | `backend/app/platform/attachments/tools/pull_tools.py` |
 | Materialization | `backend/app/platform/attachments/materialization/` |
 | 发消息组装 | `backend/app/platform/chat/run_service.py` |
 | Lite builder（→ materialization） | `backend/app/platform/attachments/unify_lite/message_builder.py` |
@@ -17,7 +19,9 @@
 | 前端 @ 引用 | `frontend/src/lib/attachmentMentions.ts` |
 | 体积限制 | `backend/app/config.py` → `ATTACHMENT_MAX_*` |
 
-**历史文档**：`docs/UNIFY_LITE.md` 为 v0 调研稿；**实现状态以本文为准**。
+**相关文档**：[`MULTI_ATTACHMENT_CONTEXT.md`](MULTI_ATTACHMENT_CONTEXT.md) — 多附件爆炸、Map-Reduce 实现（§4.7）、**验收场景 §11**。状态 SSOT 在本文件 §1.3。
+
+**历史文档**：`docs/UNIFY_LITE.md` 为 v0 调研稿；**实现状态以本文 §1.3 为准**。
 
 ---
 
@@ -37,16 +41,55 @@
 | stub 规范 + 关键词 force re-read | ✅ P2（**临时方案**，见 §6） |
 | 测试 | `tests/test_attachment_*.py`、`test_maf_mapping_lite_docs.py` 等 |
 
-### 1.2 已知缺口 / 风险（实施 P1 补丁 & 文档修订前）
+### 1.2 已知缺口 / 风险
 
-| 问题 | 风险 |
-|------|------|
-| **visibility 多轨**：registry 按 working set 判断，slim 另改 in-flight history | **高** — stub 指向已不可见 full → 假记忆 |
-| P3 slim 对**全部** user attachment 行 strip（非「即将滑出」） | **高** — 与 P0 多轮追问冲突 |
-| stub 锚点用 `first_inject_turn`，force re-read 后未改指向 | **中** — 悬空引用 |
-| 同 chat **中途换 model/mode** 未定义 | **中** |
-| P5 Pull / catalog 未做 | 长对话终态未达成 |
-| 本地 `.env` 可能与 `.env.example` 5MB 不一致 | **运维** |
+| 问题 | 风险 | 状态 |
+|------|------|------|
+| **多文件同轮绝对 token 爆炸**（`analyze_image` base64、120k read、首 turn 多 FULL） | **高** — 10M tokens 级 400 | ❌ 见 [`MULTI_ATTACHMENT_CONTEXT.md`](MULTI_ATTACHMENT_CONTEXT.md) |
+| **P1.1 生产就绪验收** — visibility + projector + tool_result 语义需与 Map-Reduce 一次对齐 | **中** — 核心代码已有，attachment projector / preflight 未做 | ⚠️ 部分 |
+| 同 chat **中途换 model/mode** 边界 | **中** | ⚠️ 文档化，待专项测 |
+| **`analyze_image` provider 矩阵**（国内 tool_result 纯文本） | **高** — 影响 vision 路径设计 | ❌ 待 Phase 0 验证 |
+| 本地 `.env` 可能与 `.env.example` 5MB 不一致 | **运维** | — |
+
+> **已关闭（勿再当阻塞项）：** visibility 多轨 / stub 误用 `first` / P3 全量 strip — 见 §1.3 与 `visibility.py`、`plan.py`（2026-03 commit `6931bf7` 一带）。
+
+### 1.3 代码实现 Truth 表（SSOT — 与 Multi §0 同一 PR 维护）
+
+> **单一真相来源：** 本节为全平台附件能力状态的 **canonical 表**。  
+> [`MULTI_ATTACHMENT_CONTEXT.md`](MULTI_ATTACHMENT_CONTEXT.md) §0 为摘要索引；**有冲突以本节 + 代码为准**。  
+> **文档纪律：** 修改本节时必须 **同一 PR** 更新 Multi 文档；禁止只改一份。若读到的 ATTACHMENT 版本**没有本节**，说明文档未同步到最新（见下方「文档锚点」）。
+
+**文档锚点（P5 状态反转证据）：** commit `6931bf7`（2026-03，`Add attachment catalog/pull pipeline…`）引入 P5a–c 代码与测试；此前 ATTACHMENT §4 标 ❌ 为**文档滞后**，非代码未实现。
+
+**Phase 0 步骤 0 交付物之一 — 现状走查清单（实施前勾选）：**
+
+- [ ] `backend/app/platform/attachments/catalog/` 存在且 `AgentFactory` 注入 `AttachmentCatalogContextProvider`
+- [ ] `pull_tools.py` 含 `read_attachment` / `analyze_image` / `search_attachments`
+- [ ] `plan.py` 含 `MaterializationAction.THIN` 与 `first_turn_inline`
+- [ ] `visibility.py` + `registry.last_full_inject_turn` 被 replay/send 共用
+- [ ] `analyze_image` 仍返回 `data_base64`（已知坑，M0 待修）
+- [x] `AttachmentPullMemoryProjector` + persist strip（PR1）
+- [x] `analyze_image` → `AttachmentVisionService`（PR2；无 base64）
+- [x] `map_attachment` + preflight + map cache（PR3）
+
+| 能力 | 关键路径 | 状态 | 验证方式 |
+|------|----------|------|----------|
+| P0 snapshot + replay | `materialization/snapshot.py`, `replay.py` | ✅ | `tests/test_attachment_materialization.py` |
+| P0′ hash + cap | `content_hash`, `attachment_limits.py` | ✅ | `tests/test_attachments.py`, Alembic `026` |
+| P1 registry dedupe | `materialization/registry.py` | ✅ | `tests/test_attachment_registry.py` |
+| **P1.1 visibility SSOT** | `visibility.py`, `plan.py` | ✅ 核心 | `tests/test_attachment_visibility.py` |
+| P2 stub + force re-read | `stub.py` | ✅ 临时 | `tests/test_attachment_force_reread.py` |
+| P3 scoped compaction | `compaction.py` | ✅ | `tests/test_attachment_compaction.py` |
+| P3-b working set compact | `session_store.py` | ✅ | `tests/test_attachment_working_set.py` |
+| materialize-on-read | `materialization/on_read.py` | ✅ | `tests/test_attachment_on_read.py` |
+| **P5a catalog + gist** | `catalog/`, Alembic `027`, `context_provider.py` | ✅ | `tests/test_attachment_catalog_formatter.py`; `6931bf7` |
+| **P5b pull tools** | `tools/pull_tools.py`, `run_state.py` | ✅ | `tests/test_attachment_pull_tools.py`, `test_attachment_vision_service.py` |
+| **Isolated vision mini-request** | `attachments/services/vision.py`, `ephemeral.py` | ✅ PR2 | `tests/test_attachment_vision_service.py` |
+| **P5c thin send** | `plan.py` THIN/FULL | ✅ | `test_pull_mode_second_at_is_thin_not_full` in `test_attachment_visibility.py` |
+| P4 prompt cache | — | ❌ 刻意不做 | 见 §10 |
+| Preflight token 预算 | `services/preflight.py`, `plan.py` | ✅ PR3 | `tests/test_attachment_preflight.py` |
+| `map_attachment` + MapService | `services/map.py`, `pull_tools.py` | ✅ PR3 | `tests/test_attachment_map_reduce.py` |
+| AttachmentPullMemoryProjector + persist strip | `memory/projectors/attachment_pull.py`, `attachments/tool_result_slim.py`, `run_service.py` | ✅ PR1 | `tests/test_attachment_tool_result_slim.py` |
 
 ---
 
@@ -108,7 +151,7 @@ visibility_rows
 2. registry 的「窗内是否已有 full inject」必须对 **visibility 求值后的 effective payload** 判断，**不能**只对 `working_set_rows` 原始 metadata 判断。
 3. 若 stub 锚点 turn 在 visibility 中**不存在可恢复的 full payload** → **禁止 stub**；改为 full inject 或（P5）`read_attachment`。
 
-**实现目标：** 抽出统一的 `compute_materialization_plan(rows, visibility_policy)`，send 与 replay **共用**（当前 send / replay 已共用 registry 类，但未与 slim 对齐 — 待 P1.1 补丁）。
+**实现：** `visibility.py` + `plan.py` + `registry.last_full_inject_turn` 已落地；**待与 M0** attachment projector / preflight **同一 PR 线**收尾（§13）。
 
 ### 3.2 Registry：derive-on-read，禁止跨请求缓存
 
@@ -131,7 +174,7 @@ Registry = 纯函数(visibility_rows, current_user_message)
 | 字段 | 含义 | 用途 |
 |------|------|------|
 | `first_materialized_turn` | 历史上第一次 full inject 的 turn sequence | 审计 / 调试 |
-| `last_full_inject_turn` | **最近一次** full inject 的 turn sequence | **stub 锚点**（待代码修正：当前 stub 误用 first） |
+| `last_full_inject_turn` | **最近一次** full inject 的 turn sequence | **stub 锚点** ✅ 代码已用 `last` |
 | `content_hash` | 最近一次 full 对应的内容 hash | 变更检测 |
 
 **状态转移：**
@@ -175,13 +218,15 @@ Registry = 纯函数(visibility_rows, current_user_message)
 |------|------|------|------|
 | **P0** | 文档 snapshot 持久化 | replay 正确性 | ✅ |
 | **P0′** | Lite hash + 体积 cap | 材料库卫生 | ✅（cap 可分型，见 §5） |
-| **P1** | Materialization registry | 重复 @ dedupe | ✅ 核心；**P1.1** visibility 对齐待做 |
-| **P2** | stub + force re-read | 体验 | ✅ 临时；P5 后废弃关键词 |
-| **P3** | 长对话降压（Push 兜底） | 减 token | ⚠️ 部分；需 P3-a 止血 + 收窄范围 |
-| **P4** | Prompt caching | 降本 | ❌ |
-| **P5a** | Attachment catalog | 索引常驻 | ❌ |
-| **P5b** | Pull tools | 按需 page-in | ❌ |
-| **P5c** | Thin send | 首 turn 可配置 inline | ❌ |
+| **P1** | Materialization registry | 重复 @ dedupe | ✅ 核心 |
+| **P1.1** | Visibility SSOT + stub=last + slim 对齐 | 生产正确性 | ✅ 核心代码；**与 Map-Reduce 共用 projector 待做** |
+| **P2** | stub + force re-read | 体验 | ✅ 临时 |
+| **P3** | 长对话降压 | 减 token | ✅ scoped compaction |
+| **P4** | Prompt caching | 降本 | ❌ 不做 provider 特判（§10） |
+| **P5a** | Attachment catalog | 索引常驻 | ✅ |
+| **P5b** | Pull tools | 按需 page-in | ✅ 实现有 base64 坑 |
+| **P5c** | Thin send | 首 turn 可 inline | ✅ |
+| **M0** | 多附件 Map-Reduce + tool slim | 绝对量不爆 | ❌ 见 [`MULTI_ATTACHMENT_CONTEXT.md`](MULTI_ATTACHMENT_CONTEXT.md) |
 
 ---
 
@@ -340,7 +385,7 @@ P5 后「同文件第二次是否调 tool」仍依赖 **本轮 context 是否已
 
 ### 11.2 P5a — Attachment catalog（索引常驻）
 
-**注入点：** `AttachmentCatalogContextProvider`（与 `LongTermMemoryProvider` 同级）或 platform instructions 动态尾部。
+**注入点：** `AttachmentCatalogContextProvider`（与 `LongTermMemoryProvider` 同级）— **索引数据**，非纪律文案。模型如何选 pull/map tool 见 [`MULTI_ATTACHMENT_CONTEXT.md` §5](MULTI_ATTACHMENT_CONTEXT.md)（**主：tool description**；**辅：`platform_instructions.py`**；**禁止**写进 agent `system_prompt.md`）。
 
 **每轮重建，不进 sliding window：**
 
@@ -366,6 +411,9 @@ P5 后「同文件第二次是否调 tool」仍依赖 **本轮 context 是否已
 | `read_attachment(id, query?)` | Lite extract / Native 文本；服务端校验 `chat_id` |
 | `analyze_image(id, question?)` | Vision；**前置验证**各 provider tool_result 是否支持 image block |
 | `search_attachments(query)` | 冷层索引（二期） |
+| `map_attachment(id, focus?)` | M0：概括 / 对比主题（**显式 map**，见 Multi §4.7） |
+
+**模型路由文案（M0）：** map vs read 纪律写在 **`attachments/tools/*.py` 的 `@tool(description)`**（主），`platform_instructions.py` 仅短总括（辅）。**不得**要求改 `backend/agents/<slug>/system_prompt.md` — 见 [`MULTI_ATTACHMENT_CONTEXT.md` §5](MULTI_ATTACHMENT_CONTEXT.md)。
 
 **Run 级缓存：** `(attachment_id, query_hash)` 本轮不重复读。
 
@@ -378,9 +426,14 @@ P5 后「同文件第二次是否调 tool」仍依赖 **本轮 context 是否已
 - `@` 时 user message 仅「附件已就绪：{filename} (id=…)」+ catalog 索引。
 - 可配置 **首 turn 仍 inline**（降 latency），后续 Pull。
 
-### 11.5 Provider 兼容性（P5 前置验证）
+### 11.5 Provider 兼容性（**M0 / Phase 0 阻塞验证**）
 
-实施前矩阵摸底：`analyze_image` 的 tool_result 在各 provider 是否可携带 vision content。
+实施 Map-Reduce / server-side vision **前**必须完成矩阵摸底（见 [`MULTI_ATTACHMENT_CONTEXT.md` §0.3](MULTI_ATTACHMENT_CONTEXT.md)）：
+
+- DeepSeek / Qwen / MiniMax：**tool_result 纯文本** → `analyze_image` **不能**把图片 block 塞回 orchestrator loop。
+- Orchestrator 主模型无 vision 时：vision 必须在 **独立 mini-request** 中调用 **vision-capable 模型**（catalog 配置切换点）。
+
+本仓库 P5b 已上线 pull tools，但 **未**完成上述验证；当前 `data_base64` 返回值在多数国内 provider 上既浪费 token 又可能无法被主模型消费。
 
 ### 11.6 测试
 
@@ -408,19 +461,28 @@ P5 后「同文件第二次是否调 tool」仍依赖 **本轮 context 是否已
 ## 13. 推荐实施顺序
 
 ```text
-已完成：P0, P0′, P1 核心, P2, working set user 行热修
+已完成（2026-03）：P0, P0′, P1 核心, P1.1 核心, P2, P3 scoped compaction,
+  P3-b, materialize-on-read, P5a catalog/gist, P5b pull tools, P5c thin send
 
-下一步（按优先级）：
-  P1.1  visibility SSOT + stub_anchor=last + slim 止血（P3-a）  ← 阻塞生产正确性
-  P5a   catalog + gist 持久化                                  ← 长对话终态地基
-  P5b   read_attachment / analyze_image + run 缓存
-  P5c   thin send（可配置首 turn inline）
-  P3-b  finalize_turn 滑出前 compact（可选兜底）
-  P4    caching
-  废弃  P2 关键词表（P5 后）
+当前最高优先级（合并为一条线 `M0-P1.1-unified`，勿与 P1.1 并行分叉）：
+  **Task 拆解见 [`MULTI_ATTACHMENT_CONTEXT.md` §13](MULTI_ATTACHMENT_CONTEXT.md)**（3 PR：瘦身 → vision → map+preflight）
+
+  M0 Phase 0  ←  PR1：AttachmentPullMemoryProjector + tool_result strip
+              ←  PR2：isolated vision mini-request（国内模型硬约束）
+              ←  PR3：map_attachment + preflight + tool description（§5）
+              ←  T0：provider 矩阵验证（可与 PR1 并行）
+              ←  摘要幂等 (attachment_id, content_hash)
+              ←  与 visibility/plan 语义一次对齐
+              ←  **禁止**改 agent system_prompt.md
+
+随后：
+  M0 Phase 1  batch map / chunk PDF / StructuredExtract（对比类）
+  M0 Phase 2  batch map / chunk PDF / metrics
+  P3-c  可选 utility caption
+  废弃  P2 关键词表（已有 pull）
 ```
 
-每个阶段 **独立 PR** + 自动测试 + 手工 checklist。
+每个阶段 **独立 PR** + 自动测试 + 手工 checklist。Truth 表见 §1.3。
 
 ---
 

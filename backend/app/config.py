@@ -125,6 +125,26 @@ class Settings(BaseSettings):
         default=5.0,
         validation_alias="ATTACHMENT_LAZY_EXTRACT_TIMEOUT_SECONDS",
     )
+    attachment_tool_result_max_chars: int = Field(
+        default=4096,
+        validation_alias="ATTACHMENT_TOOL_RESULT_MAX_CHARS",
+    )
+    attachment_vision_service_enabled: bool = Field(
+        default=True,
+        validation_alias="ATTACHMENT_VISION_SERVICE_ENABLED",
+    )
+    attachment_vision_max_edge: int = Field(
+        default=1568,
+        validation_alias="ATTACHMENT_VISION_MAX_EDGE",
+    )
+    attachment_vision_jpeg_quality: int = Field(
+        default=85,
+        validation_alias="ATTACHMENT_VISION_JPEG_QUALITY",
+    )
+    attachment_vision_model_id: str | None = Field(
+        default=None,
+        validation_alias="ATTACHMENT_VISION_MODEL_ID",
+    )
     # Diagram rendering (agents/napkin-architect)
     plantuml_renderer: str = Field(default="kroki", validation_alias="PLANTUML_RENDERER")
     kroki_url: str = Field(default="https://kroki.io", validation_alias="KROKI_URL")

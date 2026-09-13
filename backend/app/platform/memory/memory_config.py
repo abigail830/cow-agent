@@ -49,6 +49,13 @@ class AttachmentPullConfig:
     enabled: bool = True
     first_turn_inline: bool = True
     search_enabled: bool = True
+    persist_summary_only: bool = True
+
+
+@dataclass(frozen=True)
+class AttachmentBudgetConfig:
+    enabled: bool = True
+    safety_ratio: float = 0.85
 
 
 @dataclass(frozen=True)
@@ -59,6 +66,7 @@ class MemoryConfig:
     long_term: LongTermMemoryConfig = field(default_factory=LongTermMemoryConfig)
     attachment_compaction: AttachmentCompactionConfig = field(default_factory=AttachmentCompactionConfig)
     attachment_pull: AttachmentPullConfig = field(default_factory=AttachmentPullConfig)
+    attachment_budget: AttachmentBudgetConfig = field(default_factory=AttachmentBudgetConfig)
 
     def config_hash(self) -> str:
         payload = {
@@ -82,6 +90,11 @@ class MemoryConfig:
                 "enabled": self.attachment_pull.enabled,
                 "first_turn_inline": self.attachment_pull.first_turn_inline,
                 "search_enabled": self.attachment_pull.search_enabled,
+                "persist_summary_only": self.attachment_pull.persist_summary_only,
+            },
+            "attachment_budget": {
+                "enabled": self.attachment_budget.enabled,
+                "safety_ratio": self.attachment_budget.safety_ratio,
             },
         }
         raw = json.dumps(payload, sort_keys=True, ensure_ascii=False)
@@ -129,6 +142,13 @@ def parse_memory_config(agent_config: dict[str, Any] | None) -> MemoryConfig:
         enabled=bool(pull_raw.get("enabled", True)),
         first_turn_inline=bool(pull_raw.get("first_turn_inline", True)),
         search_enabled=bool(pull_raw.get("search_enabled", True)),
+        persist_summary_only=bool(pull_raw.get("persist_summary_only", True)),
+    )
+
+    budget_raw = memory.get("attachment_budget") or {}
+    attachment_budget = AttachmentBudgetConfig(
+        enabled=bool(budget_raw.get("enabled", True)),
+        safety_ratio=float(budget_raw.get("safety_ratio") or 0.85),
     )
 
     return MemoryConfig(
@@ -138,4 +158,5 @@ def parse_memory_config(agent_config: dict[str, Any] | None) -> MemoryConfig:
         long_term=long_term,
         attachment_compaction=attachment_compaction,
         attachment_pull=attachment_pull,
+        attachment_budget=attachment_budget,
     )

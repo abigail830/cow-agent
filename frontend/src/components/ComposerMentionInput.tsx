@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react'
 import type { ClipboardEvent, KeyboardEvent, RefObject } from 'react'
 import type { ChatAttachment } from '../types'
 import { segmentInputByMentions } from '../lib/attachmentMentions'
@@ -25,11 +26,30 @@ export function ComposerMentionInput({
   onPaste,
   onKeyDown,
 }: ComposerMentionInputProps) {
+  const mirrorRef = useRef<HTMLDivElement>(null)
   const segments = segmentInputByMentions(value, attachments)
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current
+    const mirror = mirrorRef.current
+    if (!textarea || !mirror) return
+
+    const syncHeight = () => {
+      textarea.style.height = '0px'
+      const nextHeight = Math.max(mirror.offsetHeight, textarea.scrollHeight)
+      textarea.style.height = `${nextHeight}px`
+    }
+
+    syncHeight()
+
+    const observer = new ResizeObserver(syncHeight)
+    observer.observe(mirror)
+    return () => observer.disconnect()
+  }, [textareaRef, value, attachments, placeholder])
 
   return (
     <div className="composer-mention-input">
-      <div className="composer-mention-input-mirror" aria-hidden="true">
+      <div ref={mirrorRef} className="composer-mention-input-mirror" aria-hidden="true">
         {segments.length === 0 ? (
           <span className="composer-mention-input-placeholder">{placeholder}</span>
         ) : (

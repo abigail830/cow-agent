@@ -27,6 +27,7 @@ dependencies = [
     "docxcompose>=1.4.0",
     "pymysql>=1.2.0",
     "e2b-code-interpreter>=1.0.0",
+    "Pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]

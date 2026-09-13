@@ -22,7 +22,7 @@ from app.platform.attachments.native.maf_content import metadata_attachment_to_m
 from app.platform.attachments.unify_lite.pipeline import format_extracted_attachment_block, wrap_unify_lite_attachment_section
 from app.platform.attachments.unify_lite.types import ExtractedAttachment
 from app.platform.attachments.unify_lite.validation import is_unify_lite_image, is_unify_lite_text
-from app.platform.memory.memory_config import AttachmentPullConfig
+from app.platform.memory.memory_config import AttachmentBudgetConfig, AttachmentPullConfig
 
 
 def build_user_attachment_contents(
@@ -34,6 +34,7 @@ def build_user_attachment_contents(
     registry: AttachmentMaterializationRegistry,
     visibility: VisibilityIndex | None = None,
     pull_config: AttachmentPullConfig | None = None,
+    attachment_budget: AttachmentBudgetConfig | None = None,
 ) -> list[Content]:
     """Build attachment-related Content blocks for one user message."""
     attachment_mode = str(metadata.get("attachment_mode") or "")
@@ -50,6 +51,7 @@ def build_user_attachment_contents(
         user_text=user_text,
         turn_sequence=turn_sequence,
         pull_config=pull,
+        attachment_budget=attachment_budget,
     )
 
     text_blocks: list[str] = []
@@ -215,6 +217,7 @@ def build_materialized_user_message(
     registry: AttachmentMaterializationRegistry,
     visibility: VisibilityIndex | None = None,
     pull_config: AttachmentPullConfig | None = None,
+    attachment_budget: AttachmentBudgetConfig | None = None,
 ) -> str | Message:
     """Build a full user Message for the current send turn (text + materialized attachments)."""
     text = content.strip()
@@ -226,6 +229,7 @@ def build_materialized_user_message(
         registry=registry,
         visibility=visibility,
         pull_config=pull_config,
+        attachment_budget=attachment_budget,
     )
 
     if not text and not attachment_parts:

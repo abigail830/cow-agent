@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import PurePosixPath
+from typing import Any
 
-from app.shared.sandbox.e2b_session import acquire_e2b_sandbox, get_e2b_session_key, release_e2b_session
+from app.shared.sandbox.e2b_session import (
+    acquire_e2b_sandbox,
+    get_e2b_session_key,
+    invalidate_e2b_sandbox,
+    is_e2b_stale_sandbox_error,
+    release_e2b_session,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +67,24 @@ class ContentStudioSandbox:
             )
         return self._create_sandbox(), True
 
+    def _call_with_reconnect(self, operation: str, fn: Callable[[], Any]) -> Any:
+        """Run a sandbox op; on stale handle, drop cache and retry once."""
+        try:
+            return fn()
+        except Exception as exc:
+            if not self._reuse_session or not is_e2b_stale_sandbox_error(exc):
+                raise
+            session_key = get_e2b_session_key()
+            if not session_key:
+                raise
+            logger.warning(
+                "E2B sandbox stale during %s; invalidating session %s and retrying once",
+                operation,
+                session_key,
+            )
+            invalidate_e2b_sandbox(session_key)
+            return fn()
+
     @staticmethod
     def resolve_path(path: str) -> str:
         raw = (path or "").strip()
@@ -87,12 +113,18 @@ class ContentStudioSandbox:
 
         workdir = self.resolve_path(cwd or WORK_DIR)
         timeout = timeout_seconds if timeout_seconds is not None else self._timeout_seconds
-        sandbox, created = self._acquire()
-        result = sandbox.commands.run(  # type: ignore[attr-defined]
-            cmd,
-            cwd=workdir,
-            timeout=timeout,
-        )
+        created = False
+
+        def _run() -> object:
+            nonlocal created
+            sandbox, created = self._acquire()
+            return sandbox.commands.run(  # type: ignore[attr-defined]
+                cmd,
+                cwd=workdir,
+                timeout=timeout,
+            )
+
+        result = self._call_with_reconnect("run_command", _run)
         stdout = getattr(result, "stdout", "") or ""
         stderr = getattr(result, "stderr", "") or ""
         exit_code = int(getattr(result, "exit_code", 1) or 0)
@@ -121,8 +153,14 @@ class ContentStudioSandbox:
 
     def read_file(self, path: str, *, max_bytes: int = 500_000) -> dict[str, str | int | bool]:
         resolved = self.resolve_path(path)
-        sandbox, created = self._acquire()
-        raw = sandbox.files.read(resolved)  # type: ignore[attr-defined]
+        created = False
+
+        def _read() -> object:
+            nonlocal created
+            sandbox, created = self._acquire()
+            return sandbox.files.read(resolved)  # type: ignore[attr-defined]
+
+        raw = self._call_with_reconnect("read_file", _read)
         if isinstance(raw, str):
             data = raw.encode("utf-8")
             text = raw
@@ -148,8 +186,14 @@ class ContentStudioSandbox:
 
     def write_file(self, path: str, content: str) -> dict[str, str | int | bool]:
         resolved = self.resolve_path(path)
-        sandbox, created = self._acquire()
-        sandbox.files.write(resolved, content)  # type: ignore[attr-defined]
+        created = False
+
+        def _write() -> None:
+            nonlocal created
+            sandbox, created = self._acquire()
+            sandbox.files.write(resolved, content)  # type: ignore[attr-defined]
+
+        self._call_with_reconnect("write_file", _write)
         return {
             "path": resolved,
             "bytes": len(content.encode("utf-8")),
@@ -158,8 +202,12 @@ class ContentStudioSandbox:
 
     def read_bytes(self, path: str, *, max_bytes: int = 20_000_000) -> bytes:
         resolved = self.resolve_path(path)
-        sandbox, _created = self._acquire()
-        data = self._read_sandbox_bytes(sandbox, resolved)
+
+        def _read_bytes() -> bytes:
+            sandbox, _created = self._acquire()
+            return self._read_sandbox_bytes(sandbox, resolved)
+
+        data = self._call_with_reconnect("read_bytes", _read_bytes)
         if resolved.lower().endswith((".docx", ".pptx", ".xlsx")) and not data.startswith(b"PK"):
             raise ContentStudioSandboxError(
                 f"Deliverable looks corrupted ({resolved}): expected ZIP (docx/pptx) header."

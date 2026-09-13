@@ -61,12 +61,32 @@ from app.platform.attachments.run_state import (
     init_attachment_run_state,
     reset_attachment_run_state,
 )
+from app.platform.attachments.tool_result_slim import slim_attachment_tool_row
 from app.config import get_settings
 from app.agent_specific.viz.spec import VizSpec
 
 logger = logging.getLogger(__name__)
 
 _TOOL_ROW_TYPES = frozenset({"tool_call", "tool_result", "mcp_call", "mcp_result"})
+
+
+def _apply_attachment_persist_strip(
+    rows: list[dict[str, Any]],
+    memory_config: MemoryConfig | None,
+) -> list[dict[str, Any]]:
+    persist_summary_only = (
+        memory_config.attachment_pull.persist_summary_only if memory_config is not None else True
+    )
+    if not persist_summary_only:
+        return rows
+    max_chars = get_settings().attachment_tool_result_max_chars
+    stripped: list[dict[str, Any]] = []
+    for row in rows:
+        if row.get("message_type") in _TOOL_ROW_TYPES:
+            stripped.append(slim_attachment_tool_row(row, max_chars=max_chars))
+        else:
+            stripped.append(row)
+    return stripped
 
 
 def _working_set_rows_for_finalize(
@@ -228,6 +248,7 @@ class ChatRunService:
             registry=registry,
             visibility=visibility,
             pull_config=pull_config,
+            attachment_budget=memory_config.attachment_budget if memory_config else None,
         )
 
     async def _resolve_run_model(self, chat: Chat) -> tuple[str, str]:
@@ -450,9 +471,14 @@ class ChatRunService:
         turn_rows: list[dict[str, Any]] = []
         if accumulator is not None and accumulator.has_content():
             accumulator.enrich_tool_arguments_from_response(response)
-            turn_rows = await accumulator.persist(self._messages, chat_id)
+            turn_rows = await accumulator.persist(self._messages, chat_id, memory_config=memory_config)
         else:
-            turn_rows = await self._persist_agent_messages(chat_id, response, skip_tool_rows=False)
+            turn_rows = await self._persist_agent_messages(
+                chat_id,
+                response,
+                skip_tool_rows=False,
+                memory_config=memory_config,
+            )
         working_set_rows = _working_set_rows_for_finalize(user_row, turn_rows)
         payload_extensions: dict[str, Any] = {}
         if run_ctx is not None:
@@ -475,13 +501,14 @@ class ChatRunService:
         response: Any | None = None,
         run_ctx: RunContext | None = None,
         accumulator: "_StreamTurnAccumulator | None" = None,
+        memory_config: MemoryConfig | None = None,
     ) -> None:
         """Best-effort persist of partial assistant output plus an error row."""
         try:
             if response is not None:
-                await self._persist_agent_messages(chat_id, response)
+                await self._persist_agent_messages(chat_id, response, memory_config=memory_config)
             elif accumulator is not None and accumulator.has_content():
-                await accumulator.persist(self._messages, chat_id)
+                await accumulator.persist(self._messages, chat_id, memory_config=memory_config)
             if run_ctx is not None:
                 extensions = await run_plugin_finalize_failure(run_ctx, accumulator=accumulator)
                 for key, value in extensions.items():
@@ -616,7 +643,7 @@ class ChatRunService:
             )
             return result.text or ""
         except Exception as exc:
-            await self._finalize_failure(chat_id, exc, run_ctx=run_ctx)
+            await self._finalize_failure(chat_id, exc, run_ctx=run_ctx, memory_config=memory_config)
             raise
         finally:
             reset_run_viz_state()
@@ -830,7 +857,12 @@ class ChatRunService:
                 return
             await self._ensure_db_connection()
             await self._finalize_failure(
-                chat_id, exc, response=final, accumulator=accumulator, run_ctx=run_ctx
+                chat_id,
+                exc,
+                response=final,
+                accumulator=accumulator,
+                run_ctx=run_ctx,
+                memory_config=memory_config,
             )
             raise
         finally:
@@ -851,6 +883,7 @@ class ChatRunService:
         response: Any,
         *,
         skip_tool_rows: bool = False,
+        memory_config: MemoryConfig | None = None,
     ) -> list[dict[str, Any]]:
         call_names, call_arguments = _collect_call_context(getattr(response, "messages", None) or [])
         rows_to_insert: list[dict[str, Any]] = []
@@ -887,6 +920,7 @@ class ChatRunService:
             )
         if not rows_to_insert:
             return []
+        rows_to_insert = _apply_attachment_persist_strip(rows_to_insert, memory_config)
         saved = await self._messages.insert_many(chat_id, rows_to_insert)
         return [row_to_dict(row) for row in saved]
 
@@ -1195,7 +1229,13 @@ class StreamTurnAccumulator:
     def has_tool_rows(self) -> bool:
         return any(row.get("message_type") in _TOOL_ROW_TYPES for row in self._rows)
 
-    async def persist_tool_rows(self, repo: MessageRepository, chat_id: uuid.UUID) -> int:
+    async def persist_tool_rows(
+        self,
+        repo: MessageRepository,
+        chat_id: uuid.UUID,
+        *,
+        memory_config: MemoryConfig | None = None,
+    ) -> int:
         """Persist tool call/result rows captured during streaming (with full arguments)."""
         self.finalize()
         tool_rows = [
@@ -1210,14 +1250,22 @@ class StreamTurnAccumulator:
         ]
         if not tool_rows:
             return 0
+        tool_rows = _apply_attachment_persist_strip(tool_rows, memory_config)
         await repo.insert_many(chat_id, tool_rows)
         return len(tool_rows)
 
-    async def persist(self, repo: MessageRepository, chat_id: uuid.UUID) -> list[dict[str, Any]]:
+    async def persist(
+        self,
+        repo: MessageRepository,
+        chat_id: uuid.UUID,
+        *,
+        memory_config: MemoryConfig | None = None,
+    ) -> list[dict[str, Any]]:
         self.finalize()
         if not self._rows:
             return []
-        saved = await repo.insert_many(chat_id, self._rows)
+        rows = _apply_attachment_persist_strip(list(self._rows), memory_config)
+        saved = await repo.insert_many(chat_id, rows)
         return [row_to_dict(row) for row in saved]
 
     async def persist_cancelled(
@@ -1225,6 +1273,8 @@ class StreamTurnAccumulator:
         repo: MessageRepository,
         chat_id: uuid.UUID,
         run_id: uuid.UUID,
+        *,
+        memory_config: MemoryConfig | None = None,
     ) -> int:
         """Write partial turn output; incomplete assistant text/reasoning marked cancelled."""
         self.finalize()
@@ -1258,6 +1308,7 @@ class StreamTurnAccumulator:
                 )
         if not rows_to_insert:
             return 0
+        rows_to_insert = _apply_attachment_persist_strip(rows_to_insert, memory_config)
         await repo.insert_many(chat_id, rows_to_insert)
         return len(rows_to_insert)
 
