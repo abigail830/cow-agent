@@ -104,6 +104,21 @@ class ContentStudioSandbox:
             "sandbox_created": created,
         }
 
+    @staticmethod
+    def _read_sandbox_bytes(sandbox: object, resolved: str) -> bytes:
+        """Read sandbox file as raw bytes — E2B defaults to UTF-8 text without format='bytes'."""
+        read = sandbox.files.read  # type: ignore[attr-defined]
+        try:
+            raw = read(resolved, format="bytes")
+        except TypeError:
+            raw = read(resolved)
+        if isinstance(raw, str):
+            raise ContentStudioSandboxError(
+                f"Sandbox returned text for a binary deliverable ({resolved}). "
+                "Cannot publish docx/pptx safely; ensure E2B files.read supports format='bytes'."
+            )
+        return bytes(raw)
+
     def read_file(self, path: str, *, max_bytes: int = 500_000) -> dict[str, str | int | bool]:
         resolved = self.resolve_path(path)
         sandbox, created = self._acquire()
@@ -144,11 +159,11 @@ class ContentStudioSandbox:
     def read_bytes(self, path: str, *, max_bytes: int = 20_000_000) -> bytes:
         resolved = self.resolve_path(path)
         sandbox, _created = self._acquire()
-        raw = sandbox.files.read(resolved)  # type: ignore[attr-defined]
-        if isinstance(raw, str):
-            data = raw.encode("utf-8")
-        else:
-            data = bytes(raw)
+        data = self._read_sandbox_bytes(sandbox, resolved)
+        if resolved.lower().endswith((".docx", ".pptx", ".xlsx")) and not data.startswith(b"PK"):
+            raise ContentStudioSandboxError(
+                f"Deliverable looks corrupted ({resolved}): expected ZIP (docx/pptx) header."
+            )
         if len(data) > max_bytes:
             raise ContentStudioSandboxError(
                 f"File exceeds publish limit ({len(data)} bytes > {max_bytes})."
