@@ -11,39 +11,54 @@ providers:
   deepseek:
     base_url: ${DEEPSEEK_BASE_URL}
 
+# roles: chat (orchestrator / user-selectable), vision_worker, text_worker (ephemeral workers).
+# Omit roles → defaults to [chat] for backward compatibility.
 models:
   - id: gpt-5.4
     label: GPT-5.4
     provider: azure_openai
     deployment: gpt-5.4
     enabled: true
+    roles: [chat]
 
   - id: claude-sonnet-4-6
     label: Claude Sonnet 4.6
     provider: azure_anthropic
     deployment: claude-sonnet-4-6
     enabled: true
+    roles: [chat]
 
   - id: qwen3.7-plus
     label: Qwen 3.7 Plus
     provider: dashscope
     deployment: qwen3.7-plus
     enabled: true
+    roles: [chat]
 
   - id: qwen3.8-max
     label: Qwen 3.8 Max
     provider: dashscope
     deployment: qwen3.8-max
     enabled: true
+    roles: [chat]
 
   - id: minimax-m3
     label: MiniMax M3
     provider: dashscope
     deployment: MiniMax/MiniMax-M3
     enabled: true
+    roles: [chat]
 
   - id: deepseek-flash
     label: DeepSeek Flash
     provider: deepseek
     deployment: deepseek-flash
     enabled: true
+    roles: [chat]
+
+  - id: qwen3-vl-32b-instruct
+    label: Qwen VL Max
+    provider: dashscope
+    deployment: Qwen/Qwen3-VL-32B-Instruct
+    enabled: true
+    roles: [vision_worker]

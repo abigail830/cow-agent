@@ -13,6 +13,11 @@ from app.platform.llm.model_registry import ModelProvider
 
 _CATALOG_PATH = Path(__file__).resolve().parents[3] / "config" / "models.yaml"
 
+MODEL_ROLE_CHAT = "chat"
+MODEL_ROLE_VISION_WORKER = "vision_worker"
+MODEL_ROLE_TEXT_WORKER = "text_worker"
+DEFAULT_MODEL_ROLES = frozenset({MODEL_ROLE_CHAT})
+
 
 @dataclass(frozen=True)
 class ModelEntry:
@@ -21,11 +26,15 @@ class ModelEntry:
     provider: str
     deployment: str
     enabled: bool = True
+    roles: frozenset[str] = DEFAULT_MODEL_ROLES
+
+    def has_role(self, role: str) -> bool:
+        return role in self.roles
 
     @property
     def supports_attachments(self) -> bool:
-        # All catalog chat models support vision (images). Document/PDF rules vary by mode.
-        return True
+        # Chat-role models are user-selectable orchestrators; worker-only models are not.
+        return self.has_role(MODEL_ROLE_CHAT)
 
 
 @dataclass(frozen=True)
@@ -41,15 +50,21 @@ class ModelCatalog:
     def list_enabled(self) -> list[ModelEntry]:
         return [entry for entry in self.models.values() if entry.enabled]
 
-    def list_available(self, settings: Settings | None = None) -> list[ModelEntry]:
+    def list_for_role(self, role: str, settings: Settings | None = None) -> list[ModelEntry]:
         s = settings or get_settings()
         available: list[ModelEntry] = []
         for entry in self.list_enabled():
+            if not entry.has_role(role):
+                continue
             if not entry.deployment.strip():
                 continue
             if _provider_configured(entry.provider, s):
                 available.append(entry)
         return sorted(available, key=lambda item: item.label.lower())
+
+    def list_available(self, settings: Settings | None = None) -> list[ModelEntry]:
+        """Chat orchestrator models available for user selection."""
+        return self.list_for_role(MODEL_ROLE_CHAT, settings)
 
     def find_by_provider_deployment(self, provider: str, deployment: str) -> ModelEntry | None:
         provider = str(provider or "").strip()
@@ -98,6 +113,18 @@ def is_provider_configured(provider: str, settings: Settings | None = None) -> b
     return _provider_configured(provider, settings or get_settings())
 
 
+def _parse_model_roles(raw: object) -> frozenset[str]:
+    if raw is None:
+        return DEFAULT_MODEL_ROLES
+    if isinstance(raw, str):
+        role = raw.strip()
+        return frozenset({role}) if role else DEFAULT_MODEL_ROLES
+    if isinstance(raw, list):
+        roles = {str(item).strip() for item in raw if str(item).strip()}
+        return frozenset(roles) if roles else DEFAULT_MODEL_ROLES
+    return DEFAULT_MODEL_ROLES
+
+
 def _load_catalog_from_disk() -> ModelCatalog:
     if not _CATALOG_PATH.exists():
         raise FileNotFoundError(f"Model catalog not found: {_CATALOG_PATH}")
@@ -122,6 +149,7 @@ def _load_catalog_from_disk() -> ModelCatalog:
             provider=str(item.get("provider") or ""),
             deployment=_resolve_env(str(item.get("deployment") or "")),
             enabled=bool(item.get("enabled", True)),
+            roles=_parse_model_roles(item.get("roles")),
         )
     return ModelCatalog(models=models, providers=providers)
 

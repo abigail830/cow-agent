@@ -151,15 +151,93 @@ async def test_analyze_image_tool_returns_summary_not_base64(
     assert "API" in str(result["summary"])
 
 
-def test_resolve_vision_model_prefers_configured_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ATTACHMENT_VISION_MODEL_ID", "gpt-5.4")
+def test_resolve_vision_model_prefers_configured_id(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    import yaml
+
+    from app.platform.llm import model_catalog
+
+    catalog_path = tmp_path / "models.yaml"
+    catalog_path.write_text(
+        yaml.dump(
+            {
+                "providers": {"dashscope": {"base_url": "https://dashscope.example/v1"}},
+                "models": [
+                    {
+                        "id": "qwen-vl-max",
+                        "label": "Qwen VL Max",
+                        "provider": "dashscope",
+                        "deployment": "qwen-vl-max",
+                        "enabled": True,
+                        "roles": ["vision_worker"],
+                    },
+                    {
+                        "id": "qwen3.7-plus",
+                        "label": "Qwen Chat",
+                        "provider": "dashscope",
+                        "deployment": "qwen3.7-plus",
+                        "enabled": True,
+                        "roles": ["chat"],
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(model_catalog, "_CATALOG_PATH", catalog_path)
+    model_catalog.reload_model_catalog()
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
+    monkeypatch.setenv("ATTACHMENT_VISION_MODEL_ID", "qwen-vl-max")
     settings = Settings(
         DATABASE_URL="postgresql://x",
         REDIS_URL="redis://x",
-        AZURE_API_KEY="k",
-        AZURE_OPENAI_BASE_URL="https://example.openai.azure.com",
-        AZURE_OPENAI_API_VERSION="2024-02-01",
-        AZURE_OPENAI_DEPLOYMENT="gpt",
+        DASHSCOPE_API_KEY="test-key",
+        DASHSCOPE_BASE_URL="https://dashscope.example/v1",
     )
     entry = resolve_vision_model_entry(settings=settings)
-    assert entry.id == "gpt-5.4"
+    assert entry.id == "qwen-vl-max"
+
+
+def test_resolve_vision_model_ignores_chat_only_env_id(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    import yaml
+
+    from app.platform.llm import model_catalog
+
+    catalog_path = tmp_path / "models.yaml"
+    catalog_path.write_text(
+        yaml.dump(
+            {
+                "providers": {"dashscope": {"base_url": "https://dashscope.example/v1"}},
+                "models": [
+                    {
+                        "id": "qwen-vl-max",
+                        "label": "Qwen VL Max",
+                        "provider": "dashscope",
+                        "deployment": "qwen-vl-max",
+                        "enabled": True,
+                        "roles": ["vision_worker"],
+                    },
+                    {
+                        "id": "qwen3.7-plus",
+                        "label": "Qwen Chat",
+                        "provider": "dashscope",
+                        "deployment": "qwen3.7-plus",
+                        "enabled": True,
+                        "roles": ["chat"],
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(model_catalog, "_CATALOG_PATH", catalog_path)
+    model_catalog.reload_model_catalog()
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
+    monkeypatch.setenv("ATTACHMENT_VISION_MODEL_ID", "qwen3.7-plus")
+    settings = Settings(
+        DATABASE_URL="postgresql://x",
+        REDIS_URL="redis://x",
+        DASHSCOPE_API_KEY="test-key",
+        DASHSCOPE_BASE_URL="https://dashscope.example/v1",
+    )
+    entry = resolve_vision_model_entry(settings=settings)
+    assert entry.id == "qwen-vl-max"

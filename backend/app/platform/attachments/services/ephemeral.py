@@ -5,8 +5,51 @@ from __future__ import annotations
 from agent_framework import Agent, Message
 
 from app.config import Settings, get_settings
-from app.platform.llm.model_catalog import ModelEntry, get_model_catalog, is_provider_configured
+from app.platform.llm.model_catalog import (
+    MODEL_ROLE_CHAT,
+    MODEL_ROLE_TEXT_WORKER,
+    MODEL_ROLE_VISION_WORKER,
+    ModelEntry,
+    get_model_catalog,
+    is_provider_configured,
+)
 from app.platform.llm.model_registry import ModelProvider, ModelProviderRegistry
+
+
+def _entry_usable(entry: ModelEntry | None, *, settings: Settings) -> bool:
+    if entry is None or not entry.enabled or not entry.deployment.strip():
+        return False
+    return is_provider_configured(entry.provider, settings)
+
+
+def resolve_worker_model_entry(
+    *,
+    role: str,
+    settings: Settings | None = None,
+    model_id: str | None = None,
+    env_model_id: str | None = None,
+    fallback_role: str | None = None,
+) -> ModelEntry:
+    """Resolve a catalog model for an ephemeral worker by role."""
+    s = settings or get_settings()
+    catalog = get_model_catalog()
+    for candidate in (model_id, (env_model_id or "").strip() or None):
+        if not candidate:
+            continue
+        entry = catalog.get(candidate)
+        if _entry_usable(entry, settings=s) and entry is not None and entry.has_role(role):
+            return entry
+
+    workers = catalog.list_for_role(role, s)
+    if workers:
+        return workers[0]
+
+    if fallback_role and fallback_role != role:
+        fallback_workers = catalog.list_for_role(fallback_role, s)
+        if fallback_workers:
+            return fallback_workers[0]
+
+    raise ValueError(f"No configured catalog model is available for role '{role}'.")
 
 
 def resolve_vision_model_entry(
@@ -14,39 +57,14 @@ def resolve_vision_model_entry(
     model_id: str | None = None,
     settings: Settings | None = None,
 ) -> ModelEntry:
-    """Pick a vision-capable catalog model for attachment mini-requests."""
+    """Pick a vision-worker catalog model for attachment mini-requests."""
     s = settings or get_settings()
-    catalog = get_model_catalog()
-    candidates: list[str] = []
-    if model_id:
-        candidates.append(model_id)
-    configured = (s.attachment_vision_model_id or "").strip()
-    if configured:
-        candidates.append(configured)
-    candidates.extend(
-        [
-            "qwen-vl-max",
-            "qwen3.7-plus",
-            "qwen3.8-max",
-            "gpt-5.4",
-            "claude-sonnet-4-6",
-            "deepseek-flash",
-        ]
+    return resolve_worker_model_entry(
+        role=MODEL_ROLE_VISION_WORKER,
+        settings=s,
+        model_id=model_id,
+        env_model_id=s.attachment_vision_model_id,
     )
-    seen: set[str] = set()
-    for candidate in candidates:
-        if not candidate or candidate in seen:
-            continue
-        seen.add(candidate)
-        entry = catalog.get(candidate)
-        if entry is None or not entry.enabled or not entry.deployment.strip():
-            continue
-        if is_provider_configured(entry.provider, s):
-            return entry
-    available = catalog.list_available(s)
-    if not available:
-        raise ValueError("No configured vision model is available in the model catalog.")
-    return available[0]
 
 
 async def ephemeral_vision_run(
@@ -81,25 +99,12 @@ def resolve_map_text_model_entry(
 ) -> ModelEntry:
     """Pick a text model for attachment map / summarize workers."""
     s = settings or get_settings()
-    catalog = get_model_catalog()
-    candidates: list[str] = []
-    if model_id:
-        candidates.append(model_id)
-    candidates.extend(["qwen3.7-plus", "deepseek-flash", "gpt-5.4", "claude-sonnet-4-6"])
-    seen: set[str] = set()
-    for candidate in candidates:
-        if not candidate or candidate in seen:
-            continue
-        seen.add(candidate)
-        entry = catalog.get(candidate)
-        if entry is None or not entry.enabled or not entry.deployment.strip():
-            continue
-        if is_provider_configured(entry.provider, s):
-            return entry
-    available = catalog.list_available(s)
-    if not available:
-        raise ValueError("No configured text model is available for attachment map workers.")
-    return available[0]
+    return resolve_worker_model_entry(
+        role=MODEL_ROLE_TEXT_WORKER,
+        settings=s,
+        model_id=model_id,
+        fallback_role=MODEL_ROLE_CHAT,
+    )
 
 
 async def ephemeral_text_run(
