@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "app/main.py": {
-      "maxDuration": 120,
+      "maxDuration": 300,
       "includeFiles": "agents/**",
       "excludeFiles": "{tests/**,__tests__/**,**/*.test.py,**/test_*.py,migrations/sql/**,scripts/**,data/**,.pytest_cache/**}"
     }
