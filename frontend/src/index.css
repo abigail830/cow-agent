@@ -3207,22 +3207,14 @@ body {
   min-width: 0;
 }
 
-.artifact-widget-frame,
-.artifact-inline-card {
-  width: 100%;
-  max-width: 85%;
-  min-width: min(100%, 16rem);
-}
-
-.artifact-widget-frame {
-  margin-top: 0.125rem;
-}
-
 /* Inline artifact cards — flat horizontal row (icon · title · actions) */
 .artifact-inline-card {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  width: 100%;
+  max-width: 85%;
+  min-width: min(100%, 16rem);
   margin-top: 0.125rem;
   padding: 0.8125rem 0.875rem;
   border: 1px solid var(--color-border);
@@ -3256,6 +3248,39 @@ body {
 .diagram-artifact-icon {
   background: #fce7f3;
   color: #db2777;
+}
+
+.content-document-artifact-icon {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.content-document-artifact-icon-docx {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.content-document-artifact-icon-pptx {
+  background: #ffedd5;
+  color: #ea580c;
+}
+
+.content-document-artifact-icon-pdf {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.content-document-artifact-icon-markdown,
+.content-document-artifact-icon-md {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.proposal-artifact-icon {
+  background: #ffedd5;
+  color: #c2410c;
 }
 
 .artifact-inline-card-main {
@@ -4581,11 +4606,6 @@ body {
 
 .proposal-draft-fee-footnotes-list li + li {
   margin-top: 0.25rem;
-}
-
-.artifact-widget-frame-expanded {
-  outline: 2px solid rgba(59, 130, 246, 0.35);
-  outline-offset: 1px;
 }
 
 .viz-widget-btn-active {

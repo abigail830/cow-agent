@@ -12,6 +12,11 @@ export function isContentDocumentArtifact(spec: ArtifactSpec): boolean {
   return spec.kind === 'content_document'
 }
 
+/** Download-first chat artifacts rendered as inline cowork-style cards. */
+export function isInlineDownloadArtifact(spec: ArtifactSpec): boolean {
+  return spec.kind === 'proposal_word' || spec.kind === 'proposal_document'
+}
+
 export function isProposalArtifact(spec: ArtifactSpec): boolean {
   return spec.kind.startsWith('proposal_')
 }
@@ -44,6 +49,7 @@ export function artifactCardSubtitle(spec: ArtifactSpec): string {
   if (isSlideDeckArtifact(spec)) return `Slides · ${formatLabel}`
   if (isDiagramArtifact(spec)) return `Diagram · ${formatLabel}`
   if (isContentDocumentArtifact(spec)) return `Document · ${formatLabel}`
+  if (spec.kind === 'proposal_preview') return 'Proposal · Preview'
   if (spec.kind.startsWith('proposal_')) return `Proposal · ${formatLabel}`
   return formatLabel
 }
