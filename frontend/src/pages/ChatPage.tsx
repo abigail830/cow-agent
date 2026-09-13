@@ -228,6 +228,8 @@ export function ChatPage() {
   const attachButtonRef = useRef<HTMLButtonElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const chatAttachmentsRef = useRef<ChatAttachmentListItem[]>([])
+  const chatAttachmentsLoadGenRef = useRef(0)
+  const prevChatIdRef = useRef<string | null>(null)
   const openChatLoadGenRef = useRef(new Map<string, number>())
   const chatLoadTasksRef = useRef(new Map<string, Promise<void>>())
   const sessionsRef = useRef(sessions)
@@ -249,6 +251,13 @@ export function ChatPage() {
     },
     [],
   )
+
+  const discardVisibleChatAttachments = useCallback(() => {
+    chatAttachmentsLoadGenRef.current += 1
+    setChatAttachments([])
+    chatAttachmentsRef.current = []
+    setChatAttachmentsLoading(false)
+  }, [])
 
   const session = getAgentSession(sessions, selectedId)
   const {
@@ -563,8 +572,9 @@ export function ChatPage() {
       chatSessionLoading: false,
       initialized: true,
     })
+    discardVisibleChatAttachments()
     resetProposalPanel(agentId)
-  }, [patchSession, resetProposalPanel])
+  }, [discardVisibleChatAttachments, patchSession, resetProposalPanel])
 
   const ensureChatId = useCallback(async (agentId: string): Promise<string> => {
     const current = getAgentSession(sessionsRef.current, agentId)
@@ -581,18 +591,22 @@ export function ChatPage() {
     const loadGen = (openChatLoadGenRef.current.get(agentId) ?? 0) + 1
     openChatLoadGenRef.current.set(agentId, loadGen)
 
+    const current = getAgentSession(sessionsRef.current, agentId)
+    if (current.chatId && current.chatId !== id) {
+      streamRegistryRef.current.abort(current.chatId)
+    }
+    if (current.chatId !== id) {
+      discardVisibleChatAttachments()
+    }
     setSessions((prev) => {
-      const current = getAgentSession(prev, agentId)
-      if (current.chatId && current.chatId !== id) {
-        streamRegistryRef.current.abort(current.chatId)
-      }
+      const session = getAgentSession(prev, agentId)
       return {
         ...prev,
         [agentId]: {
-          ...current,
+          ...session,
           error: null,
           chatSessionLoading: true,
-          messages: current.chatId === id ? current.messages : [],
+          messages: session.chatId === id ? session.messages : [],
         },
       }
     })
@@ -620,7 +634,7 @@ export function ChatPage() {
       })
       throw e
     }
-  }, [resetProposalPanel, patchSession])
+  }, [discardVisibleChatAttachments, resetProposalPanel, patchSession])
 
   const createAndOpenChat = useCallback(
     async (agentId: string) => {
@@ -628,7 +642,12 @@ export function ChatPage() {
       if (current.chatId) {
         streamRegistryRef.current.abort(current.chatId)
       }
+      setRefMaterialsOpen(false)
+      setRefMaterialsSearch('')
+      setMentionTrigger(null)
+      discardVisibleChatAttachments()
       patchSession(agentId, {
+        chatId: null,
         error: null,
         chatSessionLoading: true,
         messages: [],
@@ -658,7 +677,7 @@ export function ChatPage() {
         throw e
       }
     },
-    [patchSession, refreshChatHistory, resetProposalPanel],
+    [discardVisibleChatAttachments, patchSession, refreshChatHistory, resetProposalPanel],
   )
 
   const loadChat = useCallback(
@@ -819,11 +838,17 @@ export function ChatPage() {
 
   const loadChatAttachments = useCallback(
     async (activeChatId: string, options?: { silent?: boolean }) => {
+      const gen = ++chatAttachmentsLoadGenRef.current
       if (!options?.silent) {
         setChatAttachmentsLoading(true)
       }
       try {
         const rows = await api.listChatAttachments(activeChatId)
+        if (gen !== chatAttachmentsLoadGenRef.current) return
+        const latestChatId = selectedId
+          ? getAgentSession(sessionsRef.current, selectedId).chatId
+          : null
+        if (latestChatId !== activeChatId) return
         setChatAttachments((prev) => {
           const inFlight = prev.filter((row) => row.upload_status === 'uploading')
           const next = [...inFlight, ...rows]
@@ -831,13 +856,14 @@ export function ChatPage() {
           return next
         })
       } catch (e) {
+        if (gen !== chatAttachmentsLoadGenRef.current) return
         if (selectedId) {
           patchSession(selectedId, {
             error: formatApiError(e, 'Failed to load reference materials'),
           })
         }
       } finally {
-        if (!options?.silent) {
+        if (!options?.silent && gen === chatAttachmentsLoadGenRef.current) {
           setChatAttachmentsLoading(false)
         }
       }
@@ -850,16 +876,22 @@ export function ChatPage() {
   }, [chatAttachments])
 
   useEffect(() => {
+    const prevChatId = prevChatIdRef.current
+    prevChatIdRef.current = chatId ?? null
     setRefMaterialsOpen(false)
     setRefMaterialsSearch('')
     setMentionTrigger(null)
     if (!chatId) {
-      setChatAttachments([])
-      chatAttachmentsRef.current = []
+      discardVisibleChatAttachments()
       return
     }
+    // Switching between two real chats: drop the previous library immediately.
+    // Draft upload may set chatId from null → id; keep in-flight rows.
+    if (prevChatId && prevChatId !== chatId) {
+      discardVisibleChatAttachments()
+    }
     void loadChatAttachments(chatId)
-  }, [chatId, loadChatAttachments])
+  }, [chatId, discardVisibleChatAttachments, loadChatAttachments])
 
   const refreshMentionTrigger = useCallback((value: string, cursorPos: number) => {
     setMentionTrigger(detectMentionTrigger(value, cursorPos))
@@ -1105,6 +1137,11 @@ export function ChatPage() {
             file,
             currentSession.attachmentMode,
           )
+          const latestChatId = getAgentSession(sessionsRef.current, selectedId).chatId
+          if (latestChatId !== activeChatId) {
+            patchChatAttachments((prev) => prev.filter((row) => row.id !== pendingId))
+            return
+          }
           patchChatAttachments((prev) =>
             prev.map((row) => (row.id === pendingId ? uploaded : row)),
           )
@@ -1245,6 +1282,11 @@ export function ChatPage() {
     if (attachmentRows.length === 0 && chatAttachmentsRef.current.length === 0) {
       try {
         const rows = await api.listChatAttachments(activeChatId)
+        const latestChatId = getAgentSession(sessionsRef.current, agentId).chatId
+        if (latestChatId !== activeChatId) {
+          patchSession(agentId, { loading: false })
+          return
+        }
         chatAttachmentsRef.current = rows
         setChatAttachments(rows)
         attachmentRows = rows
