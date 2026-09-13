@@ -9,16 +9,26 @@ from typing import Annotated, Any
 from agent_framework import tool
 
 from app.platform.attachments.attachment_storage import load_inline_attachment, parse_inline_attachment_id
+from app.platform.attachments.visibility_constants import (
+    ANALYZE_IMAGE_TOOL_DESCRIPTION,
+    GUARD_ALREADY_INLINED_MESSAGE,
+    GUARD_JUST_INLINED_MESSAGE,
+    INLINE_ATTACHMENT_TOOL_DESCRIPTION,
+    VISIBILITY_INLINED,
+)
 from app.platform.attachments.services.map import get_attachment_map_service
 from app.platform.attachments.services.vision import get_attachment_vision_service
 from app.platform.attachments.run_state import get_attachment_run_state
+from app.platform.attachments.services.preflight import check_inline_attachment_allowed
 from app.platform.attachments.unify_lite.extractors.registry import extract_bytes
 from app.platform.attachments.unify_lite.validation import is_unify_lite_image
+from app.platform.memory.memory_config import AttachmentBudgetConfig
 
 ATTACHMENT_PULL_TOOL_NAMES = frozenset(
     {
         "read_attachment",
         "analyze_image",
+        "inline_attachment",
         "map_attachment",
         "search_attachments",
     }
@@ -52,7 +62,7 @@ def _resolve_record(attachment_id: str):
         "Use for documents (.txt, .docx, etc.) when you need verbatim text, specific numbers, "
         "or line-level detail beyond a summary. Optional query filters lines containing the term. "
         "Do NOT call this on multiple ids to summarize many documents — use map_attachment instead. "
-        "For images, use analyze_image instead."
+        "For images, use inline_attachment (direct vision) or analyze_image (worker summary)."
     ),
 )
 def read_attachment_tool(
@@ -112,19 +122,93 @@ def read_attachment_tool(
     return payload
 
 
+def _visibility_guard(attachment_id: str) -> dict[str, Any] | None:
+    state = get_attachment_run_state()
+    if state is None:
+        return None
+    if state.turn_visibility.get(attachment_id) == VISIBILITY_INLINED:
+        return {
+            "status": "error",
+            "message": GUARD_ALREADY_INLINED_MESSAGE,
+            "recovery": "answer_from_context",
+        }
+    if attachment_id in state.injected_inline_ids:
+        return {
+            "status": "error",
+            "message": GUARD_JUST_INLINED_MESSAGE,
+            "recovery": "answer_from_context",
+        }
+    return None
+
+
+@tool(
+    name="inline_attachment",
+    description=INLINE_ATTACHMENT_TOOL_DESCRIPTION,
+)
+async def inline_attachment_tool(
+    attachment_id: Annotated[str, "Chat attachment UUID from attachment facts."],
+) -> dict[str, Any]:
+    blocked = _visibility_guard(attachment_id)
+    if blocked:
+        return blocked
+
+    record, error = _resolve_record(attachment_id)
+    if error:
+        return error
+    assert record is not None
+
+    state = get_attachment_run_state()
+    if state is None:
+        return {"status": "error", "message": "Attachment context is not initialized for this run."}
+
+    if attachment_id in state.pending_inline:
+        return {
+            "status": "ok",
+            "cached": True,
+            "message": "Already scheduled for injection before your next reasoning step.",
+        }
+
+    mentioned_items = [
+        {
+            "id": att_id,
+            "filename": rec.filename,
+            "mime_type": rec.mime_type,
+            "size_bytes": rec.size_bytes,
+        }
+        for att_id, rec in state.attachments.items()
+        if att_id in state.turn_mentioned_ids or att_id == attachment_id
+    ]
+    allowed, reason = check_inline_attachment_allowed(
+        attachment_id=attachment_id,
+        items=mentioned_items,
+        budget=AttachmentBudgetConfig(),
+        already_inlined_ids=state.injected_inline_ids,
+    )
+    if not allowed:
+        return {"status": "error", "message": reason or "Inline not allowed by budget."}
+
+    state.pending_inline[attachment_id] = "scheduled"
+    state.page_in_ids.add(attachment_id)
+    return {
+        "status": "ok",
+        "attachment_id": attachment_id,
+        "filename": record.filename,
+        "message": "Attachment will be visible in your context on the next reasoning step.",
+    }
+
+
 @tool(
     name="analyze_image",
-    description=(
-        "Analyze a chat image attachment and return a text summary (no raw image bytes). "
-        "Use for a single image, diagram, chart, or screenshot when visual detail is needed. "
-        "For summarizing many images, prefer map_attachment per id. "
-        "For documents, use read_attachment instead."
-    ),
+    description=ANALYZE_IMAGE_TOOL_DESCRIPTION,
 )
 async def analyze_image_tool(
     attachment_id: Annotated[str, "Chat attachment UUID from the catalog index."],
     question: Annotated[str | None, "Optional focus question for the analysis."] = None,
 ) -> dict[str, Any]:
+    blocked = _visibility_guard(attachment_id)
+    if blocked:
+        return blocked
+
     record, error = _resolve_record(attachment_id)
     if error:
         return error
@@ -177,8 +261,8 @@ async def analyze_image_tool(
     description=(
         "Summarize one chat attachment by id. Use for multi-file tasks: summarize each relevant id "
         "separately (optionally with focus, e.g. '违约条款'). Returns a text summary only — not full content. "
-        "For verbatim text, numbers, or line-level detail use read_attachment. For a single image detail "
-        "use analyze_image. Do NOT call read_attachment on every id just to summarize many files."
+        "For verbatim text use read_attachment. For direct image vision use inline_attachment when budget allows. "
+        "Do NOT call read_attachment on every id just to summarize many files."
     ),
 )
 async def map_attachment_tool(
@@ -229,6 +313,7 @@ def search_attachments_tool(
 
 ATTACHMENT_PULL_BUILTIN_TOOLS: dict[str, Any] = {
     "read_attachment": read_attachment_tool,
+    "inline_attachment": inline_attachment_tool,
     "analyze_image": analyze_image_tool,
     "map_attachment": map_attachment_tool,
     "search_attachments": search_attachments_tool,

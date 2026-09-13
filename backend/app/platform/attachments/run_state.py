@@ -28,6 +28,16 @@ class AttachmentRunState:
     read_cache: dict[str, str] = field(default_factory=dict)
     map_cache: dict[str, dict[str, Any]] = field(default_factory=dict)
     page_in_ids: set[str] = field(default_factory=set)
+    # Current turn facts (model-driven strategy context)
+    turn_mentioned_ids: list[str] = field(default_factory=list)
+    turn_visibility: dict[str, str] = field(default_factory=dict)
+    turn_inline_costs: dict[str, int] = field(default_factory=dict)
+    turn_inline_budget_limit: int = 0
+    turn_inline_budget_allows_full: bool = True
+    turn_inline_budget_total_est: int = 0
+    # inline_attachment tool: scheduled → injected (per run, idempotent)
+    pending_inline: dict[str, str] = field(default_factory=dict)
+    injected_inline_ids: set[str] = field(default_factory=set)
 
     def record_read(self, cache_key: str, payload: str, *, attachment_id: str | None = None) -> None:
         self.read_cache[cache_key] = payload

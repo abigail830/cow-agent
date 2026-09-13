@@ -95,7 +95,7 @@ def test_same_turn_duplicate_attachment_id_plans_once() -> None:
     assert plan[1].action == MaterializationAction.SKIP
 
 
-def test_pull_mode_second_at_is_thin_not_full() -> None:
+def test_pull_mode_second_at_is_stub_not_full() -> None:
     memory_config = MemoryConfig()
     projected = project_rows_for_visibility([_user_row(sequence=1)], memory_config)
     visibility = build_visibility_index(projected)
@@ -112,4 +112,4 @@ def test_pull_mode_second_at_is_thin_not_full() -> None:
     )
     assert count_image_data_blocks(run_input.contents) == 0
     text = " ".join(getattr(c, "text", "") or "" for c in run_input.contents)
-    assert "read_attachment" in text
+    assert "Attachment reference" in text

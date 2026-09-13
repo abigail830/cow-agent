@@ -13,6 +13,7 @@ PLATFORM_ALWAYS_BUILTIN_TOOL_NAMES = frozenset(
     {
         PLATFORM_TIME_TOOL_NAME,
         "read_attachment",
+        "inline_attachment",
         "analyze_image",
         "map_attachment",
         "search_attachments",

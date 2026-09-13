@@ -9,7 +9,7 @@ from agent_framework import ContextProvider
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories.attachments import AttachmentRepository
-from app.platform.attachments.catalog.formatter import format_catalog_block
+from app.platform.attachments.catalog.facts import format_facts_and_budget_block
 from app.platform.attachments.catalog.gist import bootstrap_gist
 from app.platform.attachments.run_state import AttachmentRecord, attachment_records_from_rows
 from app.platform.memory.memory_config import AttachmentPullConfig
@@ -64,6 +64,6 @@ class AttachmentCatalogContextProvider(ContextProvider):
                     content_hash=row.content_hash,
                 )
             )
-        block = format_catalog_block(records)
+        block = format_facts_and_budget_block(records)
         if block:
             context.extend_instructions(self.source_id, block)

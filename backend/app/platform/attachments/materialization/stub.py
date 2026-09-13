@@ -34,7 +34,7 @@ def format_attachment_stub(
         hash_hint = f" hash={short}"
     version_note = "\n注意：该附件内容已更新，以下为最新版本。" if hash_changed else ""
     reread_hint = (
-        "如需重新查看原文，请调用 read_attachment 或 analyze_image。"
+        "完整内容仍在历史上下文中；若当前轮不可见，可用 inline_attachment / read_attachment / analyze_image（见 attachment facts）。"
         if pull_enabled
         else "如需重新查看原文，请在消息中说明「重新读取/再看一遍」。"
     )
@@ -48,7 +48,10 @@ def format_attachment_stub(
 
 
 def format_thin_attachment_ready(*, filename: str, attachment_id: str) -> str:
-    return f"附件已就绪：{filename} (id={attachment_id})。请通过 read_attachment 或 analyze_image 按需读取完整内容。"
+    return (
+        f"附件已就绪：{filename} (id={attachment_id})。"
+        "当前轮未 inline；详见 attachment facts + budget，由你决定 inline_attachment / worker tools。"
+    )
 
 
 def format_unmaterialized_attachment_notice(*, filename: str, attachment_id: str) -> str:

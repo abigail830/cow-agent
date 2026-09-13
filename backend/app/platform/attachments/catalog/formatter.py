@@ -17,7 +17,7 @@ def format_catalog_block(records: list[AttachmentRecord]) -> str:
         return ""
     sorted_records = sorted(records, key=lambda item: str(item.attachment_id))
     lines = [
-        "[Chat attachments — index only; use read_attachment / analyze_image for full content]",
+        "[Chat attachments — availability index; see attachment facts + budget for visibility and costs]",
     ]
     for record in sorted_records:
         gist = (record.gist or record.filename).replace("\n", " ").strip()

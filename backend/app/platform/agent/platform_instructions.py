@@ -1,5 +1,7 @@
 """Platform-wide agent instructions appended to every agent."""
 
+from app.platform.attachments.visibility_constants import ATTACHMENT_PLATFORM_INSTRUCTIONS_BODY
+
 _PLATFORM_MARKER = "<!-- agent-platform:base -->"
 PLATFORM_INSTRUCTIONS_VERSION_MARKER = _PLATFORM_MARKER
 
@@ -16,18 +18,7 @@ When a cancellation marker appears in history:
 - If the user asks to continue (e.g. 请继续, continue, 按错了, go on), complete the question from before the cancellation using the cancelled partial draft and any tool results already in history. Avoid repeating tool calls whose results are already present unless stale.
 """.strip()
 
-_ATTACHMENT_PULL_INSTRUCTIONS = """
-## Platform: chat attachments (catalog + pull)
-
-Each chat may include uploaded files listed in the attachment catalog injected above.
-- The catalog is an **index only** (filename + short gist). It stays available across long conversations.
-- Summarize or compare themes across files: use `map_attachment` per id (when available); do not pull full text for every id.
-- Verbatim document text, numbers, or line detail: `read_attachment(attachment_id)`.
-- Images, diagrams, or screenshots: `analyze_image(attachment_id)` (returns a text summary).
-- Use `search_attachments(query)` when many files exist and you need to find the right id.
-- Do not invent facts missing from a summary — pull the attachment again when needed.
-- Do not assume attachment content is in history unless you just loaded it in this turn.
-""".strip()
+_ATTACHMENT_PULL_INSTRUCTIONS = ATTACHMENT_PLATFORM_INSTRUCTIONS_BODY
 
 
 def append_platform_instructions(agent_instructions: str) -> str:

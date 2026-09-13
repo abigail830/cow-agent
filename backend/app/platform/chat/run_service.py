@@ -585,6 +585,11 @@ class ChatRunService:
             exclude_from_sequence=user_row.sequence,
         )
         user_metadata = user_row.message_metadata or {}
+        await self._prepare_attachment_run_context(
+            chat_id,
+            memory_config,
+            snapshot_by_id=self._snapshot_text_by_attachment_id(user_metadata),
+        )
         run_input = await self._build_run_input(
             chat,
             content,
@@ -616,12 +621,6 @@ class ChatRunService:
                 reset_attachment_run_state()
                 await run_plugin_end(run_ctx)
                 return memory_result.confirmation
-
-        await self._prepare_attachment_run_context(
-            chat_id,
-            memory_config,
-            snapshot_by_id=self._snapshot_text_by_attachment_id(user_metadata),
-        )
         bundle = await self._build_pooled_bundle(
             chat,
             model_id=model_id,
@@ -684,6 +683,11 @@ class ChatRunService:
             exclude_from_sequence=user_row.sequence,
         )
         user_metadata = user_row.message_metadata or {}
+        await self._prepare_attachment_run_context(
+            chat_id,
+            memory_config,
+            snapshot_by_id=self._snapshot_text_by_attachment_id(user_metadata),
+        )
         run_input = await self._build_run_input(
             chat,
             content,
@@ -728,12 +732,6 @@ class ChatRunService:
                     },
                 }
                 return
-
-        await self._prepare_attachment_run_context(
-            chat_id,
-            memory_config,
-            snapshot_by_id=self._snapshot_text_by_attachment_id(user_metadata),
-        )
 
         run_manager = get_run_manager()
         run = await run_manager.start_run(chat_id, user_row.id)

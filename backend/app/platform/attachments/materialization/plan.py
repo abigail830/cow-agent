@@ -9,7 +9,10 @@ from typing import Any
 from app.platform.attachments.materialization.registry import AttachmentMaterializationRegistry
 from app.platform.attachments.materialization.stub import user_requests_force_reread
 from app.platform.attachments.materialization.visibility import VisibilityIndex
-from app.platform.attachments.services.preflight import preflight_should_force_thin
+from app.platform.attachments.services.preflight import (
+    count_unique_attachment_ids,
+    preflight_allows_full_inline,
+)
 from app.platform.memory.memory_config import AttachmentBudgetConfig, AttachmentPullConfig
 
 
@@ -40,9 +43,17 @@ def compute_attachment_plan(
     """Decide FULL / STUB / THIN for each attachment in one user turn."""
     pull = pull_config or AttachmentPullConfig()
     budget = attachment_budget or AttachmentBudgetConfig()
-    force_reread = user_requests_force_reread(user_text) if not pull.enabled else False
+    force_reread = user_requests_force_reread(user_text)
     item_dicts = [item for item in items if isinstance(item, dict)]
-    force_thin = preflight_should_force_thin(item_dicts, budget) if pull.enabled else False
+    allows_full_inline = preflight_allows_full_inline(item_dicts, budget) if pull.enabled else True
+    unique_attachment_count = count_unique_attachment_ids(item_dicts)
+    # I/O convenience only: single @, first registry encounter, within budget (see docs §3.10).
+    auto_full_on_send = (
+        pull.enabled
+        and pull.first_turn_inline
+        and allows_full_inline
+        and unique_attachment_count == 1
+    )
     seen_ids: set[str] = set()
     plans: list[AttachmentPlanItem] = []
 
@@ -66,20 +77,25 @@ def compute_attachment_plan(
 
         if pull.enabled:
             if entry is None:
-                if force_thin:
-                    action = MaterializationAction.THIN
-                else:
-                    action = (
-                        MaterializationAction.FULL
-                        if pull.first_turn_inline
-                        else MaterializationAction.THIN
-                    )
+                action = (
+                    MaterializationAction.FULL
+                    if auto_full_on_send
+                    else MaterializationAction.THIN
+                )
                 plans.append(AttachmentPlanItem(att_id, action))
                 continue
             if content_hash and entry.content_hash and entry.content_hash != content_hash:
                 plans.append(AttachmentPlanItem(att_id, MaterializationAction.FULL, hash_changed=True))
                 continue
-            plans.append(AttachmentPlanItem(att_id, MaterializationAction.THIN))
+            if force_reread:
+                plans.append(AttachmentPlanItem(att_id, MaterializationAction.FULL))
+                continue
+            anchor = registry.last_full_inject_turn(att_id)
+            if visibility.anchor_still_visible(att_id, anchor):
+                plans.append(AttachmentPlanItem(att_id, MaterializationAction.STUB))
+            else:
+                # Registry has entry — model chooses inline_attachment / worker tools.
+                plans.append(AttachmentPlanItem(att_id, MaterializationAction.THIN))
             continue
 
         full, hash_changed = registry.should_full_materialize(

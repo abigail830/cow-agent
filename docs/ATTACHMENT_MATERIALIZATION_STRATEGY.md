@@ -366,6 +366,140 @@ Send 默认 THIN = 本轮 **起始状态未展开**，不是 **永远不能 FULL
 
 可选优化（非阻塞）：轻量 pre-router 让模型在 send 前建议 inline 列表——增加 latency，首版可不做了。
 
+### 3.10 哲学对齐审查（针对「已 inline 仍调 analyze_image」等场景）
+
+> **核心哲学**：平台管 **预算 + 安全 + 事实（facts）**；模型管 **策略（strategy）**。  
+> 类比：平台暴露 `context_used / budget_remaining`，由模型决定是否 compact history——而不是平台 hardcode「超过 N 轮必 compact」。
+
+#### 3.10.1 新方案已对齐的部分
+
+| 项 | 说明 |
+|----|------|
+| 删除 `≥3` / registry 永久 THIN | 平台不再替模型做「多文件 = 永远摘要」策略 |
+| `[Attachment Budget]` 块 | 类似 token 用量面板，提供成本数字供模型决策 |
+| `inline_attachment` 作为 opt-in | 模型主动请求展开，平台只做 budget 门控 |
+| worker tools 降级为 optional delegate | 不再 prescriptive「图片必 analyze_image」 |
+| replay dedup 与 current-turn 解耦 | registry 只管 history 安全，不锁死本轮能力 |
+
+#### 3.10.2 仍与哲学有张力、需补强的点
+
+**A. Catalog / instructions 仍在「替模型做策略」（当前 prod 根因）**
+
+即使 send 已 FULL inline，catalog 仍写 `index only; use analyze_image for full content`，instructions 写 `Images → analyze_image`——这是 **prescriptive 策略**，不是 **事实陈述**。新方案 §3.6 已改 instructions，但须同步：
+
+- catalog header 改为 **事实型**：`[Chat attachments — availability index]`，**禁止**「use analyze_image for full content」类动宾指引；
+- 每个 id 带 **`visibility` 字段**（见下），而非统一叫「index only」。
+
+**B. Budget 块须升级为「Facts + Budget」——关键补强**
+
+仅有 `inline_cost_est` 不够；必须让模型知道 **当前轮像素是否已在 context 里**，否则仍会误调 tool。建议每 id 必有：
+
+```text
+- id=aaa  filename=page.jpg  kind=image
+  visibility: inlined_this_turn | not_inlined | summary_only_in_history
+  inline_cost_est: 8200
+  inline_allowed: true
+```
+
+| visibility | 模型策略含义（由模型自己决定，平台只陈述事实） |
+|--------------|-----------------------------------------------|
+| `inlined_this_turn` | 像素已在当前 user message；**不应**再调 `inline_attachment` / `analyze_image` |
+| `not_inlined` | 仅 catalog/metadata；要像素 → `inline_attachment`；要廉价摘要 → worker |
+| `summary_only_in_history` | 有 cached summary，无 pixels；是否 re-inline 由模型按 budget 判断 |
+
+**这直接覆盖「单图首 @ + 已 FULL inline 仍 analyze_image」**：平台陈述 `inlined_this_turn`，tool description 加 guard「Do NOT call when visibility=inlined_this_turn」——策略权仍在模型，但 **不再被错误事实误导**。
+
+**C. Send 默认 THIN：是安全默认，不是策略——但需说清与 `@` 的关系**
+
+§3.9 的「Send 默认 THIN」符合哲学（零 payload 起始态，防 4 图首包爆炸），但与用户 `@` 显式引用之间存在产品语义张力：
+
+| 立场 | 行为 | 哲学归类 |
+|------|------|----------|
+| **严格模型策略** | 凡 @ 都 THIN，模型第一动作自选 inline/worker | ✅ 策略全归模型；❌ 单图多一轮 tool latency |
+| **@ = 用户意图信号** | 平台对 **@mentioned** 且 **budget.allow** 的 id **自动 inline**（执行用户附件意图，非替模型选题） | ⚠️ 边界：算「帮用户贴附件」还是「替模型决定看像素」？ |
+
+**已定产品立场（2026-03）** — 保留 `first_turn_inline` auto FULL，但 **钉死边界、显式定性**：
+
+| 定性 | 说明 |
+|------|------|
+| **层级** | **I/O 便利层**（平台代为执行用户明确的单一 `@` 意图），**不是** materialization 策略层 |
+| **触发条件（全部满足）** | `first_turn_inline=true` + pull enabled + **唯一附件** + registry **无** entry + preflight **未** over budget |
+| **禁止扩散** | 多附件、registry 已有 entry、budget 临界/超限 → **必须** THIN/STUB，无条件转交模型（`inline_attachment` / worker） |
+
+```text
+Send 组装（plan.py auto_full_on_send）：
+  1. 默认 THIN（安全）
+  2. 仅当 unique_attachment_count == 1 且 registry 无 entry 且 budget 允许 → auto FULL（I/O 捷径）
+  3. 多附件或 registry 有 entry 或超 budget → THIN；facts visibility=not_inlined；模型自选策略
+
+Facts 块如实写 visibility=inlined_this_turn | not_inlined
+```
+
+**为何保留单图捷径**：该场景无策略分歧（理性模型必选 FULL），多一轮 tool round-trip 只增延迟与误调风险；此前「@ 图只能拿摘要」根因是 **registry 永久 THIN**，不是 auto FULL 本身。
+
+**治理**：`visibility_constants.py` 为 visibility 词汇 SSOT；instructions / tool descriptions / guard 文案均从此渲染；`test_attachment_prompt_governance.py` 断言对齐；`test_auto_full_only_single_attachment_*` 钉死 auto FULL 边界。
+
+**D. §3.8.2 Pin 的「自动 schedule inline」违反哲学——应改**
+
+原文「pin 期间 turn 开头自动 schedule pending_inline」是 **平台替模型决定看像素**，与核心哲学冲突。
+
+改为：
+
+- pin 仅影响 budget 块：`pinned: true, visibility: …, recommendation_note: "user focus"`
+- **不**自动 inline；由模型调 `inline_attachment` 或依赖 replay 豁免保留的历史 pixels
+- replay 豁免（pin 期间不对该 id STUB）属于 **replay 安全/dedup 例外**，不是策略
+
+**E. Tool description 是「互斥事实」，不是「路由规则」**
+
+各 tool 应写 **when NOT to call**（基于 visibility / budget error），而非 **when MUST call**：
+
+```text
+analyze_image: Do NOT call if visibility=inlined_this_turn for this id.
+inline_attachment: Do NOT call if visibility=inlined_this_turn or inline_allowed=false.
+```
+
+#### 3.10.3 场景走查：单图「分析一下内容是啥」
+
+**当前 prod（未改）**
+
+```text
+send: FULL inline（单图 first_turn_inline）
+catalog: "index only → use analyze_image"     ← 错误事实 + 错误策略
+instructions: "Images → analyze_image"       ← prescriptive
+→ 模型调 analyze_image（被诱导），worker 404，再 fallback 自己看
+```
+
+**新方案（补强后）**
+
+```text
+send: @ 1 图 + budget 允许 → auto inline（§3.10.2 C 折中）
+facts: visibility=inlined_this_turn
+instructions: 已 inline → 直接回答，勿调 analyze_image
+→ 模型直接 vision 回答（零 tool）；符合哲学
+
+或（严格 THIN 路径）：
+send: THIN
+facts: visibility=not_inlined, inline_cost=8k, inline_allowed=true
+→ 模型自选 inline_attachment（direct）或 analyze_image（省 context）
+→ 两种均合法；策略归模型，平台不 prescriptive
+```
+
+#### 3.10.4 实施顺序调整（哲学优先）
+
+| 阶段 | 内容 | 理由 |
+|------|------|------|
+| **PR0** | catalog 事实化 + instructions/tool guards + `visibility` 字段（即使尚未有 inline_attachment） | **立刻**修复「已 inline 仍 analyze_image」，不改 plan 大逻辑 |
+| PR1–PR5 | 按 §5 原排期 | 结构性 refactor |
+
+#### 3.10.5 验收补充
+
+| 场景 | 期望 |
+|------|------|
+| 单图 @ + budget 内 auto inline | **0 次** analyze_image；facts=`inlined_this_turn` |
+| 单图 @ + budget 内 THIN 模式 | 模型自选；若选 inline_attachment 则 1 次 tool，若直接… 不可能（无 pixels）→ 必择一 tool 或需 auto inline |
+| 4 图 @ + over budget | facts 列 4 id + over_budget；模型策略性选 1–2 inline + 其余 map |
+| worker 404 | 不 prescriptive 必须 worker；inlined 时本不应调 worker |
+
 ---
 
 ## 4. 与现有文档 / 测试的关系
@@ -390,6 +524,8 @@ Send 默认 THIN = 本轮 **起始状态未展开**，不是 **永远不能 FULL
 | `test_pin_exempts_replay_stub` | pin 有效期内 replay 不对该 id STUB（PR5） |
 | `test_unpin_restores_normal_dedup` | unpin 后恢复常规则 replay dedup（PR5） |
 | 修订 `test_pull_mode_second_at_is_thin_not_full` | send 默认 THIN 仍成立，但 inline tool 可 override |
+| `test_attachment_prompt_governance.py` | visibility SSOT 与 instructions/tools/guard 文案一致；guard 含 `recovery=answer_from_context` |
+| `test_auto_full_only_single_attachment_*` | 多附件 / registry entry / over budget 时 auto FULL **不**生效 |
 
 ### 4.3 验收场景（对齐 MULTI §11）
 
@@ -399,6 +535,7 @@ Send 默认 THIN = 本轮 **起始状态未展开**，不是 **永远不能 FULL
 | TC-E1：DeepSeek 主模型 + 看图 | 可走 `inline_attachment`；orchestrator user message 含 image block |
 | TC-G2：stub 不挡精读 | 模型调 inline / read，不被 STUB 文案误导停止 |
 | 4 图概括 | 模型自选 4×map 或 4×inline（视 budget） |
+| 单图 @ 已 inline | **0 次** analyze_image（PR0/§3.10.3） |
 
 ---
 
@@ -406,8 +543,9 @@ Send 默认 THIN = 本轮 **起始状态未展开**，不是 **永远不能 FULL
 
 | 阶段 | 内容 | 依赖 |
 |------|------|------|
-| **PR1** | 删 `≥3 force_thin`、`entry→永久 THIN`、恢复 pull 下 force_reread；preflight 改纯预算 | — |
-| **PR2** | `[Attachment Budget]` 上下文块注入 | PR1 |
+| **PR0** | catalog/instructions/tool **事实化 + visibility guards**（§3.10.2 A/B/E）；修复已 inline 仍 analyze_image | — |
+| **PR1** | 删 `≥3 force_thin`、`entry→永久 THIN`、恢复 pull 下 force_reread；preflight 改纯预算 | PR0 |
+| **PR2** | `[Attachment Facts + Budget]` 块注入（含 per-id visibility） | PR1 |
 | **PR3** | `inline_attachment` tool + mid-run inject + **同轮幂等防重**（§3.3.1） | PR1, PR2 |
 | **PR4** | 改写 `platform_instructions.py` + tool descriptions | PR3 |
 | **PR5**（可选） | `pin_attachment` / `unpin_attachment` + **replay dedup 豁免**（§3.8.2）、budget 超限 UX | PR4 |

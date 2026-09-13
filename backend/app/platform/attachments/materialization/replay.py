@@ -7,6 +7,7 @@ from typing import Any
 
 from agent_framework import Content, Message
 
+from app.platform.attachments.catalog.facts import record_turn_materialization_facts
 from app.platform.attachments.materialization.plan import MaterializationAction, compute_attachment_plan
 from app.platform.attachments.materialization.registry import (
     AttachmentMaterializationRegistry,
@@ -53,6 +54,12 @@ def build_user_attachment_contents(
         pull_config=pull,
         attachment_budget=attachment_budget,
     )
+    if pull.enabled:
+        record_turn_materialization_facts(
+            mentioned_items=items,
+            plan=plan,
+            budget=attachment_budget,
+        )
 
     text_blocks: list[str] = []
     binary_contents: list[Content] = []
