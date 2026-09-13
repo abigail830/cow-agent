@@ -8,25 +8,19 @@ import { isContentDocumentArtifact, isDiagramArtifact, isSlideDeckArtifact } fro
 type Props = {
   spec: ArtifactSpec
   expanded?: boolean
-  createdAt?: string | null
   onExpand?: (spec: ArtifactSpec) => void
 }
 
 const PREVIEW_MAX_HEIGHT = 280
 
-export function ArtifactBubble({ spec, expanded = false, createdAt, onExpand }: Props) {
+export function ArtifactBubble({ spec, expanded = false, onExpand }: Props) {
   if (isDiagramArtifact(spec)) {
     return <DiagramArtifactCard spec={spec} expanded={expanded} onExpand={onExpand} />
   }
 
   if (isSlideDeckArtifact(spec)) {
     return (
-      <SlideDeckArtifactCard
-        spec={spec}
-        expanded={expanded}
-        createdAt={createdAt}
-        onExpand={onExpand}
-      />
+      <SlideDeckArtifactCard spec={spec} expanded={expanded} onExpand={onExpand} />
     )
   }
 

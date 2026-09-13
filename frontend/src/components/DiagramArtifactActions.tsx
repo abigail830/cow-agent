@@ -38,12 +38,41 @@ export function DiagramArtifactActions({
     }
   }
 
+  if (variant === 'card') {
+    return (
+      <div className="artifact-inline-card-actions diagram-artifact-card-actions" role="toolbar" aria-label="Diagram actions">
+        <div className="artifact-inline-action-group">
+          <button
+            type="button"
+            className={`artifact-inline-action-btn${expanded ? ' artifact-inline-action-btn-active' : ''}`}
+            aria-label={expanded ? 'Showing in side panel' : 'Open preview panel'}
+            title={expanded ? 'Open in side panel' : 'Preview'}
+            aria-pressed={expanded}
+            onClick={() => onExpand?.(spec)}
+          >
+            <VizMaximizeIcon />
+            <span>Preview</span>
+          </button>
+          <span className="artifact-inline-action-divider" aria-hidden />
+          <button
+            type="button"
+            className="artifact-inline-action-btn"
+            aria-label={downloading === 'svg' ? 'Downloading SVG' : 'Download SVG'}
+            title={downloading === 'svg' ? 'Downloading…' : 'Download'}
+            disabled={isDownloading}
+            aria-busy={downloading === 'svg'}
+            onClick={() => void handleDownload('svg')}
+          >
+            {downloading === 'svg' ? <LoadingSpinner size="sm" /> : <ArtifactDownloadIcon />}
+            <span>Download</span>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div
-      className={`diagram-artifact-card-actions${variant === 'panel' ? ' diagram-artifact-panel-actions' : ''}`}
-      role="toolbar"
-      aria-label="Diagram actions"
-    >
+    <div className="diagram-artifact-card-actions diagram-artifact-panel-actions" role="toolbar" aria-label="Diagram actions">
       <button
         type="button"
         className="diagram-artifact-action-btn"
@@ -79,42 +108,28 @@ export function DiagramArtifactActions({
         {downloading === 'svg' ? <LoadingSpinner size="sm" /> : <ArtifactDownloadIcon />}
         <span>SVG</span>
       </button>
-      {variant === 'card' ? (
-        <button
-          type="button"
-          className={`diagram-artifact-action-btn${expanded ? ' diagram-artifact-action-btn-active' : ''}`}
-          aria-label={expanded ? 'Showing in side panel' : 'Open preview panel'}
-          title={expanded ? 'Open in side panel' : 'Open preview panel'}
-          aria-pressed={expanded}
-          onClick={() => onExpand?.(spec)}
+      <button
+        type="button"
+        className="diagram-artifact-action-btn"
+        aria-label="Close preview"
+        title="Close"
+        onClick={onClose}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          aria-hidden
         >
-          <VizMaximizeIcon />
-          <span>Preview</span>
-        </button>
-      ) : (
-        <button
-          type="button"
-          className="diagram-artifact-action-btn"
-          aria-label="Close preview"
-          title="Close"
-          onClick={onClose}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="18"
-            height="18"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            aria-hidden
-          >
-            <path d="M18 6 6 18" />
-            <path d="m6 6 12 12" />
-          </svg>
-          <span>Close</span>
-        </button>
-      )}
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </svg>
+        <span>Close</span>
+      </button>
     </div>
   )
 }

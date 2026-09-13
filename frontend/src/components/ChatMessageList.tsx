@@ -78,7 +78,6 @@ function renderBlock(
       <div className="chat-artifact-row">
         <ArtifactBubble
           spec={block.spec}
-          createdAt={block.createdAt}
           expanded={isArtifactExpanded(block.spec, proposalPanelOpen, expandedArtifactId)}
           onExpand={onExpandArtifact}
         />
