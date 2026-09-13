@@ -51,6 +51,8 @@ import {
   isPendingAttachmentId,
   readyAttachments,
   type ChatAttachmentListItem,
+  mergeChatAttachmentList,
+  replacePendingAttachment,
 } from '../lib/attachmentUpload'
 import { isAttachmentReferenceCompatible } from '../lib/attachmentCompat'
 import {
@@ -850,8 +852,7 @@ export function ChatPage() {
           : null
         if (latestChatId !== activeChatId) return
         setChatAttachments((prev) => {
-          const inFlight = prev.filter((row) => row.upload_status === 'uploading')
-          const next = [...inFlight, ...rows]
+          const next = mergeChatAttachmentList(prev, rows)
           chatAttachmentsRef.current = next
           return next
         })
@@ -1142,9 +1143,7 @@ export function ChatPage() {
             patchChatAttachments((prev) => prev.filter((row) => row.id !== pendingId))
             return
           }
-          patchChatAttachments((prev) =>
-            prev.map((row) => (row.id === pendingId ? uploaded : row)),
-          )
+          patchChatAttachments((prev) => replacePendingAttachment(prev, pendingId, uploaded))
         } catch (e) {
           patchChatAttachments((prev) =>
             prev.map((row) =>
