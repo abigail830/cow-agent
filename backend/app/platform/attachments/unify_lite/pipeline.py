@@ -84,3 +84,11 @@ def format_extracted_attachment_block(item: ExtractedAttachment, *, size_bytes: 
     if item.truncated:
         header += "\n_Content truncated._"
     return f"{header}\n```\n{item.content}\n```"
+
+
+def wrap_unify_lite_attachment_section(text_blocks: list[str]) -> str:
+    """Format extracted attachment blocks into the unify-lite delimiter section."""
+    if not text_blocks:
+        return ""
+    attachment_section = "\n\n".join(text_blocks)
+    return f"---\n[Attachments — unify-lite]\n\n{attachment_section}\n---"

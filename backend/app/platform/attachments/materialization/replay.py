@@ -17,7 +17,7 @@ from app.platform.attachments.materialization.stub import (
 )
 from app.platform.attachments.materialization.stub import user_requests_force_reread
 from app.platform.attachments.native.maf_content import metadata_attachment_to_maf_content
-from app.platform.attachments.unify_lite.pipeline import format_extracted_attachment_block
+from app.platform.attachments.unify_lite.pipeline import format_extracted_attachment_block, wrap_unify_lite_attachment_section
 from app.platform.attachments.unify_lite.types import ExtractedAttachment
 from app.platform.attachments.unify_lite.validation import is_unify_lite_image, is_unify_lite_text
 
@@ -94,9 +94,9 @@ def build_user_attachment_contents(
 
     contents: list[Content] = []
     if text_blocks:
-        section = "\n\n".join(text_blocks)
-        if attachment_mode == "unify_lite":
-            section = f"---\n[Attachments — unify-lite]\n\n{section}\n---"
+        section = wrap_unify_lite_attachment_section(text_blocks)
+        if attachment_mode != "unify_lite":
+            section = "\n\n".join(text_blocks)
         contents.append(Content.from_text(section))
 
     contents.extend(binary_contents)
