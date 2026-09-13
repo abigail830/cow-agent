@@ -19,7 +19,9 @@
 | 前端 @ 引用 | `frontend/src/lib/attachmentMentions.ts` |
 | 体积限制 | `backend/app/config.py` → `ATTACHMENT_MAX_*` |
 
-**相关文档**：[`MULTI_ATTACHMENT_CONTEXT.md`](MULTI_ATTACHMENT_CONTEXT.md) — 多附件爆炸、Map-Reduce 实现（§4.7）、**验收场景 §11**。状态 SSOT 在本文件 §1.3。
+**相关文档**：
+- [`MULTI_ATTACHMENT_CONTEXT.md`](MULTI_ATTACHMENT_CONTEXT.md) — 多附件爆炸、Map-Reduce 实现（§4.7）、**验收场景 §11**
+- [`ATTACHMENT_MATERIALIZATION_STRATEGY.md`](ATTACHMENT_MATERIALIZATION_STRATEGY.md) — FULL/THIN 策略重构（预算护栏 + 模型决策）；状态 SSOT 仍在本文件 §1.3
 
 **历史文档**：`docs/UNIFY_LITE.md` 为 v0 调研稿；**实现状态以本文 §1.3 为准**。
 
