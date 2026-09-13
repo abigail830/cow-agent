@@ -8,7 +8,12 @@ from app.platform.memory.projectors.utils import ensure_dict, stringify_function
 from app.platform.attachments.attachment_adapters import metadata_attachment_to_maf_content
 from app.platform.attachments.materialization.registry import AttachmentMaterializationRegistry
 from app.platform.attachments.materialization.replay import build_replay_user_message_contents
+from app.platform.attachments.materialization.visibility import (
+    VisibilityIndex,
+    project_rows_for_visibility,
+)
 from app.platform.agent.platform_instructions import RUN_CANCELLED_USER_TEXT
+from app.platform.memory.memory_config import MemoryConfig
 
 PLATFORM_MESSAGE_TYPE_KEY = "platform_message_type"
 PLATFORM_METADATA_KEY = "platform_metadata"
@@ -82,18 +87,25 @@ def _attachments_to_contents(metadata: dict[str, Any], *, chat_id: uuid.UUID) ->
     return contents
 
 
-def to_maf_messages(rows: list[dict[str, Any]]) -> list[Message]:
+def to_maf_messages(
+    rows: list[dict[str, Any]],
+    *,
+    memory_config: MemoryConfig | None = None,
+) -> list[Message]:
     """Rebuild MAF history with Anthropic-compatible grouping.
 
     Assistant text/tool_use blocks are coalesced into one assistant message.
     Tool results immediately follow as separate tool-role messages.
     Duplicate tool rows (audit + persist) are skipped by call_id.
     """
+    projected = project_rows_for_visibility(rows, memory_config)
     messages: list[Message] = []
     assistant_contents: list[Content] = []
     seen_tool_calls: set[str] = set()
     seen_tool_results: set[str] = set()
     attachment_registry = AttachmentMaterializationRegistry()
+    visibility = VisibilityIndex()
+    pull_config = memory_config.attachment_pull if memory_config else None
 
     pending_assistant_meta: dict[str, Any] = {}
 
@@ -114,7 +126,7 @@ def to_maf_messages(rows: list[dict[str, Any]]) -> list[Message]:
             assistant_contents = []
             pending_assistant_meta = {}
 
-    for row in rows:
+    for row in projected:
         message_type = row["message_type"]
         role = row["role"]
         metadata = row.get("metadata") or {}
@@ -128,7 +140,12 @@ def to_maf_messages(rows: list[dict[str, Any]]) -> list[Message]:
                 user_contents.append(Content.from_text(text))
             if _attachment_dicts(metadata):
                 user_contents.extend(
-                    build_replay_user_message_contents(row, registry=attachment_registry)
+                    build_replay_user_message_contents(
+                        row,
+                        registry=attachment_registry,
+                        visibility=visibility,
+                        pull_config=pull_config,
+                    )
                 )
             if not user_contents:
                 user_contents.append(Content.from_text(""))

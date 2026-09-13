@@ -1132,10 +1132,12 @@ export function ChatPage() {
   )
 
   const handleAttachmentSelected = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+    const files = Array.from(event.target.files ?? [])
     event.target.value = ''
-    if (!file) return
-    uploadToLibrary(file)
+    if (files.length === 0) return
+    for (const file of files) {
+      uploadToLibrary(file)
+    }
   }
 
   const handleComposerPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
@@ -1859,6 +1861,7 @@ export function ChatPage() {
                       <input
                         ref={fileInputRef}
                         type="file"
+                        multiple
                         className="hidden"
                         accept={composerAttachmentAccept}
                         onChange={(e) => void handleAttachmentSelected(e)}

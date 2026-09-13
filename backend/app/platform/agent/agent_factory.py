@@ -5,10 +5,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import AgentModel
+from app.config import get_settings
 from app.platform.memory.compaction import build_platform_compaction
 from app.platform.memory.long_term.context_provider import LongTermMemoryProvider
 from app.platform.memory.memory_config import parse_memory_config
 from app.platform.memory.postgres_history import PostgresHistoryProvider
+from app.platform.attachments.catalog.context_provider import AttachmentCatalogContextProvider
 from app.platform.agent.agent_bundle import AgentBundle
 from app.platform.mcp.mcp_pool import McpPoolHandle
 from app.platform.hooks.hook_config import normalize_hooks
@@ -60,6 +62,13 @@ class AgentFactory:
         model_name = model_entry.deployment
 
         memory_config = parse_memory_config(row.config)
+        if not get_settings().attachment_pull_enabled:
+            from dataclasses import replace
+
+            memory_config = replace(
+                memory_config,
+                attachment_pull=replace(memory_config.attachment_pull, enabled=False),
+            )
         store = session_store or SessionStore(self._db)
         history = PostgresHistoryProvider(
             self._db,
@@ -78,6 +87,14 @@ class AgentFactory:
                     agent_id=agent_id,
                     agent_slug=row.slug or row.name,
                     memory_config=memory_config,
+                )
+            )
+        if memory_config.attachment_pull.enabled and chat_id is not None:
+            context_providers.append(
+                AttachmentCatalogContextProvider(
+                    self._db,
+                    chat_id=chat_id,
+                    pull_config=memory_config.attachment_pull,
                 )
             )
         if compaction_provider is not None:
@@ -128,9 +145,11 @@ class AgentFactory:
             *mcp_tools,
         ]
 
+        instructions = append_platform_instructions(row.instructions)
+
         agent = self._registry.create_agent(
             name=row.name,
-            instructions=append_platform_instructions(row.instructions),
+            instructions=instructions,
             model_provider=provider,
             model_name=model_name,
             context_providers=context_providers,

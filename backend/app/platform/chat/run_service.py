@@ -30,6 +30,7 @@ from app.platform.attachments.materialization import (
     enrich_metadata_with_extracted_snapshots,
 )
 from app.platform.attachments.materialization.replay import build_materialized_user_message
+from app.platform.attachments.materialization.visibility import build_visibility_index, project_rows_for_visibility
 from app.platform.attachments.service import AttachmentService
 from app.platform.llm.chat_model import resolve_chat_model
 from app.platform.llm.stream_errors import user_facing_stream_error
@@ -54,6 +55,13 @@ from app.shared.artifacts.context import get_run_artifact_state
 from app.agent_specific.proposal.context import get_run_proposal_state
 from app.agent_specific.proposal.artifact_spec import ArtifactSpec
 from app.agent_specific.viz.context import get_run_viz_state, init_run_viz_state, reset_run_viz_state
+from app.platform.attachments.catalog.gist import ensure_attachment_gists
+from app.platform.attachments.run_state import (
+    attachment_records_from_rows,
+    init_attachment_run_state,
+    reset_attachment_run_state,
+)
+from app.config import get_settings
 from app.agent_specific.viz.spec import VizSpec
 
 logger = logging.getLogger(__name__)
@@ -193,6 +201,7 @@ class ChatRunService:
         user_metadata: dict[str, Any] | None = None,
         turn_sequence: int = 0,
         prior_rows: list[dict[str, Any]] | None = None,
+        memory_config: MemoryConfig | None = None,
     ):
         metadata = user_metadata or link_attachments_metadata(
             {},
@@ -202,14 +211,23 @@ class ChatRunService:
         if not attachments:
             return content.strip() or content
         registry = AttachmentMaterializationRegistry()
+        pull_config = memory_config.attachment_pull if memory_config else None
+        projected_prior = project_rows_for_visibility(prior_rows or [], memory_config)
+        visibility = build_visibility_index(projected_prior)
         if prior_rows:
-            registry.seed_from_prior_rows(prior_rows)
+            registry.seed_from_prior_rows(
+                prior_rows,
+                memory_config=memory_config,
+                pull_config=pull_config,
+            )
         return build_materialized_user_message(
             content,
             metadata,
             chat_id=chat.id,
             turn_sequence=turn_sequence,
             registry=registry,
+            visibility=visibility,
+            pull_config=pull_config,
         )
 
     async def _resolve_run_model(self, chat: Chat) -> tuple[str, str]:
@@ -355,7 +373,48 @@ class ChatRunService:
 
     async def _memory_config_for_chat(self, chat: Chat) -> MemoryConfig:
         agent = await self._db.get(AgentModel, chat.agent_id)
-        return parse_memory_config(agent.config if agent else {})
+        memory_config = parse_memory_config(agent.config if agent else {})
+        if not get_settings().attachment_pull_enabled:
+            from dataclasses import replace
+
+            memory_config = replace(
+                memory_config,
+                attachment_pull=replace(memory_config.attachment_pull, enabled=False),
+            )
+        return memory_config
+
+    @staticmethod
+    def _snapshot_text_by_attachment_id(metadata: dict[str, Any]) -> dict[str, str]:
+        snapshots: dict[str, str] = {}
+        attachments = metadata.get("attachments")
+        if not isinstance(attachments, list):
+            return snapshots
+        for item in attachments:
+            if not isinstance(item, dict):
+                continue
+            att_id = str(item.get("id") or "")
+            snapshot = item.get("extracted_snapshot")
+            if att_id and isinstance(snapshot, dict) and snapshot.get("text"):
+                snapshots[att_id] = str(snapshot["text"])
+        return snapshots
+
+    async def _prepare_attachment_run_context(
+        self,
+        chat_id: uuid.UUID,
+        memory_config: MemoryConfig,
+        *,
+        snapshot_by_id: dict[str, str] | None = None,
+    ) -> None:
+        if not memory_config.attachment_pull.enabled:
+            reset_attachment_run_state()
+            return
+        await ensure_attachment_gists(self._db, chat_id, snapshot_by_id=snapshot_by_id)
+        repo = AttachmentRepository(self._db)
+        rows = await repo.list_for_chat(chat_id)
+        init_attachment_run_state(
+            chat_id=chat_id,
+            attachments=attachment_records_from_rows(rows),
+        )
 
     async def _agent_slug_for_chat(self, chat: Chat) -> str | None:
         agent = await self._db.get(AgentModel, chat.agent_id)
@@ -507,6 +566,7 @@ class ChatRunService:
             user_metadata=user_metadata,
             turn_sequence=user_row.sequence,
             prior_rows=prior_rows,
+            memory_config=memory_config,
         )
         memory_result = await try_handle_memory_command(
             self._db,
@@ -526,9 +586,15 @@ class ChatRunService:
             await self._db.commit()
             if memory_result.is_pure_command:
                 reset_run_viz_state()
+                reset_attachment_run_state()
                 await run_plugin_end(run_ctx)
                 return memory_result.confirmation
 
+        await self._prepare_attachment_run_context(
+            chat_id,
+            memory_config,
+            snapshot_by_id=self._snapshot_text_by_attachment_id(user_metadata),
+        )
         bundle = await self._build_pooled_bundle(
             chat,
             model_id=model_id,
@@ -554,6 +620,7 @@ class ChatRunService:
             raise
         finally:
             reset_run_viz_state()
+            reset_attachment_run_state()
             await run_plugin_end(run_ctx)
 
     async def stream_message(
@@ -598,6 +665,7 @@ class ChatRunService:
             user_metadata=user_metadata,
             turn_sequence=user_row.sequence,
             prior_rows=prior_rows,
+            memory_config=memory_config,
         )
         memory_result = await try_handle_memory_command(
             self._db,
@@ -621,6 +689,7 @@ class ChatRunService:
             }
             if memory_result.is_pure_command:
                 reset_run_viz_state()
+                reset_attachment_run_state()
                 await run_plugin_end(run_ctx)
                 turn_messages = await self._list_turn_messages_since(chat_id, user_row.sequence)
                 yield {
@@ -632,6 +701,12 @@ class ChatRunService:
                     },
                 }
                 return
+
+        await self._prepare_attachment_run_context(
+            chat_id,
+            memory_config,
+            snapshot_by_id=self._snapshot_text_by_attachment_id(user_metadata),
+        )
 
         run_manager = get_run_manager()
         run = await run_manager.start_run(chat_id, user_row.id)
@@ -760,6 +835,7 @@ class ChatRunService:
             raise
         finally:
             reset_run_viz_state()
+            reset_attachment_run_state()
             await run_plugin_end(run_ctx)
             await run_manager.complete(run.run_id)
 

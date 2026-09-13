@@ -137,6 +137,7 @@ class ModelProviderRegistry:
         middleware: list | None = None,
         tools: list | None = None,
         compaction_strategy: object | None = None,
+        default_options: dict | None = None,
         require_per_service_call_history_persistence: bool = False,
     ) -> Agent:
         if model_provider == ModelProvider.AZURE_OPENAI:
@@ -152,11 +153,15 @@ class ModelProviderRegistry:
         else:
             raise NotImplementedError(f"Provider {model_provider} not implemented")
 
-        default_options: dict | None = None
+        merged_default_options: dict | None = None
         if model_provider == ModelProvider.AZURE_ANTHROPIC:
-            default_options = {"max_tokens": 16000}
+            merged_default_options = {"max_tokens": 16000}
             if self._settings.claude_enable_thinking:
-                default_options["thinking"] = {"type": "enabled", "budget_tokens": 1024}
+                merged_default_options["thinking"] = {"type": "enabled", "budget_tokens": 1024}
+            if default_options:
+                merged_default_options.update(default_options)
+        elif default_options:
+            merged_default_options = dict(default_options)
 
         return Agent(
             client=client,
@@ -165,7 +170,7 @@ class ModelProviderRegistry:
             context_providers=context_providers,
             middleware=middleware,
             tools=tools,
-            default_options=default_options,
+            default_options=merged_default_options,
             compaction_strategy=compaction_strategy,
             require_per_service_call_history_persistence=require_per_service_call_history_persistence,
         )

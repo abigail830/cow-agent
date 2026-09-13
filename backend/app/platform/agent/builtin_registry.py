@@ -12,6 +12,7 @@ from app.agent_specific.proposal.tools import PROPOSAL_BUILTIN_TOOLS
 from app.agent_specific.viz.tools import VIZ_BUILTIN_TOOLS
 from app.agent_specific.yl_worker2.tools import YL_WORKER2_TOOLS
 from app.platform.agent.platform_time import platform_time
+from app.platform.attachments.tools.pull_tools import ATTACHMENT_PULL_BUILTIN_TOOLS
 
 _TOOL_FRAGMENTS: tuple[dict[str, Callable[..., Any]], ...] = (
     PROPOSAL_BUILTIN_TOOLS,
@@ -26,6 +27,7 @@ _TOOL_FRAGMENTS: tuple[dict[str, Callable[..., Any]], ...] = (
 
 def _merge_tool_fragments() -> dict[str, Callable[..., Any]]:
     merged: dict[str, Callable[..., Any]] = {"platform_time": platform_time}
+    merged.update(ATTACHMENT_PULL_BUILTIN_TOOLS)
     for fragment in _TOOL_FRAGMENTS:
         merged.update(fragment)
     return merged

@@ -120,7 +120,11 @@ class Settings(BaseSettings):
     attachment_max_total_bytes_per_message: int = Field(
         default=50 * 1024 * 1024, validation_alias="ATTACHMENT_MAX_TOTAL_BYTES_PER_MESSAGE"
     )
-
+    attachment_pull_enabled: bool = Field(default=True, validation_alias="ATTACHMENT_PULL_ENABLED")
+    attachment_lazy_extract_timeout_seconds: float = Field(
+        default=5.0,
+        validation_alias="ATTACHMENT_LAZY_EXTRACT_TIMEOUT_SECONDS",
+    )
     # Diagram rendering (agents/napkin-architect)
     plantuml_renderer: str = Field(default="kroki", validation_alias="PLANTUML_RENDERER")
     kroki_url: str = Field(default="https://kroki.io", validation_alias="KROKI_URL")

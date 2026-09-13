@@ -57,12 +57,15 @@ def test_compaction_strips_image_data_from_old_turn() -> None:
     ).get("text", "")
 
 
-def test_history_projection_strips_user_attachments() -> None:
+def test_history_projection_strips_old_user_attachments() -> None:
     cfg = parse_memory_config({"memory": {"slim": {"enabled": True}}})
     projection = HistoryProjection()
-    row = _image_user_row(1)
-    row["metadata"]["attachments"][0]["extracted_snapshot"]["text"] = "Long extract text"
-    projected = projection.project_rows([row], cfg)[0]
+    rows = []
+    for seq in (1, 3, 5, 7):
+        row = _image_user_row(seq)
+        row["metadata"]["attachments"][0]["extracted_snapshot"]["text"] = f"Body turn {seq}"
+        rows.append(row)
+    projected = projection.project_rows(rows, cfg)[0]
     assert projected["metadata"]["attachments"][0].get("compaction_placeholder") is True
 
 

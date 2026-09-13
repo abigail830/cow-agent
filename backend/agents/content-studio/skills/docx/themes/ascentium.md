@@ -10,6 +10,18 @@ Standalone brand spec for **Ascentium** Word documents. Do **not** mix with Insp
 
 Professional, confident, clear. Structured hierarchy; readable body copy; orange used for emphasis and CTAs, not overwhelming page fills.
 
+## Generation safety (docx-js)
+
+Read before writing the generator script. More gotchas in `../SKILL.md`.
+
+| Rule | Do |
+|------|-----|
+| **`TextRun.text` must be a string** | Always `{ text: String(value) }` — especially table cells, counts, dates, IDs. Never pass a number/boolean directly. |
+| **No `\n` in text** | One block per `Paragraph`. Use `PageBreak` inside a paragraph for page breaks. |
+| **Font names with spaces** | Safe: `Poppins`, `Calibri`, `Cambria`. Risky as `TextRun.font` or embedded fonts: `Noto Sans SC`, `Microsoft YaHei` (can corrupt the package — [docx-js #2521](https://github.com/dolanmiu/docx/issues/2521)). Prefer single-token names; split Latin/CJK into separate runs (see [CJK / mixed script](#cjk--mixed-script)). |
+| **`HeadingLevel` alone is not enough** | Built-in heading styles default to Word blue (`2E74B5`). Override in `styles.paragraphStyles` **or** set `color` + `font` on every heading `TextRun`. |
+| **Font fallback** | docx-js has no CSS-style fallback chain. Use `fontFallbackBody` / `fontFallbackTitle` as the primary `font` when Poppins may be missing, or split runs by script (below). |
+
 ## Colours (docx-js — hex **without** `#`)
 
 | Role | Name | Hex |
@@ -34,18 +46,38 @@ Professional, confident, clear. Structured hierarchy; readable body copy; orange
 
 | Element | Font | Size (pt) | docx-js |
 |---------|------|-----------|---------|
-| Document title | Poppins | 28–32 | custom paragraph, bold |
-| Heading 1 | Poppins | 22–24 | `HeadingLevel.HEADING_1` |
-| Heading 2 | Poppins | 18–20 | `HeadingLevel.HEADING_2` |
-| Heading 3 | Poppins | 14–16 | `HeadingLevel.HEADING_3` |
+| Document title | Poppins | 28–32 | custom paragraph style, bold |
+| Heading 1 | Poppins | 22–24 | `HeadingLevel.HEADING_1` + brand colour |
+| Heading 2 | Poppins | 18–20 | `HeadingLevel.HEADING_2` + brand colour |
+| Heading 3 | Poppins | 14–16 | `HeadingLevel.HEADING_3` + brand colour |
 | Body | Poppins | 11–12 | default paragraphs |
 | Emphasis | Poppins | 11–12 | bold or `bold: true` |
-| Chinese body | Noto Sans SC | 11–12 | same runs when needed |
+| Chinese body | Noto Sans SC | 11–12 | **separate `TextRun`** — see CJK section |
 | Caption / footer | Poppins | 9–10 | muted colour `878A8A` |
 
-If Poppins is not available on the target machine, fall back to **Calibri** (body) and **Cambria** (headings) while keeping the Ascentium palette.
+If Poppins is not installed on the target machine, use **`fontFallbackBody` (Calibri)** for body and **`fontFallbackTitle` (Cambria)** for headings while keeping the Ascentium palette.
 
-**TOC:** use built-in `HeadingLevel.HEADING_1` / `HEADING_2` for sections that should appear in a table of contents.
+**TOC:** use `HeadingLevel.HEADING_1` / `HEADING_2` for sections that should appear in a table of contents.
+
+## CJK / mixed script
+
+**Poppins has no CJK glyphs.** Do not put Chinese and Latin in the same `TextRun` when the run uses `font: C.fontBody`.
+
+```javascript
+const HAS_CJK = /[\u4e00-\u9fff\u3400-\u4dbf]/;
+function fontFor(text) {
+  return HAS_CJK.test(text) ? C.fontCjk : C.fontBody;
+}
+
+// Latin run
+new TextRun({ text: 'Audit scope: ', font: C.fontBody, size: 22, color: C.midnightGreen })
+// Chinese run (separate)
+new TextRun({ text: '质量管理体系', font: C.fontCjk, size: 22, color: C.midnightGreen })
+```
+
+**Tables with Chinese:** do not set Poppins on every cell. Either omit `font` on mixed cells (Word substitutes) or set `font: C.fontCjk` on cells that contain Chinese. Never use Poppins alone in a cell with CJK text — glyphs show as □.
+
+**`fontCjk` note:** brand face is `Noto Sans SC` (contains a space). For maximum open compatibility, use `fontCjkFallback` (`Microsoft YaHei`, also spaced) only on Chinese-only runs, or omit `font` and let Word pick a system CJK face.
 
 ## Document patterns
 
@@ -75,9 +107,10 @@ const ASCENTIUM = {
   errorRed: 'DC3545',
   fontTitle: 'Poppins',
   fontBody: 'Poppins',
-  fontCjk: 'Noto Sans SC',
-  fontFallbackTitle: 'Cambria',
-  fontFallbackBody: 'Calibri',
+  fontCjk: 'Noto Sans SC',           // brand CJK — spaced name; Chinese-only runs
+  fontCjkFallback: 'Microsoft YaHei', // widely installed CJK; spaced name
+  fontFallbackTitle: 'Cambria',       // use when Poppins unavailable
+  fontFallbackBody: 'Calibri',        // use when Poppins unavailable
 };
 ```
 
@@ -86,8 +119,7 @@ const ASCENTIUM = {
 ```javascript
 const fs = require('fs');
 const {
-  Document, Packer, Paragraph, TextRun, HeadingLevel,
-  AlignmentType, ShadingType, BorderStyle,
+  Document, Packer, Paragraph, TextRun, HeadingLevel, ShadingType,
 } = require('docx');
 
 const C = ASCENTIUM;
@@ -107,6 +139,25 @@ const doc = new Document({
         run: { size: 56, bold: true, font: C.fontTitle, color: C.midnightGreen },
         paragraph: { spacing: { after: 200 } },
       },
+      // Override built-in heading colours (default is Word blue 2E74B5)
+      {
+        id: 'Heading1',
+        name: 'Heading 1',
+        basedOn: 'Normal',
+        next: 'Normal',
+        quickFormat: true,
+        run: { size: 32, bold: true, font: C.fontTitle, color: C.midnightGreen },
+        paragraph: { spacing: { before: 240, after: 120 }, outlineLevel: 0 },
+      },
+      {
+        id: 'Heading2',
+        name: 'Heading 2',
+        basedOn: 'Normal',
+        next: 'Normal',
+        quickFormat: true,
+        run: { size: 26, bold: true, font: C.fontTitle, color: C.midnightGreen },
+        paragraph: { spacing: { before: 200, after: 80 }, outlineLevel: 1 },
+      },
     ],
   },
   sections: [{
@@ -124,10 +175,22 @@ const doc = new Document({
       }),
       new Paragraph({
         heading: HeadingLevel.HEADING_1,
-        children: [new TextRun({ text: 'Section one', bold: true, font: C.fontTitle })],
+        children: [new TextRun({
+          text: 'Section one',
+          bold: true,
+          font: C.fontTitle,
+          color: C.midnightGreen,
+        })],
       }),
       new Paragraph({
-        children: [new TextRun('Body paragraph with Ascentium styling.')],
+        children: [new TextRun({ text: 'Body paragraph with Ascentium styling.' })],
+      }),
+      // CJK: separate runs — do not mix scripts under Poppins
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Scope: ', font: C.fontBody, size: 22, color: C.midnightGreen }),
+          new TextRun({ text: '示例中文', font: C.fontCjk, size: 22, color: C.midnightGreen }),
+        ],
       }),
     ],
   }],
@@ -136,6 +199,6 @@ const doc = new Document({
 Packer.toBuffer(doc).then((buf) => fs.writeFileSync('report.docx', buf));
 ```
 
-**Table header example:** cell shading `{ type: ShadingType.CLEAR, fill: C.midnightGreen, color: 'auto' }`, run colour `FFFFFF`.
+**Table header example:** cell shading `{ type: ShadingType.CLEAR, fill: C.midnightGreen, color: 'auto' }`, run colour `FFFFFF`. Cell text: `{ text: String(cellValue) }` — never a raw number.
 
 **Hyperlinks / emphasis:** `color: C.vibrantOrange` on `TextRun` for links and CTAs.

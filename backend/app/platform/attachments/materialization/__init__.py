@@ -8,6 +8,9 @@ from app.platform.attachments.materialization.replay import (
     build_user_attachment_contents,
     count_image_data_blocks,
 )
+from app.platform.attachments.materialization.on_read import (
+    materialize_row_attachments_sync,
+)
 from app.platform.attachments.materialization.snapshot import (
     enrich_metadata_with_extracted_snapshots,
     snapshot_from_extracted,

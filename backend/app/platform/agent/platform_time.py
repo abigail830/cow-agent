@@ -9,7 +9,14 @@ from zoneinfo import ZoneInfo
 from agent_framework import tool
 
 PLATFORM_TIME_TOOL_NAME = "platform_time"
-PLATFORM_ALWAYS_BUILTIN_TOOL_NAMES = frozenset({PLATFORM_TIME_TOOL_NAME})
+PLATFORM_ALWAYS_BUILTIN_TOOL_NAMES = frozenset(
+    {
+        PLATFORM_TIME_TOOL_NAME,
+        "read_attachment",
+        "analyze_image",
+        "search_attachments",
+    }
+)
 
 _DEFAULT_LOCAL_TZ = ZoneInfo("Asia/Shanghai")
 

@@ -51,6 +51,14 @@ class AttachmentRepository:
         result = await self._session.execute(query.limit(1))
         return result.scalar_one_or_none()
 
+    async def update_gist(self, attachment_id: uuid.UUID, gist: str) -> ChatAttachment | None:
+        row = await self.get(attachment_id)
+        if row is None:
+            return None
+        row.gist = gist.strip() or None
+        await self._session.flush()
+        return row
+
     async def insert(
         self,
         *,
@@ -63,6 +71,7 @@ class AttachmentRepository:
         message_id: uuid.UUID | None = None,
         attachment_id: uuid.UUID | None = None,
         content_hash: str | None = None,
+        gist: str | None = None,
     ) -> ChatAttachment:
         row = ChatAttachment(
             id=attachment_id or uuid.uuid4(),
@@ -74,6 +83,7 @@ class AttachmentRepository:
             mime_type=mime_type,
             size_bytes=size_bytes,
             content_hash=content_hash,
+            gist=gist,
         )
         self._session.add(row)
         await self._session.flush()

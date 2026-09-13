@@ -22,13 +22,13 @@ class HistoryProjection:
         self._skill = skill_projector or SkillMemoryProjector()
 
     def project_rows(self, rows: list[dict[str, Any]], memory_config: MemoryConfig) -> list[dict[str, Any]]:
-        if not memory_config.slim.enabled:
+        if not memory_config.slim.enabled and not memory_config.attachment_compaction.enabled:
             return [dict(row) for row in rows]
 
         call_args: dict[str, dict[str, Any]] = {}
         projected: list[dict[str, Any]] = []
         for row in rows:
-            projected.append(self._project_row(dict(row), memory_config, call_args))
+            projected.append(self._project_row(dict(row), memory_config, call_args, rows))
         return projected
 
     def _project_row(
@@ -36,15 +36,20 @@ class HistoryProjection:
         row: dict[str, Any],
         memory_config: MemoryConfig,
         call_args: dict[str, dict[str, Any]],
+        all_rows: list[dict[str, Any]],
     ) -> dict[str, Any]:
         message_type = row.get("message_type") or ""
         metadata = dict(row.get("metadata") or {})
         tool_name = str(metadata.get("tool_name") or "")
 
         if message_type.startswith("skill_") or tool_name in {"load_skill", "read_skill_resource"}:
+            if not memory_config.slim.enabled:
+                return row
             return self._skill.project_skill_row(row, memory_config.slim)
 
         if message_type in ("tool_call", "mcp_call"):
+            if not memory_config.slim.enabled:
+                return row
             arguments = ensure_dict(metadata.get("arguments"))
             call_id = str(metadata.get("call_id") or "")
             if call_id:
@@ -68,6 +73,8 @@ class HistoryProjection:
             }
 
         if message_type in ("tool_result", "mcp_result"):
+            if not memory_config.slim.enabled:
+                return row
             call_id = str(metadata.get("call_id") or "")
             paired_args = call_args.get(call_id, {})
             if paired_args and "arguments" not in metadata:
@@ -86,6 +93,10 @@ class HistoryProjection:
             }
 
         if message_type == "text" and row.get("role") == "user":
-            return strip_attachment_heavy_payload(row)
+            return strip_attachment_heavy_payload(
+                row,
+                rows=all_rows,
+                compaction=memory_config.attachment_compaction,
+            )
 
         return row

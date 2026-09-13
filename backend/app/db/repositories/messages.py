@@ -63,6 +63,12 @@ class MessageRepository:
             await self._session.flush()
         return saved
 
+    async def get(self, message_id: uuid.UUID) -> Message | None:
+        return await self._session.get(Message, message_id)
+
+    async def flush(self) -> None:
+        await self._session.flush()
+
     async def insert(
         self,
         *,

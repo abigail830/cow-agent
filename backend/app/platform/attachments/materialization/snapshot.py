@@ -14,6 +14,9 @@ from app.platform.attachments.materialization.hash import format_content_hash, s
 from app.platform.attachments.unify_lite.types import ExtractedAttachment
 
 
+EXTRACT_PIPELINE_VERSION = "unify_lite_v1"
+
+
 def snapshot_from_extracted(
     item: ExtractedAttachment,
     *,
@@ -27,6 +30,26 @@ def snapshot_from_extracted(
         "text": item.content,
         "truncated": item.truncated,
         "char_count": item.char_count,
+        "extracted_at": datetime.now(UTC).isoformat(),
+        "extract_pipeline_version": EXTRACT_PIPELINE_VERSION,
+    }
+
+
+def snapshot_materialize_failed(
+    *,
+    filename: str,
+    attachment_id: str,
+    reason: str,
+    notice_text: str,
+) -> dict[str, Any]:
+    return {
+        "materialize_failed": True,
+        "failure_reason": reason,
+        "failed_at": datetime.now(UTC).isoformat(),
+        "text": notice_text,
+        "char_count": len(notice_text),
+        "truncated": False,
+        "content_hash": "",
         "extracted_at": datetime.now(UTC).isoformat(),
     }
 

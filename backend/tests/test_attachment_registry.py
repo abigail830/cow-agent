@@ -10,6 +10,10 @@ from app.platform.attachments.materialization.replay import (
     count_image_data_blocks,
 )
 from app.platform.memory.maf_mapping import to_maf_messages
+from app.platform.memory.memory_config import AttachmentPullConfig, parse_memory_config
+from app.platform.attachments.materialization.visibility import build_visibility_index, project_rows_for_visibility
+
+PUSH_PULL = AttachmentPullConfig(enabled=False)
 
 
 CHAT_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
@@ -54,8 +58,11 @@ def _mock_image_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_registry_first_at_full_second_stub() -> None:
     prior = [_user_row(content="Analyze @chart.png", sequence=1)]
+    memory_config = parse_memory_config({"memory": {"attachment_pull": {"enabled": False}}})
+    projected = project_rows_for_visibility(prior, memory_config)
+    visibility = build_visibility_index(projected)
     registry = AttachmentMaterializationRegistry()
-    registry.seed_from_prior_rows(prior)
+    registry.seed_from_prior_rows(prior, memory_config=memory_config)
 
     metadata = {
         "attachment_mode": "unify_lite",
@@ -67,6 +74,8 @@ def test_registry_first_at_full_second_stub() -> None:
         chat_id=CHAT_ID,
         turn_sequence=3,
         registry=registry,
+        visibility=visibility,
+        pull_config=PUSH_PULL,
     )
     assert isinstance(run_input, Content) or hasattr(run_input, "contents")
     contents = run_input.contents if hasattr(run_input, "contents") else [run_input]
@@ -104,6 +113,7 @@ def test_registry_out_of_window_refull() -> None:
         chat_id=CHAT_ID,
         turn_sequence=99,
         registry=registry,
+        pull_config=PUSH_PULL,
     )
     assert count_image_data_blocks(run_input.contents) == 1
 
