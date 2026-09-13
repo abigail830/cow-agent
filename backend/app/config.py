@@ -147,19 +147,14 @@ class Settings(BaseSettings):
         validation_alias="SYNC_AGENT_PROFILES_ON_STARTUP",
     )
 
-    # Sandbox (agents/slide-studio) — E2B default; local skips Slidev build
-    sandbox_provider: str = Field(default="e2b", validation_alias="SANDBOX_PROVIDER")
+    # Sandbox (content-studio) — E2B command/file workspace
     e2b_api_key: str | None = Field(default=None, validation_alias="E2B_API_KEY")
-    e2b_slidev_template: str | None = Field(default=None, validation_alias="E2B_SLIDEV_TEMPLATE")
     e2b_content_studio_template: str | None = Field(
         default="okf-content-studio:1.14",
         validation_alias="E2B_CONTENT_STUDIO_TEMPLATE",
     )
     sandbox_timeout_seconds: float = Field(default=180.0, validation_alias="SANDBOX_TIMEOUT_SECONDS")
-    sandbox_slidev_export_pdf: bool = Field(default=False, validation_alias="SANDBOX_SLIDEV_EXPORT_PDF")
     sandbox_reuse_session: bool = Field(default=True, validation_alias="SANDBOX_REUSE_SESSION")
-    sandbox_slidev_cache: bool = Field(default=True, validation_alias="SANDBOX_SLIDEV_CACHE")
-    sandbox_async_build: bool = Field(default=False, validation_alias="SANDBOX_ASYNC_BUILD")
 
     unify_lite_max_chars_per_file: int = Field(
         default=32_000,

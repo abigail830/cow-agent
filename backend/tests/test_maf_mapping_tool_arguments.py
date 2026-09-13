@@ -27,8 +27,8 @@ def test_to_maf_messages_stringifies_tool_call_arguments() -> None:
             "content": None,
             "metadata": {
                 "call_id": "call-1",
-                "tool_name": "render_slidev",
-                "arguments": {"source": "# Deck", "title": "Demo"},
+                "tool_name": "publish_artifact",
+                "arguments": {"path": "/home/user/content-studio/deck.html", "title": "Demo"},
             },
             "parent_id": None,
             "sequence": 2,
@@ -39,7 +39,7 @@ def test_to_maf_messages_stringifies_tool_call_arguments() -> None:
             "role": "tool",
             "message_type": "tool_result",
             "content": '{"status":"queued"}',
-            "metadata": {"call_id": "call-1", "tool_name": "render_slidev", "result": {"status": "queued"}},
+            "metadata": {"call_id": "call-1", "tool_name": "publish_artifact", "result": {"status": "queued"}},
             "parent_id": None,
             "sequence": 3,
         },
@@ -52,5 +52,5 @@ def test_to_maf_messages_stringifies_tool_call_arguments() -> None:
     assert isinstance(tool_call, Content)
     assert tool_call.type == "function_call"
     assert isinstance(tool_call.arguments, str)
-    assert '"source"' in tool_call.arguments
+    assert '"path"' in tool_call.arguments
     assert '"title"' in tool_call.arguments

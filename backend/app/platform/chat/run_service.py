@@ -48,10 +48,6 @@ from app.platform.chat.stream_pipeline import (
     tool_result_stream_events,
 )
 from app.agent_specific.proposal.stream_emitter import proposal_updated_event
-from app.agent_specific.slide.stream_emitter import (
-    SlideBuildStreamEmitter,
-    flush_completed_slide_build_artifacts,
-)
 from app.agent_specific.viz.stream_emitter import VizStreamEmitter, viz_spec_payload
 from app.shared.artifacts.stream_emitter import ArtifactStreamEmitter, artifact_spec_payload
 from app.shared.artifacts.context import get_run_artifact_state
@@ -542,16 +538,6 @@ class ChatRunService:
         try:
             async with bundle as agent:
                 result = await agent.run(run_input, session=session)
-            from app.config import get_settings
-            from app.agent_specific.slide.build_jobs import wait_for_slide_build_jobs
-
-            settings = get_settings()
-            if settings.sandbox_async_build:
-                wait_for_slide_build_jobs(
-                    chat_id,
-                    timeout_seconds=max(60.0, settings.sandbox_timeout_seconds + 30.0),
-                )
-            flush_completed_slide_build_artifacts(chat_id)
             await self._persist_pending_artifacts(chat_id)
             await self._finalize_success(
                 chat_id,
@@ -917,13 +903,6 @@ def _emit_pending_viz_events(
     accumulator: StreamTurnAccumulator,
 ) -> list[dict[str, Any]]:
     return VizStreamEmitter().drain_pending(chat_id, accumulator)
-
-
-def _emit_completed_slide_build_events(
-    chat_id: uuid.UUID,
-    accumulator: StreamTurnAccumulator,
-) -> list[dict[str, Any]]:
-    return SlideBuildStreamEmitter().drain_pending(chat_id, accumulator)
 
 
 class StreamTurnAccumulator:

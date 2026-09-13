@@ -117,7 +117,7 @@ export function SlideDeckViewer({ spec }: Props) {
         {iframeState === 'error' ? (
           <div className="slide-deck-viewer-error" role="alert">
             <p>Slide preview failed to load.</p>
-            <p className="panel-loading-caption">Try re-running render_slidev or open Download for the source.</p>
+            <p className="panel-loading-caption">Open Download for the source file.</p>
           </div>
         ) : null}
         <iframe

@@ -29,7 +29,7 @@ class AllowedToolsMiddleware(FunctionMiddleware):
 
         # Soft-fail: return an error payload to the model and let the agent loop continue.
         # Raising MiddlewareTermination would set should_terminate and stop the run before
-        # the model can retry with an allowed tool (e.g. render_html_ppt).
+        # the model can retry with an allowed tool (e.g. publish_artifact).
         context.result = {
             "error": f"Tool not allowed: {name}",
             "hint": (

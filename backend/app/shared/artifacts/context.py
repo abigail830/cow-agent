@@ -57,11 +57,6 @@ def get_run_artifact_state() -> RunArtifactState | None:
 
 
 def reset_run_artifact_state() -> None:
-    ctx = _run_artifact_state.get()
-    if ctx is not None and ctx.chat_id is not None:
-        from app.agent_specific.slide.build_jobs import reset_slide_build_jobs
-
-        reset_slide_build_jobs(ctx.chat_id)
     release_e2b_session()
     set_e2b_session_key(None)
     _run_artifact_state.set(None)

@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from app.agent_specific.proposal.plugin import ProposalPlugin
-from app.agent_specific.slide.plugin import SlidePlugin
 from app.agent_specific.viz.plugin import VIZ_TOOL_NAMES, VizCapabilityPlugin
 from app.agent_specific.yl_worker2.plugin import YlWorker2Plugin
 from app.platform.runtime.plugin import AgentPlugin
@@ -16,7 +15,6 @@ _ALL_PLUGINS: tuple[AgentPlugin, ...] = (
     ArtifactRuntimePlugin(),
     DiagramArtifactPlugin(),
     SandboxArtifactPlugin(),
-    SlidePlugin(),
     YlWorker2Plugin(),
 )
 

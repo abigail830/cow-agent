@@ -7,8 +7,7 @@ from pathlib import PurePosixPath
 
 from app.shared.artifacts.spec import ArtifactSpec
 from app.shared.artifacts.storage import new_chat_artifact_id, save_content_file, save_slide_deck
-from app.agent_specific.slide.artifact_builder import artifact_download_url, artifact_preview_url
-from app.agent_specific.slide.renderer import slugify_title
+from app.shared.artifacts.urls import artifact_download_url, artifact_preview_url
 
 _PREVIEW_CHAR_LIMIT = 120_000
 

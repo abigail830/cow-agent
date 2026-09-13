@@ -100,9 +100,7 @@ function CancelIcon() {
 }
 
 function runningHintForTitle(title: string): string {
-  if (title === 'render_slidev') return 'Building slides…'
-  if (title === 'render_html_ppt') return 'Publishing HTML deck…'
-  if (title === 'load_slide') return 'Loading…'
+  if (title === 'publish_artifact') return 'Publishing deliverable…'
   return 'Running…'
 }
 

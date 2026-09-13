@@ -16,8 +16,8 @@ def _tool_call_row(call_id: str, *, seq: int = 2) -> dict:
         "content": None,
         "metadata": {
             "call_id": call_id,
-            "tool_name": "render_html_ppt",
-            "arguments": {"source": "<html></html>", "title": "Demo"},
+            "tool_name": "publish_artifact",
+            "arguments": {"path": "/home/user/content-studio/deck.html", "title": "Demo"},
         },
         "parent_id": None,
         "sequence": seq,
@@ -31,7 +31,7 @@ def _tool_result_row(call_id: str, *, seq: int = 3) -> dict:
         "role": "tool",
         "message_type": "tool_result",
         "content": '{"status":"ok"}',
-        "metadata": {"call_id": call_id, "tool_name": "render_html_ppt", "result": {"status": "ok"}},
+        "metadata": {"call_id": call_id, "tool_name": "publish_artifact", "result": {"status": "ok"}},
         "parent_id": None,
         "sequence": seq,
     }

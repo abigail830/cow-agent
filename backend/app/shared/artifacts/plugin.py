@@ -13,14 +13,13 @@ SANDBOX_ARTIFACT_TOOL_NAMES = SANDBOX_TOOL_NAMES | PUBLISH_TOOL_NAMES
 
 # Agents that always use the shared artifact queue (+ optional E2B sandbox namespace).
 _ARTIFACT_E2B_NAMESPACE: dict[str, str | None] = {
-    "slide-studio": "slidev",
     "content-studio": "content-studio",
     "napkin-architect": None,
 }
 
 
 class ArtifactRuntimePlugin(AgentPlugin):
-    """Initialize shared RunArtifactState for slide, content, and diagram agents."""
+    """Initialize shared RunArtifactState for content, diagram, and similar agents."""
 
     def matches(self, agent_slug: str | None) -> bool:
         return True
