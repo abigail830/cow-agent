@@ -27,7 +27,7 @@ async def list_agents(
         .order_by(AgentModel.name)
     )
     agents = result.scalars().all()
-    return [await _to_out(agent, user.id) for agent in agents]
+    return [await _to_out(agent, user.id, db) for agent in agents]
 
 
 @router.get("/{agent_id}", response_model=AgentOut)
@@ -39,7 +39,7 @@ async def get_agent(
     agent = await db.get(AgentModel, agent_id)
     if agent is None:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return await _to_out(agent, user.id)
+    return await _to_out(agent, user.id, db)
 
 
 @router.patch("/{agent_id}/model-selection", response_model=AgentOut)
@@ -57,12 +57,13 @@ async def patch_agent_model_selection(
     entry = catalog.get(body.model_id)
     if entry is None or body.model_id not in available_ids:
         raise HTTPException(status_code=400, detail=f"Unknown or unavailable model: {body.model_id}")
-    await set_model_preference(user.id, agent_id, body.model_id)
-    return await _to_out(agent, user.id)
+    await set_model_preference(db, user.id, agent_id, body.model_id)
+    await db.commit()
+    return await _to_out(agent, user.id, db)
 
 
-async def _to_out(agent: AgentModel, user_id: uuid.UUID) -> AgentOut:
-    selected = await get_model_preference(user_id, agent.id)
+async def _to_out(agent: AgentModel, user_id: uuid.UUID, db: AsyncSession) -> AgentOut:
+    selected = await get_model_preference(db, user_id, agent.id)
     return AgentOut(
         id=agent.id,
         slug=agent.slug,

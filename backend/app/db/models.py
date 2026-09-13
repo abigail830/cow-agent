@@ -84,6 +84,31 @@ class AgentModel(Base):
     mcp_links: Mapped[list["AgentMcpServer"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
     skill_links: Mapped[list["AgentSkill"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
     memory_snapshots: Mapped[list["MemorySnapshot"]] = relationship(back_populates="agent")
+    model_preferences: Mapped[list["UserAgentModelPreference"]] = relationship(
+        back_populates="agent",
+        cascade="all, delete-orphan",
+    )
+
+
+class UserAgentModelPreference(Base):
+    __tablename__ = "user_agent_model_preferences"
+    __table_args__ = (
+        Index("idx_user_agent_model_preferences_user_agent", "user_id", "agent_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False
+    )
+    model_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    agent: Mapped["AgentModel"] = relationship(back_populates="model_preferences")
 
 
 class MemorySnapshot(Base):

@@ -13,5 +13,5 @@ async def resolve_chat_model(db: AsyncSession, chat: Chat) -> ModelEntry:
     agent = await db.get(AgentModel, chat.agent_id)
     if agent is None:
         raise ValueError("Agent not found for chat")
-    preference_id = await get_model_preference(chat.user_id, chat.agent_id)
+    preference_id = await get_model_preference(db, chat.user_id, chat.agent_id)
     return resolve_agent_model(agent, preference_id)

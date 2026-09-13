@@ -1,3 +1,5 @@
+/** Browser-only UI placeholder while waiting for server model preference. Not authoritative. */
+
 const PREFIX = 'agent-platform:model:'
 
 export function getStoredModelId(agentId: string): string | null {

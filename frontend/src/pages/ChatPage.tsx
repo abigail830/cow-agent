@@ -435,21 +435,30 @@ export function ChatPage() {
     void api.listModels().then(setModelOptions).catch(() => setModelOptions([]))
   }, [])
 
+  // Placeholder only until GET /agents returns authoritative selected_model_id.
+  useEffect(() => {
+    if (!selectedId) return
+    const placeholder = getStoredModelId(selectedId)
+    if (!placeholder) return
+    setSelectedModelByAgent((prev) =>
+      prev[selectedId] ? prev : { ...prev, [selectedId]: placeholder },
+    )
+  }, [selectedId])
+
   useEffect(() => {
     if (!selectedId || !selected) return
-    const stored = getStoredModelId(selectedId)
     const firstAvailable = modelOptions.find((option) => option.available !== false)?.id
-    const initial =
-      stored ??
+    const serverModel =
       selected.selected_model_id ??
       selected.default_model_id ??
       firstAvailable ??
       modelOptions[0]?.id ??
       null
-    if (!initial) return
+    if (!serverModel) return
     setSelectedModelByAgent((prev) =>
-      prev[selectedId] === initial ? prev : { ...prev, [selectedId]: initial },
+      prev[selectedId] === serverModel ? prev : { ...prev, [selectedId]: serverModel },
     )
+    setStoredModelId(selectedId, serverModel)
   }, [modelOptions, selected, selectedId])
 
   const handleModelChange = useCallback(async (modelId: string) => {
@@ -457,9 +466,12 @@ export function ChatPage() {
     setSelectedModelByAgent((prev) => ({ ...prev, [selectedId]: modelId }))
     setStoredModelId(selectedId, modelId)
     try {
-      await api.patchAgentModelSelection(selectedId, modelId)
+      const updated = await api.patchAgentModelSelection(selectedId, modelId)
+      setAgents((prev) =>
+        prev.map((agent) => (agent.id === selectedId ? { ...agent, ...updated } : agent)),
+      )
     } catch {
-      /* local selection remains; server may still use previous preference until retry */
+      /* optimistic UI remains; user can retry by changing model again */
     }
   }, [selectedId])
 
