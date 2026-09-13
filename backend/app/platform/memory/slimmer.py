@@ -8,6 +8,7 @@ from app.platform.memory.memory_config import MemoryConfig
 from app.platform.memory.projector_registry import MemoryProjectorRegistry, get_memory_projector_registry
 from app.platform.memory.projectors.skill import SkillMemoryProjector
 from app.platform.memory.projectors.utils import ensure_dict
+from app.platform.attachments.materialization.compaction import strip_attachment_heavy_payload
 
 
 class HistoryProjection:
@@ -83,5 +84,8 @@ class HistoryProjection:
                 "content": slimmed.content,
                 "metadata": {**metadata, **slimmed.metadata},
             }
+
+        if message_type == "text" and row.get("role") == "user":
+            return strip_attachment_heavy_payload(row)
 
         return row

@@ -6,6 +6,8 @@ from agent_framework import Content, Message
 
 from app.platform.memory.projectors.utils import ensure_dict, stringify_function_call_arguments
 from app.platform.attachments.attachment_adapters import metadata_attachment_to_maf_content
+from app.platform.attachments.materialization.registry import AttachmentMaterializationRegistry
+from app.platform.attachments.materialization.replay import build_replay_user_message_contents
 from app.platform.agent.platform_instructions import RUN_CANCELLED_USER_TEXT
 
 PLATFORM_MESSAGE_TYPE_KEY = "platform_message_type"
@@ -91,6 +93,7 @@ def to_maf_messages(rows: list[dict[str, Any]]) -> list[Message]:
     assistant_contents: list[Content] = []
     seen_tool_calls: set[str] = set()
     seen_tool_results: set[str] = set()
+    attachment_registry = AttachmentMaterializationRegistry()
 
     pending_assistant_meta: dict[str, Any] = {}
 
@@ -124,11 +127,9 @@ def to_maf_messages(rows: list[dict[str, Any]]) -> list[Message]:
             if text:
                 user_contents.append(Content.from_text(text))
             if _attachment_dicts(metadata):
-                chat_id_raw = row.get("chat_id")
-                if chat_id_raw:
-                    user_contents.extend(
-                        _attachments_to_contents(metadata, chat_id=uuid.UUID(str(chat_id_raw)))
-                    )
+                user_contents.extend(
+                    build_replay_user_message_contents(row, registry=attachment_registry)
+                )
             if not user_contents:
                 user_contents.append(Content.from_text(""))
             messages.append(

@@ -11,6 +11,7 @@ from app.platform.attachments.attachment_storage import (
     format_inline_provider_file_id,
     save_inline_attachment,
 )
+from app.platform.attachments.materialization.hash import sha256_hex
 from app.platform.attachments.modes import AttachmentProcessingMode
 from app.platform.attachments.native.maf_content import attachment_metadata
 from app.platform.attachments.unify_lite.pipeline import extract_attachments
@@ -41,6 +42,16 @@ class UnifyLiteAttachmentHandler:
             mime_type=mime_type,
             size_bytes=len(data),
         )
+        content_hash = sha256_hex(data)
+        existing = await self._attachments.find_by_content_hash(
+            chat_id,
+            content_hash,
+            provider=UNIFY_LITE_PROVIDER,
+        )
+        if existing is not None:
+            await self._db.refresh(existing)
+            return attachment_metadata(existing, processing_mode=AttachmentProcessingMode.UNIFY_LITE.value)
+
         attachment_id = uuid.uuid4()
         save_inline_attachment(chat_id, attachment_id, data)
         row = await self._attachments.insert(
@@ -51,6 +62,7 @@ class UnifyLiteAttachmentHandler:
             filename=filename,
             mime_type=mime_type,
             size_bytes=len(data),
+            content_hash=content_hash,
         )
         await self._db.commit()
         await self._db.refresh(row)

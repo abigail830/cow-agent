@@ -35,6 +35,22 @@ class AttachmentRepository:
         rows.sort(key=lambda row: order.get(row.id, len(order)))
         return rows
 
+    async def find_by_content_hash(
+        self,
+        chat_id: uuid.UUID,
+        content_hash: str,
+        *,
+        provider: str | None = None,
+    ) -> ChatAttachment | None:
+        query = select(ChatAttachment).where(
+            ChatAttachment.chat_id == chat_id,
+            ChatAttachment.content_hash == content_hash,
+        )
+        if provider is not None:
+            query = query.where(ChatAttachment.provider == provider)
+        result = await self._session.execute(query.limit(1))
+        return result.scalar_one_or_none()
+
     async def insert(
         self,
         *,
@@ -46,6 +62,7 @@ class AttachmentRepository:
         size_bytes: int,
         message_id: uuid.UUID | None = None,
         attachment_id: uuid.UUID | None = None,
+        content_hash: str | None = None,
     ) -> ChatAttachment:
         row = ChatAttachment(
             id=attachment_id or uuid.uuid4(),
@@ -56,6 +73,7 @@ class AttachmentRepository:
             filename=filename,
             mime_type=mime_type,
             size_bytes=size_bytes,
+            content_hash=content_hash,
         )
         self._session.add(row)
         await self._session.flush()

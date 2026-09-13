@@ -73,4 +73,7 @@ def attachment_metadata(att, *, processing_mode: str | None = None) -> dict:
     }
     if processing_mode:
         payload["processing_mode"] = processing_mode
+    content_hash = getattr(att, "content_hash", None)
+    if content_hash:
+        payload["content_hash"] = content_hash
     return payload

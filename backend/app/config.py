@@ -115,7 +115,7 @@ class Settings(BaseSettings):
         default=5, validation_alias="ATTACHMENT_MAX_FILES_PER_MESSAGE"
     )
     attachment_max_bytes_per_file: int = Field(
-        default=50 * 1024 * 1024, validation_alias="ATTACHMENT_MAX_BYTES_PER_FILE"
+        default=5 * 1024 * 1024, validation_alias="ATTACHMENT_MAX_BYTES_PER_FILE"
     )
     attachment_max_total_bytes_per_message: int = Field(
         default=50 * 1024 * 1024, validation_alias="ATTACHMENT_MAX_TOTAL_BYTES_PER_MESSAGE"

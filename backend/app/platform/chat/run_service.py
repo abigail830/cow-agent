@@ -23,14 +23,14 @@ from app.platform.mcp.mcp_connect import disconnect_bundle, iter_mcp_connect_kee
 from app.platform.mcp.mcp_pool import McpPoolKey, get_mcp_connection_pool
 from app.platform.agent.platform_instructions import RUN_CANCELLED_USER_TEXT
 from app.platform.session.session_store import SessionStore
-from app.platform.session.user_message_input import (
-    build_user_run_input,
-    build_user_run_input_lite,
-    link_attachments_metadata,
-)
+from app.platform.session.user_message_input import link_attachments_metadata
 from app.platform.attachments.modes import AttachmentProcessingMode, parse_attachment_mode
+from app.platform.attachments.materialization import (
+    AttachmentMaterializationRegistry,
+    enrich_metadata_with_extracted_snapshots,
+)
+from app.platform.attachments.materialization.replay import build_materialized_user_message
 from app.platform.attachments.service import AttachmentService
-from app.platform.attachments.unify_lite.partition import partition_unify_lite_attachments
 from app.platform.llm.chat_model import resolve_chat_model
 from app.platform.llm.stream_errors import user_facing_stream_error
 from app.platform.chat.run_manager import get_run_manager
@@ -63,6 +63,20 @@ from app.agent_specific.viz.spec import VizSpec
 logger = logging.getLogger(__name__)
 
 _TOOL_ROW_TYPES = frozenset({"tool_call", "tool_result", "mcp_call", "mcp_result"})
+
+
+def _working_set_rows_for_finalize(
+    user_row: Message | None,
+    turn_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Include the persisted user row so history replay retains attachment metadata."""
+    if user_row is None:
+        return turn_rows
+    user_dict = row_to_dict(user_row)
+    user_sequence = int(user_dict.get("sequence") or 0)
+    if user_sequence and any(int(row.get("sequence") or 0) == user_sequence for row in turn_rows):
+        return turn_rows
+    return [user_dict, *turn_rows]
 
 
 def turn_row_dict_to_out(chat_id: uuid.UUID, row: dict[str, Any]) -> dict[str, Any]:
@@ -148,6 +162,31 @@ class ChatRunService:
             processing_mode=attachment_mode,
         )
 
+    async def _prepare_user_turn_metadata(
+        self,
+        chat: Chat,
+        attachments: list,
+        *,
+        attachment_mode: str | None,
+    ) -> dict[str, Any]:
+        metadata = link_attachments_metadata({}, attachments, attachment_mode=attachment_mode)
+        mode = parse_attachment_mode(attachment_mode)
+        if mode != AttachmentProcessingMode.UNIFY_LITE or not attachments:
+            return metadata
+        from app.platform.attachments.unify_lite.partition import partition_unify_lite_attachments
+
+        service = AttachmentService(self._db)
+        text_rows, _ = partition_unify_lite_attachments(attachments)
+        if not text_rows:
+            return metadata
+        extracted = service.extract_unify_lite(chat.id, text_rows)
+        return enrich_metadata_with_extracted_snapshots(
+            metadata,
+            extracted,
+            chat_id=chat.id,
+            attachments=attachments,
+        )
+
     async def _build_run_input(
         self,
         chat: Chat,
@@ -155,20 +194,27 @@ class ChatRunService:
         attachments: list,
         *,
         attachment_mode: str | None = None,
+        user_metadata: dict[str, Any] | None = None,
+        turn_sequence: int = 0,
+        prior_rows: list[dict[str, Any]] | None = None,
     ):
-        mode = parse_attachment_mode(attachment_mode)
-        if mode == AttachmentProcessingMode.UNIFY_LITE:
-            service = AttachmentService(self._db)
-            text_rows, image_rows = partition_unify_lite_attachments(attachments)
-            extracted = service.extract_unify_lite(chat.id, text_rows) if text_rows else []
-            size_bytes_by_id = {row.id: row.size_bytes for row in attachments}
-            return build_user_run_input_lite(
-                content,
-                extracted,
-                image_attachments=image_rows,
-                size_bytes_by_id=size_bytes_by_id,
-            )
-        return build_user_run_input(content, attachments)
+        metadata = user_metadata or link_attachments_metadata(
+            {},
+            attachments,
+            attachment_mode=attachment_mode,
+        )
+        if not attachments:
+            return content.strip() or content
+        registry = AttachmentMaterializationRegistry()
+        if prior_rows:
+            registry.seed_from_prior_rows(prior_rows)
+        return build_materialized_user_message(
+            content,
+            metadata,
+            chat_id=chat.id,
+            turn_sequence=turn_sequence,
+            registry=registry,
+        )
 
     async def _resolve_run_model(self, chat: Chat) -> tuple[str, str]:
         model_entry = await resolve_chat_model(self._db, chat)
@@ -240,6 +286,7 @@ class ChatRunService:
         attachment_ids: list[uuid.UUID] | None = None,
         attachment_mode: str | None = None,
         expected_provider: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Message:
         """Persist the user message immediately so it survives agent failures."""
         resolved = (
@@ -252,7 +299,12 @@ class ChatRunService:
                 attachment_mode=attachment_mode,
             )
         )
-        metadata = link_attachments_metadata({}, resolved, attachment_mode=attachment_mode)
+        if metadata is None:
+            metadata = await self._prepare_user_turn_metadata(
+                chat,
+                resolved,
+                attachment_mode=attachment_mode,
+            )
         row = await self._messages.insert(
             chat_id=chat.id,
             role="user",
@@ -346,6 +398,7 @@ class ChatRunService:
             turn_rows = await accumulator.persist(self._messages, chat_id)
         else:
             turn_rows = await self._persist_agent_messages(chat_id, response, skip_tool_rows=False)
+        working_set_rows = _working_set_rows_for_finalize(user_row, turn_rows)
         payload_extensions: dict[str, Any] = {}
         if run_ctx is not None:
             payload_extensions = await run_plugin_finalize_success(run_ctx, accumulator=accumulator)
@@ -353,7 +406,7 @@ class ChatRunService:
             chat_id,
             session,
             memory_config,
-            turn_rows,
+            working_set_rows,
             payload_extensions=payload_extensions or None,
         )
         await self._db.commit()
@@ -444,11 +497,20 @@ class ChatRunService:
             attachment_ids=attachment_ids,
             attachment_mode=attachment_mode,
         )
+        prior_rows = await self._sessions.get_working_set_rows(
+            chat_id,
+            memory_config,
+            exclude_from_sequence=user_row.sequence,
+        )
+        user_metadata = user_row.message_metadata or {}
         run_input = await self._build_run_input(
             chat,
             content,
             attachments,
             attachment_mode=attachment_mode,
+            user_metadata=user_metadata,
+            turn_sequence=user_row.sequence,
+            prior_rows=prior_rows,
         )
         memory_result = await try_handle_memory_command(
             self._db,
@@ -536,11 +598,20 @@ class ChatRunService:
             attachment_ids=attachment_ids,
             attachment_mode=attachment_mode,
         )
+        prior_rows = await self._sessions.get_working_set_rows(
+            chat_id,
+            memory_config,
+            exclude_from_sequence=user_row.sequence,
+        )
+        user_metadata = user_row.message_metadata or {}
         run_input = await self._build_run_input(
             chat,
             content,
             attachments,
             attachment_mode=attachment_mode,
+            user_metadata=user_metadata,
+            turn_sequence=user_row.sequence,
+            prior_rows=prior_rows,
         )
         memory_result = await try_handle_memory_command(
             self._db,
