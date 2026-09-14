@@ -21,14 +21,19 @@ When a cancellation marker appears in history:
 _ATTACHMENT_PULL_INSTRUCTIONS = ATTACHMENT_PLATFORM_INSTRUCTIONS_BODY
 
 
-def append_platform_instructions(agent_instructions: str) -> str:
+def append_platform_instructions(
+    agent_instructions: str,
+    *,
+    include_attachment_pull: bool = True,
+) -> str:
     """Append platform base instructions once."""
     base = agent_instructions.rstrip()
     if _PLATFORM_MARKER in base:
         return base
-    return (
-        f"{base}\n\n{_PLATFORM_MARKER}\n\n{_CANCEL_INSTRUCTIONS}\n\n{_ATTACHMENT_PULL_INSTRUCTIONS}"
-    )
+    parts = [base, _PLATFORM_MARKER, _CANCEL_INSTRUCTIONS]
+    if include_attachment_pull:
+        parts.append(_ATTACHMENT_PULL_INSTRUCTIONS)
+    return "\n\n".join(parts)
 
 
 # Exported for message mapping consistency with DB content.

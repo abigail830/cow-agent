@@ -24,7 +24,8 @@ from app.platform.agent.skill_registry import SkillRegistry
 from app.platform.agent.tool_registry import ToolRegistry
 from app.platform.agent.plugin_registry import tool_names_for_slug, viz_tool_names
 from app.platform.agent.builtin_registry import BUILTIN_TOOLS
-from app.platform.agent.platform_time import PLATFORM_ALWAYS_BUILTIN_TOOL_NAMES
+from app.platform.attachments.modes import AttachmentProcessingMode, parse_attachment_mode
+from app.platform.agent.platform_time import PLATFORM_ALWAYS_BUILTIN_TOOL_NAMES, PLATFORM_TIME_TOOL_NAME
 from app.platform.agent.tool_groups import resolve_builtin_tools
 
 
@@ -55,14 +56,19 @@ class AgentFactory:
         session_store: SessionStore | None = None,
         mcp_tools: list | None = None,
         mcp_pool_handle: McpPoolHandle | None = None,
+        attachment_mode: str | None = None,
     ) -> AgentBundle:
         row = await self.get_agent_row(agent_id)
         model_entry = resolve_agent_model(row, model_id)
         provider = ModelProvider(model_entry.provider)
         model_name = model_entry.deployment
 
+        enable_attachment_pull = (
+            get_settings().attachment_pull_enabled
+            and parse_attachment_mode(attachment_mode) == AttachmentProcessingMode.UNIFY_LITE
+        )
         memory_config = parse_memory_config(row.config)
-        if not get_settings().attachment_pull_enabled:
+        if not enable_attachment_pull:
             from dataclasses import replace
 
             memory_config = replace(
@@ -105,7 +111,10 @@ class AgentFactory:
             context_providers.append(skills_provider)
             skill_tools.update({"load_skill", "read_skill_resource"})
 
-        extra_allowed_tools = set(PLATFORM_ALWAYS_BUILTIN_TOOL_NAMES) | skill_tools
+        always_builtin_names = frozenset({PLATFORM_TIME_TOOL_NAME})
+        if enable_attachment_pull:
+            always_builtin_names = PLATFORM_ALWAYS_BUILTIN_TOOL_NAMES
+        extra_allowed_tools = set(always_builtin_names) | skill_tools
 
         middleware = resolve_middleware(
             row.config,
@@ -114,6 +123,7 @@ class AgentFactory:
             session_store=store,
             extra_allowed_tools=extra_allowed_tools or None,
             stop_event=stop_event,
+            enable_attachment_pull=enable_attachment_pull,
         )
 
         function_tools = await self._tools.resolve_for_agent(agent_id)
@@ -135,7 +145,7 @@ class AgentFactory:
 
         always_builtin = [
             BUILTIN_TOOLS[name]
-            for name in PLATFORM_ALWAYS_BUILTIN_TOOL_NAMES
+            for name in always_builtin_names
             if name in BUILTIN_TOOLS
         ]
         combined_tools = [
@@ -145,7 +155,10 @@ class AgentFactory:
             *mcp_tools,
         ]
 
-        instructions = append_platform_instructions(row.instructions)
+        instructions = append_platform_instructions(
+            row.instructions,
+            include_attachment_pull=enable_attachment_pull,
+        )
 
         agent = self._registry.create_agent(
             name=row.name,

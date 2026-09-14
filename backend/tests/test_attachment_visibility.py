@@ -95,6 +95,38 @@ def test_same_turn_duplicate_attachment_id_plans_once() -> None:
     assert plan[1].action == MaterializationAction.SKIP
 
 
+def _native_image_meta(att_id: str, filename: str) -> dict:
+    return {
+        "id": att_id,
+        "filename": filename,
+        "mime_type": "image/jpeg",
+        "size_bytes": 64,
+        "provider": "deepseek",
+        "processing_mode": "native",
+        "provider_file_id": f"inline:{att_id}",
+        "content_hash": f"sha256:{att_id}",
+    }
+
+
+def test_native_three_images_full_inline_even_when_pull_enabled() -> None:
+    ids = [
+        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1",
+        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2",
+        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3",
+    ]
+    items = [_native_image_meta(att_id, f"{idx + 1}.jpeg") for idx, att_id in enumerate(ids)]
+    run_input = build_materialized_user_message(
+        "看这三张图",
+        {"attachment_mode": "native", "attachments": items},
+        chat_id=CHAT_ID,
+        turn_sequence=1,
+        registry=AttachmentMaterializationRegistry(),
+        visibility=VisibilityIndex(),
+        pull_config=AttachmentPullConfig(enabled=True, first_turn_inline=True),
+    )
+    assert count_image_data_blocks(run_input.contents) == 3
+
+
 def test_pull_mode_second_at_is_stub_not_full() -> None:
     memory_config = MemoryConfig()
     projected = project_rows_for_visibility([_user_row(sequence=1)], memory_config)

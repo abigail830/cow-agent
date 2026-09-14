@@ -41,6 +41,7 @@ class AttachmentMaterializationRegistry:
     ) -> None:
         """Replay prior user turns to populate registry state (send path)."""
         from app.platform.attachments.materialization.plan import MaterializationAction, compute_attachment_plan
+        from app.platform.attachments.modes import attachment_pull_applies
 
         projected = project_rows_for_visibility(rows, memory_config)
         visibility = VisibilityIndex()
@@ -54,13 +55,14 @@ class AttachmentMaterializationRegistry:
                 continue
             turn_sequence = int(row.get("sequence") or 0)
             user_text = str(row.get("content") or "")
+            row_pull = pull if attachment_pull_applies(metadata) else AttachmentPullConfig(enabled=False)
             plan = compute_attachment_plan(
                 items=items,
                 registry=self,
                 visibility=visibility,
                 user_text=user_text,
                 turn_sequence=turn_sequence,
-                pull_config=pull,
+                pull_config=row_pull,
                 attachment_budget=memory_config.attachment_budget if memory_config else None,
             )
             for item, plan_item in zip(_dedupe_items(items), plan):

@@ -70,6 +70,17 @@ def test_platform_instructions_use_canonical_body() -> None:
     assert ATTACHMENT_PLATFORM_INSTRUCTIONS_BODY in platform_instructions._ATTACHMENT_PULL_INSTRUCTIONS
 
 
+def test_platform_instructions_can_omit_attachment_pull() -> None:
+    with_pull = platform_instructions.append_platform_instructions("You are a helper.")
+    without_pull = platform_instructions.append_platform_instructions(
+        "You are a helper.",
+        include_attachment_pull=False,
+    )
+    assert ATTACHMENT_PLATFORM_INSTRUCTIONS_BODY in with_pull
+    assert ATTACHMENT_PLATFORM_INSTRUCTIONS_BODY not in without_pull
+    assert "analyze_image" not in without_pull
+
+
 def test_pull_tools_import_canonical_descriptions() -> None:
     assert pull_tools.INLINE_ATTACHMENT_TOOL_DESCRIPTION == INLINE_ATTACHMENT_TOOL_DESCRIPTION
     assert pull_tools.ANALYZE_IMAGE_TOOL_DESCRIPTION == ANALYZE_IMAGE_TOOL_DESCRIPTION

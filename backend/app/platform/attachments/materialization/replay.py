@@ -19,6 +19,7 @@ from app.platform.attachments.materialization.stub import (
     format_thin_attachment_ready,
 )
 from app.platform.attachments.materialization.visibility import VisibilityIndex
+from app.platform.attachments.modes import attachment_pull_applies
 from app.platform.attachments.native.maf_content import metadata_attachment_to_maf_content
 from app.platform.attachments.unify_lite.pipeline import format_extracted_attachment_block, wrap_unify_lite_attachment_section
 from app.platform.attachments.unify_lite.types import ExtractedAttachment
@@ -45,6 +46,8 @@ def build_user_attachment_contents(
 
     vis = visibility if visibility is not None else VisibilityIndex()
     pull = pull_config if pull_config is not None else AttachmentPullConfig(enabled=False)
+    if pull.enabled and not attachment_pull_applies(metadata):
+        pull = AttachmentPullConfig(enabled=False)
     plan = compute_attachment_plan(
         items=items,
         registry=registry,

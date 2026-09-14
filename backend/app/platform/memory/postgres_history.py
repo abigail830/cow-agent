@@ -49,7 +49,11 @@ class PostgresHistoryProvider(HistoryProvider):
         if self._model_provider:
             rows = sanitize_rows_for_provider(rows, provider=self._model_provider)
         rows = await materialize_rows_on_read(self._session, rows, chat_id=chat_id)
-        return to_maf_messages(rows, memory_config=self._memory_config)
+        return to_maf_messages(
+            rows,
+            memory_config=self._memory_config,
+            model_provider=self._model_provider,
+        )
 
     async def save_messages(
         self,

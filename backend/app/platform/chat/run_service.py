@@ -263,6 +263,7 @@ class ChatRunService:
         stop_event: asyncio.Event | None = None,
         turn_start_sequence: int | None = None,
         session_store: SessionStore | None = None,
+        attachment_mode: str | None = None,
     ) -> Any:
         agent_row = await self._factory.get_agent_row(chat.agent_id)
         pool = get_mcp_connection_pool()
@@ -295,6 +296,7 @@ class ChatRunService:
                 session_store=session_store,
                 mcp_tools=handle.tools,
                 mcp_pool_handle=handle,
+                attachment_mode=attachment_mode,
             )
         except Exception:
             await pool.release(handle)
@@ -392,10 +394,19 @@ class ChatRunService:
             logger.exception("Failed to persist cancelled turn for chat %s", chat_id)
             await self._db.rollback()
 
-    async def _memory_config_for_chat(self, chat: Chat) -> MemoryConfig:
+    async def _memory_config_for_chat(
+        self,
+        chat: Chat,
+        *,
+        attachment_mode: str | None = None,
+    ) -> MemoryConfig:
         agent = await self._db.get(AgentModel, chat.agent_id)
         memory_config = parse_memory_config(agent.config if agent else {})
-        if not get_settings().attachment_pull_enabled:
+        pull_on = (
+            get_settings().attachment_pull_enabled
+            and parse_attachment_mode(attachment_mode) == AttachmentProcessingMode.UNIFY_LITE
+        )
+        if not pull_on:
             from dataclasses import replace
 
             memory_config = replace(
@@ -560,7 +571,7 @@ class ChatRunService:
         attachment_mode: str | None = None,
     ) -> str:
         chat = await self._get_chat(chat_id)
-        memory_config = await self._memory_config_for_chat(chat)
+        memory_config = await self._memory_config_for_chat(chat, attachment_mode=attachment_mode)
         session = await self._sessions.get_or_create(chat_id)
         run_ctx = await self._prepare_run_plugins(chat)
         model_id, model_provider = await self._resolve_run_model(chat)
@@ -626,6 +637,7 @@ class ChatRunService:
             model_id=model_id,
             turn_start_sequence=user_row.sequence,
             session_store=self._sessions,
+            attachment_mode=attachment_mode,
         )
         try:
             async with bundle as agent:
@@ -658,7 +670,7 @@ class ChatRunService:
         attachment_mode: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         chat = await self._get_chat(chat_id)
-        memory_config = await self._memory_config_for_chat(chat)
+        memory_config = await self._memory_config_for_chat(chat, attachment_mode=attachment_mode)
         session = await self._sessions.get_or_create(chat_id)
         run_ctx = await self._prepare_run_plugins(chat)
         model_id, model_provider = await self._resolve_run_model(chat)
@@ -774,6 +786,7 @@ class ChatRunService:
                 stop_event=run.stop_event,
                 turn_start_sequence=user_row.sequence,
                 session_store=self._sessions,
+                attachment_mode=attachment_mode,
             )
             async for keepalive in iter_mcp_connect_keepalive(bundle):
                 yield keepalive

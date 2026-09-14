@@ -2,6 +2,7 @@ from enum import Enum
 
 from agent_framework import Agent
 from app.platform.llm.anthropic_client import FILES_API_BETA, PlatformAnthropicClient
+from app.platform.llm.deepseek_client import PlatformDeepSeekClient
 from agent_framework.openai import OpenAIChatClient, OpenAIChatCompletionClient
 
 from app.config import Settings, get_settings
@@ -94,14 +95,15 @@ class ModelProviderRegistry:
             api_key_env="DASHSCOPE_API_KEY",
         )
 
-    def create_deepseek_client(self, *, model: str | None = None) -> OpenAIChatCompletionClient:
-        """DeepSeek OpenAI-compatible Chat Completions API."""
+    def create_deepseek_client(self, *, model: str | None = None) -> PlatformDeepSeekClient:
+        """DeepSeek OpenAI-compatible Chat Completions API (thinking-mode aware)."""
         return self._create_openai_compatible_client(
             api_key=self._settings.deepseek_api_key,
             base_url=self._settings.deepseek_base_url,
             model=model or self._settings.deepseek_default_model,
             provider_label="DeepSeek",
             api_key_env="DEEPSEEK_API_KEY",
+            client_cls=PlatformDeepSeekClient,
         )
 
     def _create_openai_compatible_client(
@@ -112,6 +114,7 @@ class ModelProviderRegistry:
         model: str | None,
         provider_label: str,
         api_key_env: str,
+        client_cls: type[OpenAIChatCompletionClient] | None = None,
     ) -> OpenAIChatCompletionClient:
         if not api_key:
             raise ValueError(f"{provider_label} is not configured ({api_key_env} env var)")
@@ -119,7 +122,8 @@ class ModelProviderRegistry:
             raise ValueError(
                 f"{provider_label} model is required — set model in profile.yaml or catalog deployment"
             )
-        return OpenAIChatCompletionClient(
+        cls = client_cls or OpenAIChatCompletionClient
+        return cls(
             model=model,
             api_key=api_key,
             base_url=_openai_compatible_base_url(base_url),

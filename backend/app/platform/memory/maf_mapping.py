@@ -91,6 +91,7 @@ def to_maf_messages(
     rows: list[dict[str, Any]],
     *,
     memory_config: MemoryConfig | None = None,
+    model_provider: str | None = None,
 ) -> list[Message]:
     """Rebuild MAF history with Anthropic-compatible grouping.
 
@@ -227,7 +228,11 @@ def to_maf_messages(
                 if call_id:
                     seen_tool_calls.add(call_id)
 
-            if message_type == "reasoning" and not metadata.get("protected_data"):
+            if (
+                message_type == "reasoning"
+                and not metadata.get("protected_data")
+                and model_provider != "deepseek"
+            ):
                 content = Content.from_text(row.get("content") or "")
             else:
                 content = _row_to_content(row)

@@ -33,6 +33,7 @@ def resolve_middleware(
     session_store: SessionStore | None = None,
     extra_allowed_tools: set[str] | None = None,
     stop_event: asyncio.Event | None = None,
+    enable_attachment_pull: bool | None = None,
 ) -> list:
     cfg = config or {}
     middleware: list = []
@@ -43,7 +44,12 @@ def resolve_middleware(
 
     if chat_id is not None:
         middleware.append(ChatPiiRedactionMiddleware())
-        if get_settings().attachment_pull_enabled:
+        pull_on = (
+            get_settings().attachment_pull_enabled
+            if enable_attachment_pull is None
+            else enable_attachment_pull
+        )
+        if pull_on:
             middleware.append(AttachmentInlineChatMiddleware())
 
     allowed_entries = list(cfg.get("allowed_tools") or [])
