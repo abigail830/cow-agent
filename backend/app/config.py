@@ -115,35 +115,28 @@ class Settings(BaseSettings):
         default=5, validation_alias="ATTACHMENT_MAX_FILES_PER_MESSAGE"
     )
     attachment_max_bytes_per_file: int = Field(
-        default=5 * 1024 * 1024, validation_alias="ATTACHMENT_MAX_BYTES_PER_FILE"
+        default=20 * 1024 * 1024, validation_alias="ATTACHMENT_MAX_BYTES_PER_FILE"
     )
     attachment_max_total_bytes_per_message: int = Field(
         default=50 * 1024 * 1024, validation_alias="ATTACHMENT_MAX_TOTAL_BYTES_PER_MESSAGE"
     )
-    attachment_pull_enabled: bool = Field(default=True, validation_alias="ATTACHMENT_PULL_ENABLED")
-    attachment_lazy_extract_timeout_seconds: float = Field(
-        default=5.0,
-        validation_alias="ATTACHMENT_LAZY_EXTRACT_TIMEOUT_SECONDS",
+    attachment_max_pages_per_file: int = Field(
+        default=50, validation_alias="ATTACHMENT_MAX_PAGES_PER_FILE"
     )
-    attachment_tool_result_max_chars: int = Field(
-        default=4096,
-        validation_alias="ATTACHMENT_TOOL_RESULT_MAX_CHARS",
+    attachment_max_pages_per_message: int = Field(
+        default=60, validation_alias="ATTACHMENT_MAX_PAGES_PER_MESSAGE"
     )
-    attachment_vision_service_enabled: bool = Field(
-        default=True,
-        validation_alias="ATTACHMENT_VISION_SERVICE_ENABLED",
+    attachment_extract_max_chars_per_file: int = Field(
+        default=32_000,
+        validation_alias="ATTACHMENT_EXTRACT_MAX_CHARS_PER_FILE",
     )
-    attachment_vision_max_edge: int = Field(
-        default=1568,
-        validation_alias="ATTACHMENT_VISION_MAX_EDGE",
+    attachment_extract_max_chars_per_message: int = Field(
+        default=80_000,
+        validation_alias="ATTACHMENT_EXTRACT_MAX_CHARS_PER_MESSAGE",
     )
-    attachment_vision_jpeg_quality: int = Field(
-        default=85,
-        validation_alias="ATTACHMENT_VISION_JPEG_QUALITY",
-    )
-    attachment_vision_model_id: str | None = Field(
-        default=None,
-        validation_alias="ATTACHMENT_VISION_MODEL_ID",
+    attachment_table_max_rows_per_sheet: int = Field(
+        default=2000,
+        validation_alias="ATTACHMENT_TABLE_MAX_ROWS_PER_SHEET",
     )
     # Diagram rendering (agents/napkin-architect)
     plantuml_renderer: str = Field(default="kroki", validation_alias="PLANTUML_RENDERER")
@@ -179,15 +172,6 @@ class Settings(BaseSettings):
     )
     sandbox_timeout_seconds: float = Field(default=180.0, validation_alias="SANDBOX_TIMEOUT_SECONDS")
     sandbox_reuse_session: bool = Field(default=True, validation_alias="SANDBOX_REUSE_SESSION")
-
-    unify_lite_max_chars_per_file: int = Field(
-        default=32_000,
-        validation_alias="UNIFY_LITE_MAX_CHARS_PER_FILE",
-    )
-    unify_lite_max_chars_per_message: int = Field(
-        default=80_000,
-        validation_alias="UNIFY_LITE_MAX_CHARS_PER_MESSAGE",
-    )
 
     notion_mcp_client_id: str | None = Field(default=None, validation_alias="NOTION_MCP_CLIENT_ID")
     notion_mcp_client_secret: str | None = Field(default=None, validation_alias="NOTION_MCP_CLIENT_SECRET")

@@ -56,12 +56,6 @@ import {
 } from '../lib/attachmentUpload'
 import { isAttachmentReferenceCompatible } from '../lib/attachmentCompat'
 import {
-  getStoredAttachmentMode,
-  setStoredAttachmentMode,
-  UNIFY_LITE_ATTACHMENT_ACCEPT,
-  type AttachmentProcessingMode,
-} from '../lib/attachmentMode'
-import {
   detectMentionTrigger,
   filterAttachmentsForMention,
   insertMentionIntoText,
@@ -213,6 +207,7 @@ export function ChatPage() {
   )
   const [mentionHighlightIndex, setMentionHighlightIndex] = useState(0)
   const composerMentionWrapRef = useRef<HTMLDivElement>(null)
+  const mentionDismissedStartRef = useRef<number | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [memoryOpen, setMemoryOpen] = useState(false)
@@ -287,7 +282,6 @@ export function ChatPage() {
     fulfillmentForms,
     fulfillmentFormsLoading,
     fulfillmentFormsError,
-    attachmentMode,
   } = session
 
   const SCROLL_PIN_THRESHOLD_PX = 80
@@ -309,8 +303,6 @@ export function ChatPage() {
 
   const selected = agents.find((a) => a.id === selectedId) ?? null
   const selectedModelId = selectedId ? selectedModelByAgent[selectedId] ?? null : null
-  const currentModel = modelOptions.find((option) => option.id === selectedModelId) ?? null
-  const currentProvider = currentModel?.provider ?? selected?.model_provider ?? 'azure_anthropic'
   const isProposalComposer = selected?.slug === PROPOSAL_COMPOSER_SLUG
   const isYlWorker2 = selected?.slug === YL_WORKER2_SLUG
   const showChat = !agentsLoading && selected != null
@@ -659,6 +651,7 @@ export function ChatPage() {
       setRefMaterialsOpen(false)
       setRefMaterialsSearch('')
       setMentionTrigger(null)
+      mentionDismissedStartRef.current = null
       discardVisibleChatAttachments()
       patchSession(agentId, {
         chatId: null,
@@ -894,6 +887,7 @@ export function ChatPage() {
     setRefMaterialsOpen(false)
     setRefMaterialsSearch('')
     setMentionTrigger(null)
+    mentionDismissedStartRef.current = null
     if (!chatId) {
       discardVisibleChatAttachments()
       return
@@ -906,32 +900,44 @@ export function ChatPage() {
     void loadChatAttachments(chatId)
   }, [chatId, discardVisibleChatAttachments, loadChatAttachments])
 
-  const refreshMentionTrigger = useCallback((value: string, cursorPos: number) => {
-    setMentionTrigger(detectMentionTrigger(value, cursorPos))
-  }, [])
-
   const readyChatAttachments = useMemo(
     () => readyAttachments(chatAttachments),
     [chatAttachments],
   )
 
-  const mentionFilteredAttachments = useMemo(() => {
-    if (!mentionTrigger) return []
-    return filterAttachmentsForMention(
-      readyChatAttachments,
-      mentionTrigger.query,
-      attachmentMode,
-      currentProvider,
-    )
-  }, [attachmentMode, currentProvider, mentionTrigger, readyChatAttachments])
+  const refreshMentionTrigger = useCallback(
+    (value: string, cursorPos: number) => {
+      const next = detectMentionTrigger(value, cursorPos, readyChatAttachments)
+      if (next && mentionDismissedStartRef.current === next.start) {
+        setMentionTrigger(null)
+        return
+      }
+      if (!next || mentionDismissedStartRef.current !== next.start) {
+        mentionDismissedStartRef.current = null
+      }
+      setMentionTrigger(next)
+    },
+    [readyChatAttachments],
+  )
+
+  const closeMentionPopup = useCallback(() => {
+    setMentionTrigger((current) => {
+      if (current) mentionDismissedStartRef.current = current.start
+      return null
+    })
+  }, [])
 
   useEffect(() => {
     if (!selectedId) return
-    const stored = getStoredAttachmentMode(selectedId)
-    if (stored) {
-      patchSession(selectedId, { attachmentMode: stored })
-    }
-  }, [patchSession, selectedId])
+    const session = getAgentSession(sessionsRef.current, selectedId)
+    const cursor = textareaRef.current?.selectionStart ?? session.input.length
+    refreshMentionTrigger(session.input, cursor)
+  }, [readyChatAttachments, refreshMentionTrigger, selectedId])
+
+  const mentionFilteredAttachments = useMemo(() => {
+    if (!mentionTrigger) return []
+    return filterAttachmentsForMention(readyChatAttachments, mentionTrigger.query)
+  }, [mentionTrigger, readyChatAttachments])
 
   useEffect(() => {
     if (!mentionTrigger) return
@@ -975,24 +981,11 @@ export function ChatPage() {
     refreshMentionTrigger(value, pos)
   }
 
-  const handleAttachmentModeChange = useCallback(
-    (mode: AttachmentProcessingMode) => {
-      if (!selectedId) return
-      setStoredAttachmentMode(selectedId, mode)
-      patchSession(selectedId, { attachmentMode: mode })
-    },
-    [patchSession, selectedId],
-  )
-
   const insertAttachmentMention = useCallback(
     (attachment: ChatAttachment) => {
       if (!selectedId) return
       const session = getAgentSession(sessionsRef.current, selectedId)
-      const compat = isAttachmentReferenceCompatible(
-        attachment,
-        session.attachmentMode,
-        currentProvider,
-      )
+      const compat = isAttachmentReferenceCompatible(attachment)
       if (!compat.compatible) return
 
       const textarea = textareaRef.current
@@ -1006,6 +999,7 @@ export function ChatPage() {
           attachment.filename,
         )
         patchSession(selectedId, { input: nextValue })
+        mentionDismissedStartRef.current = null
         setMentionTrigger(null)
         requestAnimationFrame(() => {
           textarea?.focus()
@@ -1013,18 +1007,18 @@ export function ChatPage() {
         })
       } else {
         const needsSpace = session.input.length > 0 && !/\s$/.test(session.input)
-        const mention = `${needsSpace ? ' ' : ''}@${attachment.filename}`
+        const mention = `${needsSpace ? ' ' : ''}@${attachment.filename} `
         patchSession(selectedId, { input: `${session.input}${mention}` })
+        mentionDismissedStartRef.current = null
         setMentionTrigger(null)
       }
       setRecentlyReferencedAttachmentId(attachment.id)
       requestAnimationFrame(() => textarea?.focus())
     },
-    [currentProvider, mentionTrigger, patchSession, selectedId],
+    [mentionTrigger, patchSession, selectedId],
   )
 
-  const composerAttachmentAccept =
-    attachmentMode === 'unify_lite' ? UNIFY_LITE_ATTACHMENT_ACCEPT : SUPPORTED_ATTACHMENT_ACCEPT
+  const composerAttachmentAccept = SUPPORTED_ATTACHMENT_ACCEPT
 
   useEffect(() => {
     if (!recentlyReferencedAttachmentId) return
@@ -1134,8 +1128,7 @@ export function ChatPage() {
         return
       }
 
-      const session = getAgentSession(sessionsRef.current, selectedId)
-      const pending = createPendingAttachment(file, session.attachmentMode)
+      const pending = createPendingAttachment(file)
       patchChatAttachments((prev) => [pending, ...prev])
       setRefMaterialsOpen(true)
       patchSession(selectedId, { error: null })
@@ -1144,12 +1137,7 @@ export function ChatPage() {
         const pendingId = pending.id
         try {
           const activeChatId = await ensureChatId(selectedId)
-          const currentSession = getAgentSession(sessionsRef.current, selectedId)
-          const uploaded = await api.uploadChatAttachment(
-            activeChatId,
-            file,
-            currentSession.attachmentMode,
-          )
+          const uploaded = await api.uploadChatAttachment(activeChatId, file)
           const latestChatId = getAgentSession(sessionsRef.current, selectedId).chatId
           if (latestChatId !== activeChatId) {
             patchChatAttachments((prev) => prev.filter((row) => row.id !== pendingId))
@@ -1332,8 +1320,6 @@ export function ChatPage() {
       return
     }
 
-    const sendSession = getAgentSession(sessionsRef.current, agentId)
-
     for (const attachmentId of attachmentIds) {
       const att = attachmentRows.find((row) => row.id === attachmentId)
       if (!att) {
@@ -1343,11 +1329,7 @@ export function ChatPage() {
         })
         return
       }
-      const compat = isAttachmentReferenceCompatible(
-        att,
-        sendSession.attachmentMode,
-        currentProvider,
-      )
+      const compat = isAttachmentReferenceCompatible(att)
       if (!compat.compatible) {
         patchSession(agentId, {
           loading: false,
@@ -1377,7 +1359,6 @@ export function ChatPage() {
                   provider: item.provider,
                   provider_file_id: item.provider_file_id,
                 })),
-                attachment_mode: sendSession.attachmentMode,
               }
             : {},
         parent_id: null,
@@ -1621,7 +1602,6 @@ export function ChatPage() {
         },
         abortController.signal,
         attachmentIds,
-        sendSession.attachmentMode,
       )
 
       if (!streamRegistryRef.current.isActive(activeChatId, generation)) return
@@ -1930,6 +1910,7 @@ export function ChatPage() {
                           onQueryChange={updateMentionQuery}
                           onHighlightChange={setMentionHighlightIndex}
                           onSelect={insertAttachmentMention}
+                          onClose={closeMentionPopup}
                         />
                         <ComposerMentionInput
                           textareaRef={textareaRef}
@@ -1947,7 +1928,7 @@ export function ChatPage() {
                             if (mentionTrigger) {
                               if (e.key === 'Escape') {
                                 e.preventDefault()
-                                setMentionTrigger(null)
+                                closeMentionPopup()
                                 return
                               }
                               if (mentionFilteredAttachments.length > 0) {
@@ -2015,9 +1996,6 @@ export function ChatPage() {
                             onDeleteAttachment={(att) => void handleDeleteAttachment(att)}
                             referencedAttachmentIds={parseAttachmentMentionIds(input, readyChatAttachments)}
                             recentlyReferencedId={recentlyReferencedAttachmentId}
-                            attachmentMode={attachmentMode}
-                            onAttachmentModeChange={handleAttachmentModeChange}
-                            currentProvider={currentProvider}
                             disabled={loading || chatSessionLoading}
                           />
                         </div>

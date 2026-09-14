@@ -8,8 +8,6 @@ from app.platform.memory.memory_config import MemoryConfig
 from app.platform.memory.projector_registry import MemoryProjectorRegistry, get_memory_projector_registry
 from app.platform.memory.projectors.skill import SkillMemoryProjector
 from app.platform.memory.projectors.utils import ensure_dict
-from app.platform.attachments.materialization.compaction import strip_attachment_heavy_payload
-from app.platform.attachments.tool_result_slim import is_attachment_pull_tool
 
 
 class HistoryProjection:
@@ -23,13 +21,13 @@ class HistoryProjection:
         self._skill = skill_projector or SkillMemoryProjector()
 
     def project_rows(self, rows: list[dict[str, Any]], memory_config: MemoryConfig) -> list[dict[str, Any]]:
-        if not memory_config.slim.enabled and not memory_config.attachment_compaction.enabled:
+        if not memory_config.slim.enabled:
             return [dict(row) for row in rows]
 
         call_args: dict[str, dict[str, Any]] = {}
         projected: list[dict[str, Any]] = []
         for row in rows:
-            projected.append(self._project_row(dict(row), memory_config, call_args, rows))
+            projected.append(self._project_row(dict(row), memory_config, call_args))
         return projected
 
     def _project_row(
@@ -37,20 +35,15 @@ class HistoryProjection:
         row: dict[str, Any],
         memory_config: MemoryConfig,
         call_args: dict[str, dict[str, Any]],
-        all_rows: list[dict[str, Any]],
     ) -> dict[str, Any]:
         message_type = row.get("message_type") or ""
         metadata = dict(row.get("metadata") or {})
         tool_name = str(metadata.get("tool_name") or "")
 
         if message_type.startswith("skill_") or tool_name in {"load_skill", "read_skill_resource"}:
-            if not memory_config.slim.enabled:
-                return row
             return self._skill.project_skill_row(row, memory_config.slim)
 
         if message_type in ("tool_call", "mcp_call"):
-            if not memory_config.slim.enabled:
-                return row
             arguments = ensure_dict(metadata.get("arguments"))
             call_id = str(metadata.get("call_id") or "")
             if call_id:
@@ -78,11 +71,6 @@ class HistoryProjection:
             paired_args = call_args.get(call_id, {})
             if paired_args and "arguments" not in metadata:
                 metadata = {**metadata, "arguments": paired_args}
-            attachment_persist_slim = (
-                memory_config.attachment_pull.persist_summary_only and is_attachment_pull_tool(tool_name)
-            )
-            if not memory_config.slim.enabled and not attachment_persist_slim:
-                return row
             projector = self._registry.resolve(tool_name, message_type=message_type)
             slimmed = projector.slim_result(
                 tool_name=tool_name,
@@ -95,12 +83,5 @@ class HistoryProjection:
                 "content": slimmed.content,
                 "metadata": {**metadata, **slimmed.metadata},
             }
-
-        if message_type == "text" and row.get("role") == "user":
-            return strip_attachment_heavy_payload(
-                row,
-                rows=all_rows,
-                compaction=memory_config.attachment_compaction,
-            )
 
         return row

@@ -1,12 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { AtSign, FileText, Paperclip, Plus, Search, Trash2 } from 'lucide-react'
-import type { AttachmentProcessingMode } from '../lib/attachmentMode'
-import { UNIFY_LITE_ATTACHMENT_LABEL } from '../lib/attachmentMode'
 import type { ChatAttachmentListItem } from '../lib/attachmentUpload'
 import { isAttachmentReferenceCompatible } from '../lib/attachmentCompat'
 import { formatAttachmentTimestamp } from '../lib/attachmentMentions'
-import { AttachmentModeToggle } from './AttachmentModeToggle'
+import { SUPPORTED_ATTACHMENT_LABEL } from '../lib/attachments'
 import { LoadingSpinner } from './LoadingSpinner'
 
 function formatFileSize(sizeBytes: number): string {
@@ -29,9 +27,6 @@ interface ReferenceMaterialsDropupProps {
   onDeleteAttachment: (attachment: ChatAttachmentListItem) => void
   referencedAttachmentIds?: string[]
   recentlyReferencedId?: string | null
-  attachmentMode: AttachmentProcessingMode
-  onAttachmentModeChange: (mode: AttachmentProcessingMode) => void
-  currentProvider: string
   disabled?: boolean
 }
 
@@ -49,9 +44,6 @@ export function ReferenceMaterialsDropup({
   onDeleteAttachment,
   referencedAttachmentIds = [],
   recentlyReferencedId = null,
-  attachmentMode,
-  onAttachmentModeChange,
-  currentProvider,
   disabled = false,
 }: ReferenceMaterialsDropupProps) {
   const referencedSet = new Set(referencedAttachmentIds)
@@ -114,11 +106,6 @@ export function ReferenceMaterialsDropup({
           <Paperclip size={14} strokeWidth={1.75} aria-hidden="true" />
           <span>Attachments</span>
         </div>
-        <AttachmentModeToggle
-          value={attachmentMode}
-          onChange={onAttachmentModeChange}
-          disabled={disabled}
-        />
         <button
           type="button"
           className="ref-materials-add"
@@ -154,11 +141,7 @@ export function ReferenceMaterialsDropup({
           </p>
         ) : (
           filtered.map((att) => {
-            const compat = isAttachmentReferenceCompatible(att, attachmentMode, currentProvider)
-            const modeLabel =
-              att.processing_mode === 'unify_lite' || att.provider === 'unify_lite'
-                ? 'Unify-lite'
-                : 'Native'
+            const compat = isAttachmentReferenceCompatible(att)
             const isUploading = att.upload_status === 'uploading'
             const isFailed = att.upload_status === 'failed'
             const isDeleting = deletingAttachmentId === att.id
@@ -188,7 +171,7 @@ export function ReferenceMaterialsDropup({
                       ? 'Uploading…'
                       : isFailed
                         ? 'Upload failed'
-                        : `${modeLabel} · ${formatFileSize(att.size_bytes)}`}
+                        : formatFileSize(att.size_bytes)}
                     {!isUploading && !isFailed && att.created_at
                       ? ` · ${formatAttachmentTimestamp(att.created_at)}`
                       : ''}
@@ -248,9 +231,7 @@ export function ReferenceMaterialsDropup({
             ? ` · ${attachments.filter((att) => att.upload_status === 'uploading').length} uploading`
             : ''}
         </span>
-        {attachmentMode === 'unify_lite' ? (
-          <span className="ref-materials-footer-hint">{UNIFY_LITE_ATTACHMENT_LABEL}</span>
-        ) : null}
+        <span className="ref-materials-footer-hint">{SUPPORTED_ATTACHMENT_LABEL}</span>
       </div>
     </div>
   )

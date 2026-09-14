@@ -14,7 +14,6 @@ from app.db.repositories.messages import MessageRepository
 from app.platform.memory.maf_mapping import row_to_dict
 from app.platform.memory.memory_config import MemoryConfig
 from app.platform.memory.turn_window import take_last_turns
-from app.platform.attachments.materialization.compaction import compact_working_set_attachment_rows
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +172,6 @@ class SessionStore:
             existing_sequences.add(seq)
 
         existing_rows.sort(key=lambda r: int(r.get("sequence") or 0))
-        existing_rows = compact_working_set_attachment_rows(existing_rows, memory_config)
         trimmed = take_last_turns(existing_rows, memory_config.working_set_turns)
         last_sequence = max((int(r.get("sequence") or 0) for r in trimmed), default=0)
 

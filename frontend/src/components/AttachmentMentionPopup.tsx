@@ -20,6 +20,7 @@ interface AttachmentMentionPopupProps {
   onQueryChange: (query: string) => void
   onHighlightChange: (index: number) => void
   onSelect: (attachment: ChatAttachment) => void
+  onClose: () => void
 }
 
 export function AttachmentMentionPopup({
@@ -32,6 +33,7 @@ export function AttachmentMentionPopup({
   onQueryChange,
   onHighlightChange,
   onSelect,
+  onClose,
 }: AttachmentMentionPopupProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState({ left: 16, bottom: 80 })
@@ -67,6 +69,19 @@ export function AttachmentMentionPopup({
     )
     active?.scrollIntoView({ block: 'nearest' })
   }, [attachments.length, highlightIndex, open])
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      if (!target) return
+      if (panelRef.current?.contains(target)) return
+      if (anchorRef.current?.contains(target)) return
+      onClose()
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [anchorRef, onClose, open])
 
   if (!open) return null
 

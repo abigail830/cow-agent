@@ -5,7 +5,6 @@ from agent_framework import HistoryProvider, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories.messages import MessageRepository
-from app.platform.attachments.materialization.on_read import materialize_rows_on_read
 from app.platform.memory.maf_mapping import maf_message_to_rows, to_maf_messages
 from app.platform.memory.memory_config import MemoryConfig
 from app.platform.memory.provider_history import sanitize_rows_for_provider
@@ -21,6 +20,7 @@ class PostgresHistoryProvider(HistoryProvider):
         memory_config: MemoryConfig,
         pending_turn_start_sequence: int | None = None,
         model_provider: str | None = None,
+        model_id: str | None = None,
     ) -> None:
         super().__init__(
             "postgres-history",
@@ -34,6 +34,7 @@ class PostgresHistoryProvider(HistoryProvider):
         self._memory_config = memory_config
         self._pending_turn_start_sequence = pending_turn_start_sequence
         self._model_provider = model_provider
+        self._model_id = model_id
 
     async def get_messages(
         self, session_id: str | None, *, state: dict | None = None, **kwargs
@@ -48,11 +49,11 @@ class PostgresHistoryProvider(HistoryProvider):
         )
         if self._model_provider:
             rows = sanitize_rows_for_provider(rows, provider=self._model_provider)
-        rows = await materialize_rows_on_read(self._session, rows, chat_id=chat_id)
         return to_maf_messages(
             rows,
             memory_config=self._memory_config,
             model_provider=self._model_provider,
+            model_id=self._model_id,
         )
 
     async def save_messages(

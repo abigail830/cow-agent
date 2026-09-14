@@ -4,21 +4,25 @@ import type { ChatAttachment } from '../types'
 
 export const DEFAULT_ATTACHMENT_LIMITS = {
   max_files_per_message: 5,
-  max_bytes_per_file: 50 * 1024 * 1024,
+  max_bytes_per_file: 20 * 1024 * 1024,
   max_total_bytes_per_message: 50 * 1024 * 1024,
+  max_pages_per_file: 50,
+  max_pages_per_message: 60,
 } as const
 
 export type AttachmentLimits = {
   max_files_per_message: number
   max_bytes_per_file: number
   max_total_bytes_per_message: number
+  max_pages_per_file?: number
+  max_pages_per_message?: number
 }
 
 export const SUPPORTED_ATTACHMENT_ACCEPT =
-  '.pdf,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx'
+  '.pdf,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.xls,.xlsx'
 
 export const SUPPORTED_ATTACHMENT_LABEL =
-  'PDF, text, CSV, JSON, images (PNG/JPEG/GIF/WebP), Word/Excel/PowerPoint'
+  'PDF, text, CSV, JSON, images (PNG/JPEG/GIF/WebP), Excel'
 
 const SUPPORTED_ATTACHMENT_EXTENSIONS = new Set(
   SUPPORTED_ATTACHMENT_ACCEPT.split(',').map((ext) => ext.trim().toLowerCase()).filter(Boolean),
@@ -34,12 +38,8 @@ const SUPPORTED_ATTACHMENT_MIMES = new Set([
   'image/jpeg',
   'image/gif',
   'image/webp',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ])
 
 const MIME_TO_EXTENSION: Record<string, string> = {

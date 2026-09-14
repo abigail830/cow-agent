@@ -7,14 +7,11 @@ import logging
 import uuid
 from typing import Any
 
-from agent_framework import FunctionMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.platform.hooks.allowed_tools import AllowedToolsMiddleware
 from app.platform.hooks.audit import AuditMiddleware
-from app.platform.hooks.attachment_inline import AttachmentInlineChatMiddleware
 from app.platform.hooks.chat_redaction import ChatPiiRedactionMiddleware
-from app.config import get_settings
 from app.platform.hooks.stop_requested import StopRequestedMiddleware
 from app.platform.agent.allowed_tools import runtime_function_allowlist
 from app.platform.hooks.hook_catalog import HOOK_CATALOG, build_hook_middleware
@@ -33,7 +30,6 @@ def resolve_middleware(
     session_store: SessionStore | None = None,
     extra_allowed_tools: set[str] | None = None,
     stop_event: asyncio.Event | None = None,
-    enable_attachment_pull: bool | None = None,
 ) -> list:
     cfg = config or {}
     middleware: list = []
@@ -44,13 +40,6 @@ def resolve_middleware(
 
     if chat_id is not None:
         middleware.append(ChatPiiRedactionMiddleware())
-        pull_on = (
-            get_settings().attachment_pull_enabled
-            if enable_attachment_pull is None
-            else enable_attachment_pull
-        )
-        if pull_on:
-            middleware.append(AttachmentInlineChatMiddleware())
 
     allowed_entries = list(cfg.get("allowed_tools") or [])
     allowlist = runtime_function_allowlist(allowed_entries)

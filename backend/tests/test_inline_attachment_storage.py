@@ -2,12 +2,9 @@ import uuid
 
 from agent_framework import Content
 
-from app.platform.attachments.attachment_adapters import (
-    attachment_to_maf_content,
-    metadata_attachment_to_maf_content,
-    should_use_azure_inline_image,
-)
-from app.platform.attachments.attachment_storage import (
+from app.platform.attachments.materialize import materialize_attachments
+from app.platform.attachments.providers.adapters import should_use_azure_inline_image
+from app.platform.attachments.storage import (
     format_inline_provider_file_id,
     is_inline_provider_file_id,
     load_inline_attachment,
@@ -34,14 +31,17 @@ def test_inline_provider_file_id_roundtrip():
 
 class _InlineAttachment:
     def __init__(self, chat_id: uuid.UUID, attachment_id: uuid.UUID) -> None:
+        self.id = attachment_id
         self.chat_id = chat_id
         self.provider_file_id = format_inline_provider_file_id(attachment_id)
         self.mime_type = "image/png"
         self.filename = "screenshot.png"
+        self.size_bytes = 8
+        self.provider = "azure_openai"
 
 
-def test_attachment_to_maf_content_inline_image(tmp_path, monkeypatch):
-    import app.platform.attachments.attachment_storage as attachment_storage
+def test_materialize_inline_image(tmp_path, monkeypatch):
+    import app.platform.attachments.storage as attachment_storage
 
     monkeypatch.setattr(attachment_storage, "blob_storage_enabled", lambda: False)
     monkeypatch.setattr(attachment_storage, "INLINE_ATTACHMENTS_ROOT", tmp_path)
@@ -50,14 +50,20 @@ def test_attachment_to_maf_content_inline_image(tmp_path, monkeypatch):
     attachment_id = uuid.uuid4()
     save_inline_attachment(chat_id, attachment_id, b"\x89PNG\r\n\x1a\n")
 
-    content = attachment_to_maf_content(_InlineAttachment(chat_id, attachment_id))
+    parts = materialize_attachments(
+        [_InlineAttachment(chat_id, attachment_id)],
+        chat_id=chat_id,
+        provider="azure_openai",
+    )
+    assert len(parts) == 1
+    content = parts[0]
     assert isinstance(content, Content)
     assert content.type == "data"
     assert content.media_type == "image/png"
 
 
-def test_metadata_attachment_to_maf_content_inline_image(tmp_path, monkeypatch):
-    import app.platform.attachments.attachment_storage as attachment_storage
+def test_materialize_metadata_inline_image(tmp_path, monkeypatch):
+    import app.platform.attachments.storage as attachment_storage
 
     monkeypatch.setattr(attachment_storage, "blob_storage_enabled", lambda: False)
     monkeypatch.setattr(attachment_storage, "INLINE_ATTACHMENTS_ROOT", tmp_path)
@@ -72,13 +78,13 @@ def test_metadata_attachment_to_maf_content_inline_image(tmp_path, monkeypatch):
         "mime_type": "image/png",
         "provider_file_id": format_inline_provider_file_id(attachment_id),
     }
-    content = metadata_attachment_to_maf_content(item, chat_id=chat_id)
-    assert content is not None
-    assert content.type == "data"
+    parts = materialize_attachments([item], chat_id=chat_id, provider="azure_openai")
+    assert parts
+    assert parts[0].type == "data"
 
 
 def test_save_inline_attachment_uses_blob_when_enabled(monkeypatch):
-    import app.platform.attachments.attachment_storage as attachment_storage
+    import app.platform.attachments.storage as attachment_storage
 
     stored: dict[str, bytes] = {}
 

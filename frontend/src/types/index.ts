@@ -57,7 +57,6 @@ export interface ChatAttachment {
   size_bytes: number
   provider: string
   provider_file_id: string
-  processing_mode?: string | null
   created_at: string | null
 }
 

@@ -1,4 +1,3 @@
-import type { AttachmentProcessingMode } from './attachmentMode'
 import type { ChatAttachment } from '../types'
 
 export type AttachmentUploadStatus = 'uploading' | 'failed'
@@ -15,19 +14,15 @@ export function isAttachmentReady(att: ChatAttachmentListItem): boolean {
   return !isPendingAttachmentId(att.id) && att.upload_status !== 'uploading'
 }
 
-export function createPendingAttachment(
-  file: File,
-  processingMode: AttachmentProcessingMode,
-): ChatAttachmentListItem {
+export function createPendingAttachment(file: File): ChatAttachmentListItem {
   return {
     id: `pending-${crypto.randomUUID()}`,
     chat_id: '',
     filename: file.name,
     mime_type: file.type || 'application/octet-stream',
     size_bytes: file.size,
-    provider: processingMode === 'unify_lite' ? 'unify_lite' : 'pending',
+    provider: 'pending',
     provider_file_id: '',
-    processing_mode: processingMode,
     created_at: null,
     upload_status: 'uploading',
   }
@@ -44,10 +39,8 @@ export function mergeChatAttachmentList(
 ): ChatAttachmentListItem[] {
   const serverById = new Map(server.map((row) => [row.id, row]))
   const uploading = local.filter((row) => row.upload_status === 'uploading')
-  // Rows that finished locally but may be missing from a stale server snapshot.
   const localOnlyReady = local.filter(
-    (row) =>
-      isAttachmentReady(row) && !serverById.has(row.id),
+    (row) => isAttachmentReady(row) && !serverById.has(row.id),
   )
 
   const seen = new Set<string>()
@@ -69,7 +62,6 @@ export function mergeChatAttachmentList(
   return merged
 }
 
-/** Apply upload result; when unify-lite dedupes to an existing id, drop the pending row only. */
 export function replacePendingAttachment(
   prev: ChatAttachmentListItem[],
   pendingId: string,

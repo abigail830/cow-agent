@@ -1,4 +1,3 @@
-import type { AttachmentProcessingMode } from './attachmentMode'
 import type { ChatAttachment } from '../types'
 import { isAttachmentReferenceCompatible } from './attachmentCompat'
 
@@ -7,13 +6,33 @@ export type MentionTrigger = {
   query: string
 }
 
-/** Detect `@query` being typed at the cursor (query may be empty). */
-export function detectMentionTrigger(value: string, cursorPos: number): MentionTrigger | null {
-  const before = value.slice(0, cursorPos)
-  const match = before.match(/@([^\s@]*)$/)
+/**
+ * Detect an in-progress `@query` at the cursor.
+ * Already-resolved `@filename` chips are closed tokens: typing immediately after
+ * them (including CJK with no space) must not reopen the picker.
+ */
+export function detectMentionTrigger(
+  value: string,
+  cursorPos: number,
+  attachments: ChatAttachment[] = [],
+): MentionTrigger | null {
+  const clamped = Math.max(0, Math.min(cursorPos, value.length))
+  const segments = segmentInputByMentions(value, attachments)
+  let offset = 0
+  let textRunStart = 0
+  for (const segment of segments) {
+    const end = offset + segment.value.length
+    if (segment.kind === 'mention') {
+      if (clamped > offset && clamped <= end) return null
+      if (end <= clamped) textRunStart = end
+    }
+    offset = end
+  }
+  const localBefore = value.slice(textRunStart, clamped)
+  const match = localBefore.match(/@([^\s@]*)$/)
   if (!match) return null
   return {
-    start: cursorPos - match[0].length,
+    start: textRunStart + localBefore.length - match[0].length,
     query: match[1] ?? '',
   }
 }
@@ -21,12 +40,10 @@ export function detectMentionTrigger(value: string, cursorPos: number): MentionT
 export function filterAttachmentsForMention(
   attachments: ChatAttachment[],
   query: string,
-  mode: AttachmentProcessingMode,
-  currentProvider: string,
 ): ChatAttachment[] {
   const normalized = query.trim().toLowerCase()
   return attachments.filter((att) => {
-    if (!isAttachmentReferenceCompatible(att, mode, currentProvider).compatible) return false
+    if (!isAttachmentReferenceCompatible(att).compatible) return false
     if (!normalized) return true
     return att.filename.toLowerCase().includes(normalized)
   })
@@ -141,8 +158,9 @@ export function insertMentionIntoText(
   const before = value.slice(0, mentionStart)
   const after = value.slice(cursorPos)
   const mention = `@${filename}`
-  const nextValue = `${before}${mention}${after}`
-  const nextCursor = before.length + mention.length
+  const glue = /^\s/.test(after) ? '' : ' '
+  const nextValue = `${before}${mention}${glue}${after}`
+  const nextCursor = before.length + mention.length + glue.length
   return { nextValue, nextCursor }
 }
 

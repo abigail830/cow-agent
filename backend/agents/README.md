@@ -118,9 +118,7 @@ DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 
 可选模型见 `backend/config/models.yaml`（如 `qwen3.7-plus`、`qwen3.8-max`、`minimax-m3`）。
 
-**Unify-lite 附件**：txt/md/docx 抽取为文本；图片上传至 blob，仅在消息中 `@filename` 引用时以 Native 多模态发送。
-
-**Native 附件**：PDF（Azure）/ 图片 inline 多模态。
+附件走单一路径（`platform/attachments/`）：图片多模态；Qwen 原生 PDF，MiniMax PDF 转图；xlsx/csv/txt 抽文本；PPT/Word 请用户先另存为 PDF。
 
 ### DeepSeek
 
@@ -138,7 +136,7 @@ DEEPSEEK_API_KEY=sk-...
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 ```
 
-附件：Native 模式下图片 inline 多模态；Unify-lite 下 `@` 引用图片时同样走 Native 多模态。
+附件：图片优先 Files API `file_id`；PDF 转图后走视觉；xlsx/txt 抽文本。
 
 ### mcp_servers.yaml vs profile
 

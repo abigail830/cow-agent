@@ -1,4 +1,4 @@
-"""Add content_hash to chat_attachments for unify-lite deduplication."""
+"""Add content_hash to chat_attachments for upload deduplication."""
 
 from __future__ import annotations
 

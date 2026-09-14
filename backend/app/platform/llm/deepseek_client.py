@@ -61,16 +61,41 @@ class PlatformDeepSeekClient(OpenAIChatCompletionClient):
 
     def _prepare_message_for_openai(self, message: Message) -> list[dict[str, Any]]:
         reasoning_text = _reasoning_text_from_message(message)
-        if reasoning_text:
+        hosted_files = [
+            content
+            for content in (message.contents or [])
+            if getattr(content, "type", None) == "hosted_file" and getattr(content, "file_id", None)
+        ]
+        if reasoning_text or hosted_files:
             stripped = Message(
                 message.role,
-                [content for content in (message.contents or []) if getattr(content, "type", None) != "text_reasoning"],
+                [
+                    content
+                    for content in (message.contents or [])
+                    if getattr(content, "type", None) not in {"text_reasoning", "hosted_file"}
+                ],
                 author_name=message.author_name,
                 additional_properties=message.additional_properties,
             )
             prepared = super()._prepare_message_for_openai(stripped)
         else:
             prepared = super()._prepare_message_for_openai(message)
+
+        if hosted_files:
+            file_parts = [{"type": "file", "file_id": content.file_id} for content in hosted_files]
+            for item in prepared:
+                if item.get("role") != "user":
+                    continue
+                body = item.get("content")
+                if isinstance(body, list):
+                    item["content"] = [*body, *file_parts]
+                elif isinstance(body, str) and body:
+                    item["content"] = [{"type": "text", "text": body}, *file_parts]
+                else:
+                    item["content"] = file_parts
+                break
+            else:
+                prepared.append({"role": "user", "content": file_parts})
 
         if not reasoning_text:
             return prepared

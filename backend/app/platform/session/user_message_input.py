@@ -5,32 +5,34 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from agent_framework import Content, Message
-
-from app.platform.attachments.attachment_adapters import attachment_metadata, attachments_to_maf_contents
-from app.platform.attachments.unify_lite.message_builder import build_user_run_input_lite
-from app.platform.attachments.unify_lite.types import ExtractedAttachment
+from app.platform.attachments.materialize import build_user_message_with_attachments
+from app.platform.attachments.metadata import attachment_metadata
 
 
 __all__ = [
     "build_user_run_input",
-    "build_user_run_input_lite",
     "link_attachments_metadata",
     "user_message_attachment_metadata",
 ]
 
 
-def build_user_run_input(content: str, attachments: list[Any]) -> str | Message:
-    text = content.strip()
+def build_user_run_input(
+    content: str,
+    attachments: list[Any],
+    *,
+    model_id: str | None = None,
+    provider: str | None = None,
+):
     if not attachments:
-        return text
-    contents: list[Content] = []
-    if text:
-        contents.append(Content.from_text(text))
-    contents.extend(attachments_to_maf_contents(attachments))
-    if not contents:
-        contents.append(Content.from_text(""))
-    return Message(role="user", contents=contents)
+        return content.strip() or content
+    chat_id = getattr(attachments[0], "chat_id", None)
+    return build_user_message_with_attachments(
+        content,
+        attachments,
+        chat_id=chat_id or uuid.UUID(int=0),
+        model_id=model_id,
+        provider=provider,
+    )
 
 
 def user_message_attachment_metadata(attachments: list[Any]) -> dict[str, Any]:
@@ -42,15 +44,8 @@ def user_message_attachment_metadata(attachments: list[Any]) -> dict[str, Any]:
 def link_attachments_metadata(
     metadata: dict[str, Any],
     attachments: list[Any],
-    *,
-    attachment_mode: str | None = None,
 ) -> dict[str, Any]:
     attachment_meta = user_message_attachment_metadata(attachments)
-    if not attachment_meta and not attachment_mode:
+    if not attachment_meta:
         return metadata
-    merged = {**metadata}
-    if attachment_meta:
-        merged.update(attachment_meta)
-    if attachment_mode:
-        merged["attachment_mode"] = attachment_mode
-    return merged
+    return {**metadata, **attachment_meta}

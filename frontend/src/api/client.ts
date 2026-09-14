@@ -10,7 +10,6 @@ import type {
   User,
   IntegrationStatus,
 } from '../types'
-import type { AttachmentProcessingMode } from '../lib/attachmentMode'
 import type { AttachmentLimits } from '../lib/attachments'
 import { DEFAULT_ATTACHMENT_LIMITS } from '../lib/attachments'
 import type { ProposalExportResponse, ProposalPreview } from '../types/proposalPreview'
@@ -121,11 +120,9 @@ export const api = {
   uploadChatAttachment: async (
     chatId: string,
     file: File,
-    processingMode: AttachmentProcessingMode = 'unify_lite',
   ): Promise<ChatAttachment> => {
     const form = new FormData()
     form.append('file', file)
-    form.append('processing_mode', processingMode)
     const res = await fetch(`${API}/chats/${chatId}/attachments`, {
       ...defaultFetchInit,
       method: 'POST',
@@ -216,7 +213,6 @@ export async function streamChat(
   onEvent: (ev: StreamEvent) => void,
   signal?: AbortSignal,
   attachmentIds: string[] = [],
-  attachmentMode: AttachmentProcessingMode = 'unify_lite',
 ): Promise<void> {
   const res = await fetch(`${API}/chats/${chatId}/stream`, {
     ...defaultFetchInit,
@@ -225,7 +221,6 @@ export async function streamChat(
     body: JSON.stringify({
       content,
       attachment_ids: attachmentIds,
-      attachment_mode: attachmentMode,
     }),
     signal,
   })

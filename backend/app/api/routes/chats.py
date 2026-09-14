@@ -2,7 +2,7 @@ import json
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -283,7 +283,6 @@ async def list_attachments(
             size_bytes=row["size_bytes"],
             provider=row["provider"],
             provider_file_id=row["provider_file_id"],
-            processing_mode=row.get("processing_mode"),
             created_at=row.get("created_at"),
         )
         for row in rows
@@ -293,7 +292,6 @@ async def list_attachments(
 @router.post("/{chat_id}/attachments", response_model=AttachmentOut, status_code=201)
 async def upload_attachment(
     file: UploadFile = File(...),
-    processing_mode: str = Form("unify_lite"),
     chat: Chat = Depends(get_owned_chat),
     db: AsyncSession = Depends(get_db),
 ) -> AttachmentOut:
@@ -309,7 +307,6 @@ async def upload_attachment(
             filename=file.filename,
             mime_type=mime_type,
             data=data,
-            processing_mode=processing_mode,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -324,7 +321,6 @@ async def upload_attachment(
         size_bytes=payload["size_bytes"],
         provider=payload["provider"],
         provider_file_id=payload["provider_file_id"],
-        processing_mode=payload.get("processing_mode"),
         created_at=None,
     )
 
@@ -354,7 +350,6 @@ async def post_message(
             chat.id,
             body.content,
             attachment_ids=body.attachment_ids,
-            attachment_mode=body.attachment_mode,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -378,7 +373,6 @@ async def stream_message(
                 chat.id,
                 body.content,
                 attachment_ids=body.attachment_ids,
-                attachment_mode=body.attachment_mode,
             ):
                 yield f"event: {event['event']}\ndata: {json.dumps(event['data'], ensure_ascii=False)}\n\n"
         except ValueError as exc:

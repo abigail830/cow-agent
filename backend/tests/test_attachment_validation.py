@@ -1,6 +1,7 @@
 import pytest
 
-from app.platform.attachments.attachment_adapters import validate_attachment_file, validate_message_attachments
+from app.config import get_settings
+from app.platform.attachments.validation import validate_attachment_file, validate_message_attachments
 
 
 def test_validate_attachment_file_rejects_empty():
@@ -9,11 +10,12 @@ def test_validate_attachment_file_rejects_empty():
 
 
 def test_validate_attachment_file_rejects_oversized():
-    with pytest.raises(ValueError, match="limit"):
+    limit = get_settings().attachment_max_bytes_per_file
+    with pytest.raises(ValueError, match="MB"):
         validate_attachment_file(
             filename="big.pdf",
             mime_type="application/pdf",
-            size_bytes=50 * 1024 * 1024 + 1,
+            size_bytes=limit + 1,
         )
 
 
@@ -37,8 +39,8 @@ def test_validate_message_attachments_rejects_too_many():
 
 
 def test_validate_message_attachments_rejects_total_size():
-    half = 50 * 1024 * 1024 // 2 + 1
-    with pytest.raises(ValueError, match="Combined"):
+    half = get_settings().attachment_max_total_bytes_per_message // 2 + 1
+    with pytest.raises(ValueError, match="MB"):
         validate_message_attachments(size_bytes_list=[half, half])
 
 

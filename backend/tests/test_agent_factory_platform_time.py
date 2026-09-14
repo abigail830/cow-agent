@@ -55,49 +55,12 @@ async def test_agent_factory_injects_platform_time():
 
         await AgentFactory(MagicMock()).build(agent_id)
 
-    assert "platform_time" in _tool_names(created.get("tools"))
-    assert "platform_time" in middleware_kwargs.get("extra_allowed_tools", set())
-    assert "analyze_image" in _tool_names(created.get("tools"))
-
-
-@pytest.mark.asyncio
-async def test_agent_factory_native_mode_omits_attachment_pull_tools():
-    agent_id = UUID("00000000-0000-0000-0000-000000000098")
-    mock_row = MagicMock()
-    mock_row.model_provider = "deepseek"
-    mock_row.model_name = "deepseek-flash"
-    mock_row.name = "test-agent"
-    mock_row.slug = "content-studio"
-    mock_row.instructions = "test"
-    mock_row.config = {"allowed_tools": ["sandbox_run_command"]}
-    mock_row.default_model_id = "deepseek-flash"
-
-    created: dict = {}
-
-    with (
-        patch.object(AgentFactory, "get_agent_row", AsyncMock(return_value=mock_row)),
-        patch("app.platform.agent.agent_factory.PostgresHistoryProvider"),
-        patch("app.platform.agent.agent_factory.SkillRegistry") as skill_reg_cls,
-        patch("app.platform.agent.agent_factory.ToolRegistry") as tool_reg_cls,
-        patch("app.platform.agent.agent_factory.McpRegistry") as mcp_reg_cls,
-        patch("app.platform.agent.agent_factory.ModelProviderRegistry") as model_reg_cls,
-        patch("app.platform.agent.agent_factory.resolve_middleware", return_value=[]),
-        patch("app.platform.agent.agent_factory.append_platform_instructions", side_effect=lambda text, **_: text) as append_mock,
-    ):
-        skill_reg_cls.return_value.resolve_provider_for_agent = AsyncMock(return_value=None)
-        tool_reg_cls.return_value.resolve_for_agent = AsyncMock(return_value=[])
-        mcp_reg_cls.return_value.resolve_for_agent = AsyncMock(return_value=[])
-        model_reg_cls.return_value.create_agent.side_effect = lambda **kwargs: (
-            created.update(kwargs) or MagicMock()
-        )
-
-        await AgentFactory(MagicMock()).build(agent_id, attachment_mode="native")
-
     names = _tool_names(created.get("tools"))
     assert "platform_time" in names
+    assert "platform_time" in middleware_kwargs.get("extra_allowed_tools", set())
     assert "analyze_image" not in names
     assert "inline_attachment" not in names
-    assert append_mock.call_args.kwargs.get("include_attachment_pull") is False
+    assert "read_attachment" not in names
 
 
 def test_platform_time_in_allowlist_with_profile_tools():

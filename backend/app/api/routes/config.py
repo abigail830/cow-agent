@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.config import get_settings
-from app.platform.attachments.attachment_limits import attachment_limits_dict
+from app.platform.attachments.limits import attachment_limits_dict
 from app.platform.auth.current_user import get_current_user
 
 router = APIRouter(prefix="/config", tags=["config"])

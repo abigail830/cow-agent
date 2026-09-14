@@ -1,6 +1,4 @@
 import type { ProposalPanelTab } from '../components/ProposalPanelShell'
-import type { AttachmentProcessingMode } from './attachmentMode'
-import { DEFAULT_ATTACHMENT_MODE } from './attachmentMode'
 import type { PendingAttachment } from './attachments'
 import type { TurnSyncPhase } from './turnSync'
 import type { ArtifactSpec } from '../types/artifact'
@@ -16,7 +14,6 @@ export type AgentChatSession = {
   messages: Message[]
   input: string
   pendingAttachments: PendingAttachment[]
-  attachmentMode: AttachmentProcessingMode
   loading: boolean
   activeRunId: string | null
   chatSessionLoading: boolean
@@ -48,7 +45,6 @@ export function createEmptyAgentSession(agentId: string): AgentChatSession {
     messages: [],
     input: '',
     pendingAttachments: [],
-    attachmentMode: DEFAULT_ATTACHMENT_MODE,
     loading: false,
     activeRunId: null,
     chatSessionLoading: false,

@@ -5,15 +5,10 @@ from typing import Any
 from agent_framework import Content, Message
 
 from app.platform.memory.projectors.utils import ensure_dict, stringify_function_call_arguments
-from app.platform.attachments.attachment_adapters import metadata_attachment_to_maf_content
-from app.platform.attachments.materialization.registry import AttachmentMaterializationRegistry
-from app.platform.attachments.materialization.replay import build_replay_user_message_contents
-from app.platform.attachments.materialization.visibility import (
-    VisibilityIndex,
-    project_rows_for_visibility,
-)
+from app.platform.attachments.materialize import build_replay_attachment_contents
 from app.platform.agent.platform_instructions import RUN_CANCELLED_USER_TEXT
 from app.platform.memory.memory_config import MemoryConfig
+from app.platform.memory.slimmer import HistoryProjection
 
 PLATFORM_MESSAGE_TYPE_KEY = "platform_message_type"
 PLATFORM_METADATA_KEY = "platform_metadata"
@@ -71,6 +66,17 @@ def _row_to_content(row: dict[str, Any]) -> Content | None:
     return None
 
 
+def _project_history_rows(
+    rows: list[dict[str, Any]],
+    memory_config: MemoryConfig | None,
+) -> list[dict[str, Any]]:
+    if not rows:
+        return []
+    if memory_config is None or not memory_config.slim.enabled:
+        return [dict(row) for row in rows]
+    return HistoryProjection().project_rows(rows, memory_config)
+
+
 def _attachment_dicts(metadata: dict[str, Any]) -> list[dict[str, Any]]:
     raw = metadata.get("attachments")
     if not isinstance(raw, list):
@@ -78,20 +84,12 @@ def _attachment_dicts(metadata: dict[str, Any]) -> list[dict[str, Any]]:
     return [item for item in raw if isinstance(item, dict)]
 
 
-def _attachments_to_contents(metadata: dict[str, Any], *, chat_id: uuid.UUID) -> list[Content]:
-    contents: list[Content] = []
-    for item in _attachment_dicts(metadata):
-        content = metadata_attachment_to_maf_content(item, chat_id=chat_id)
-        if content is not None:
-            contents.append(content)
-    return contents
-
-
 def to_maf_messages(
     rows: list[dict[str, Any]],
     *,
     memory_config: MemoryConfig | None = None,
     model_provider: str | None = None,
+    model_id: str | None = None,
 ) -> list[Message]:
     """Rebuild MAF history with Anthropic-compatible grouping.
 
@@ -99,15 +97,11 @@ def to_maf_messages(
     Tool results immediately follow as separate tool-role messages.
     Duplicate tool rows (audit + persist) are skipped by call_id.
     """
-    projected = project_rows_for_visibility(rows, memory_config)
+    projected = _project_history_rows(rows, memory_config)
     messages: list[Message] = []
     assistant_contents: list[Content] = []
     seen_tool_calls: set[str] = set()
     seen_tool_results: set[str] = set()
-    attachment_registry = AttachmentMaterializationRegistry()
-    visibility = VisibilityIndex()
-    pull_config = memory_config.attachment_pull if memory_config else None
-
     pending_assistant_meta: dict[str, Any] = {}
 
     def flush_assistant() -> None:
@@ -141,11 +135,10 @@ def to_maf_messages(
                 user_contents.append(Content.from_text(text))
             if _attachment_dicts(metadata):
                 user_contents.extend(
-                    build_replay_user_message_contents(
+                    build_replay_attachment_contents(
                         row,
-                        registry=attachment_registry,
-                        visibility=visibility,
-                        pull_config=pull_config,
+                        model_id=model_id,
+                        provider=model_provider,
                     )
                 )
             if not user_contents:

@@ -1,8 +1,8 @@
 import pytest
 
-from app.platform.attachments.attachment_adapters import (
-    _azure_openai_files_url,
+from app.platform.attachments.providers.adapters import (
     azure_openai_file_upload_purpose,
+    azure_openai_files_url,
     is_azure_openai_base_url,
     validate_azure_openai_attachment_mime,
 )
@@ -15,7 +15,7 @@ def test_is_azure_openai_base_url():
 
 
 def test_azure_openai_files_url_uses_v1_path():
-    url = _azure_openai_files_url(
+    url = azure_openai_files_url(
         "https://smart-sales.cognitiveservices.azure.com/openai",
         "preview",
     )
