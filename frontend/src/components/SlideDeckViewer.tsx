@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ArtifactSpec } from '../types/artifact'
 import { resolveApiPath } from '../lib/apiBase'
 import { LoadingSpinner } from './LoadingSpinner'
@@ -39,15 +39,33 @@ function isPreviewLoadFailure(bodyText: string): boolean {
   return false
 }
 
+/**
+ * HTML decks: same request as Download (`resolveApiPath` + cookies), then a
+ * blob iframe. Direct iframe src to cow-agent.vercel.app is blocked by
+ * CSP `frame-ancestors 'self'`; fetch is not.
+ */
+async function loadHtmlPreviewBlob(previewPath: string): Promise<string> {
+  const res = await fetch(resolveApiPath(previewPath), { credentials: 'include' })
+  const text = await res.text()
+  if (!res.ok || isPreviewLoadFailure(text)) {
+    throw new Error(res.statusText || 'Preview file not found')
+  }
+  return URL.createObjectURL(new Blob([text], { type: 'text/html;charset=utf-8' }))
+}
+
 export function SlideDeckViewer({ spec }: Props) {
-  const previewUrl = spec.preview_url
-    ? normalizeSlidePreviewUrl(resolveApiPath(spec.preview_url))
-    : null
+  const previewPath = spec.preview_url ? normalizeSlidePreviewUrl(spec.preview_url) : null
+  const useHtmlBlob = Boolean(previewPath && spec.format === 'html')
+  const iframeSrcFallback = previewPath ? normalizeSlidePreviewUrl(resolveApiPath(previewPath)) : null
+
   const wrapRef = useRef<HTMLDivElement>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const [iframeState, setIframeState] = useState<'loading' | 'ready' | 'error'>(
-    previewUrl ? 'loading' : 'ready',
+    previewPath ? 'loading' : 'ready',
   )
+
+  const iframeSrc = useHtmlBlob ? blobUrl : iframeSrcFallback
 
   const fitIframe = useCallback(() => {
     const wrap = wrapRef.current
@@ -71,12 +89,39 @@ export function SlideDeckViewer({ spec }: Props) {
   }, [])
 
   useEffect(() => {
-    setIframeState(previewUrl ? 'loading' : 'ready')
-  }, [previewUrl])
+    if (!previewPath || !useHtmlBlob) {
+      setBlobUrl(null)
+      setIframeState(previewPath ? 'loading' : 'ready')
+      return
+    }
+
+    let cancelled = false
+    let objectUrl: string | null = null
+    setBlobUrl(null)
+    setIframeState('loading')
+    void loadHtmlPreviewBlob(previewPath)
+      .then((url) => {
+        if (cancelled) {
+          URL.revokeObjectURL(url)
+          return
+        }
+        objectUrl = url
+        setBlobUrl(url)
+        setIframeState('ready')
+      })
+      .catch(() => {
+        if (!cancelled) setIframeState('error')
+      })
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [previewPath, useHtmlBlob])
 
   useEffect(() => {
     const wrap = wrapRef.current
-    if (!wrap || !previewUrl) return
+    if (!wrap || !iframeSrc) return
 
     fitIframe()
 
@@ -88,24 +133,9 @@ export function SlideDeckViewer({ spec }: Props) {
 
     window.addEventListener('resize', fitIframe)
     return () => window.removeEventListener('resize', fitIframe)
-  }, [previewUrl, iframeState, fitIframe])
+  }, [iframeSrc, iframeState, fitIframe])
 
-  const handleIframeLoad = (event: SyntheticEvent<HTMLIFrameElement>) => {
-    const iframe = event.currentTarget
-    try {
-      const bodyText = iframe.contentDocument?.body?.innerText ?? ''
-      if (isPreviewLoadFailure(bodyText)) {
-        setIframeState('error')
-        return
-      }
-    } catch {
-      // Cross-origin iframe — cannot inspect document.
-    }
-    setIframeState('ready')
-    fitIframe()
-  }
-
-  if (previewUrl) {
+  if (previewPath) {
     return (
       <div ref={wrapRef} className="slide-deck-viewer-wrap">
         {iframeState === 'loading' ? (
@@ -120,17 +150,19 @@ export function SlideDeckViewer({ spec }: Props) {
             <p className="panel-loading-caption">Open Download for the source file.</p>
           </div>
         ) : null}
-        <iframe
-          ref={iframeRef}
-          className="slide-deck-viewer"
-          title={spec.title}
-          src={previewUrl}
-          sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-          referrerPolicy="no-referrer"
-          aria-hidden={iframeState === 'error'}
-          onLoad={handleIframeLoad}
-          onError={() => setIframeState('error')}
-        />
+        {iframeSrc ? (
+          <iframe
+            ref={iframeRef}
+            className="slide-deck-viewer"
+            title={spec.title}
+            src={iframeSrc}
+            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+            referrerPolicy="no-referrer"
+            aria-hidden={iframeState === 'error'}
+            onLoad={fitIframe}
+            onError={() => setIframeState('error')}
+          />
+        ) : null}
       </div>
     )
   }
