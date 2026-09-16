@@ -83,6 +83,10 @@ export function normalizePastedAttachmentFile(file: File): File {
 /** Read supported files from a paste event (e.g. screenshot from clipboard). */
 export function readPastedAttachmentFiles(data: DataTransfer | null): File[] {
   if (!data) return []
+  // Word / Excel / browsers often put both text/plain and a rendered PNG on the
+  // clipboard. Prefer inserting the text; only treat this as an attachment paste
+  // when there is no plain text (true screenshot / file copy).
+  if (data.getData('text/plain').trim()) return []
   const files: File[] = []
   for (const item of Array.from(data.items)) {
     if (item.kind !== 'file') continue
