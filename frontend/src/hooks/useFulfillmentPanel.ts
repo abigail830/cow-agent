@@ -31,6 +31,7 @@ export function useFulfillmentPanel({
 
   const fetchForms = useCallback(
     async (agentId: string, id: string) => {
+      if (!id) return
       const generation = (fetchGenRef.current.get(agentId) ?? 0) + 1
       fetchGenRef.current.set(agentId, generation)
       patchSession(agentId, {
@@ -68,11 +69,11 @@ export function useFulfillmentPanel({
   )
 
   useEffect(() => {
-    if (!isYlWorker2 || !selectedId) {
+    if (!isYlWorker2 || !selectedId || !chatId) {
       fetchKeyRef.current = null
       return
     }
-    if (!chatId || chatSessionLoading) return
+    if (chatSessionLoading) return
 
     const fetchKey = `${selectedId}:${chatId}`
     if (fetchKeyRef.current === fetchKey) return

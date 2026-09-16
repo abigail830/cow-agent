@@ -49,3 +49,11 @@ class ProposalStreamEmitter(StreamEmitter):
             return []
         event = proposal_updated_event(chat_id)
         return [event] if event is not None else []
+
+    def events_after_finalize(
+        self,
+        chat_id: uuid.UUID,
+        accumulator: StreamTurnAccumulator,
+    ) -> list[dict[str, Any]]:
+        event = proposal_updated_event(chat_id)
+        return [event] if event is not None else []

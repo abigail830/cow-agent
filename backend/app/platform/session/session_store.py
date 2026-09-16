@@ -19,8 +19,9 @@ logger = logging.getLogger(__name__)
 
 SESSION_TTL_SECONDS = 60 * 60 * 24
 WORKING_SET_VERSION = 2
-# Extensions that must survive redis/DB merge (redis may lag behind DB on cold start).
-_PERSISTED_EXTENSION_KEYS = ("proposal_draft", "fulfillment_forms")
+# Redis is source of truth for hot session / working-set. Any other top-level
+# key present in DB overlays Redis (Redis may lag or hold stale empties).
+_CORE_PAYLOAD_KEYS = frozenset({"session", "working_set", "type"})
 
 
 class SessionStore:
@@ -54,7 +55,7 @@ class SessionStore:
         return payload if payload is not None else {}
 
     async def merge_extension(self, chat_id: uuid.UUID, key: str, value: Any) -> None:
-        """Merge a top-level key into the chat session payload (e.g. proposal_state)."""
+        """Merge a top-level key into the chat session payload."""
         payload = await self._load_payload(chat_id) or {}
         payload[key] = value
         await self._save_payload(chat_id, payload)
@@ -231,10 +232,9 @@ class SessionStore:
         if db_payload is None:
             return cached
         merged = dict(cached)
-        # Persisted extensions: DB is source of truth (Redis may lag or hold stale empties).
-        for key in _PERSISTED_EXTENSION_KEYS:
-            if key in db_payload:
-                merged[key] = db_payload[key]
+        for key, value in db_payload.items():
+            if key not in _CORE_PAYLOAD_KEYS:
+                merged[key] = value
         return merged
 
     async def _save_payload(self, chat_id: uuid.UUID, payload: dict[str, Any]) -> None:

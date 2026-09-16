@@ -327,6 +327,8 @@ export function ChatPage() {
   }, [])
 
   const fetchProposalPreview = useCallback(async (agentId: string, id: string) => {
+    if (!id) return
+    if (getAgentSession(sessionsRef.current, agentId).chatId !== id) return
     const generation = (proposalPreviewFetchGenRef.current.get(agentId) ?? 0) + 1
     proposalPreviewFetchGenRef.current.set(agentId, generation)
     patchSession(agentId, {
@@ -363,6 +365,8 @@ export function ChatPage() {
   }, [patchSession])
 
   const fetchProposalState = useCallback(async (agentId: string, id: string) => {
+    if (!id) return
+    if (getAgentSession(sessionsRef.current, agentId).chatId !== id) return
     const generation = (proposalStateFetchGenRef.current.get(agentId) ?? 0) + 1
     proposalStateFetchGenRef.current.set(agentId, generation)
     patchSession(agentId, {
@@ -791,11 +795,11 @@ export function ChatPage() {
   }, [])
 
   useEffect(() => {
-    if (!isProposalComposer || !selectedId) {
+    if (!isProposalComposer || !selectedId || !chatId) {
       proposalFetchKeyRef.current = null
       return
     }
-    if (!chatId || chatSessionLoading) return
+    if (chatSessionLoading) return
 
     const fetchKey = `${selectedId}:${chatId}`
     if (proposalFetchKeyRef.current === fetchKey) return
@@ -845,6 +849,11 @@ export function ChatPage() {
 
   const loadChatAttachments = useCallback(
     async (activeChatId: string, options?: { silent?: boolean }) => {
+      if (!activeChatId) return
+      const sessionChatId = selectedId
+        ? getAgentSession(sessionsRef.current, selectedId).chatId
+        : null
+      if (sessionChatId !== activeChatId) return
       const gen = ++chatAttachmentsLoadGenRef.current
       if (!options?.silent) {
         setChatAttachmentsLoading(true)
@@ -1072,30 +1081,14 @@ export function ChatPage() {
     setRefMaterialsOpen(true)
 
     const session = getAgentSession(sessionsRef.current, selectedId)
-    if (session.chatId) {
-      void loadChatAttachments(session.chatId, {
-        silent: chatAttachmentsRef.current.length > 0,
-      })
-      return
-    }
-
-    void (async () => {
-      try {
-        const activeChatId = await ensureChatId(selectedId)
-        await loadChatAttachments(activeChatId)
-      } catch (e) {
-        setRefMaterialsOpen(false)
-        patchSession(selectedId, {
-          error: e instanceof Error ? e.message : 'Failed to open reference materials',
-        })
-      }
-    })()
+    if (!session.chatId) return
+    void loadChatAttachments(session.chatId, {
+      silent: chatAttachmentsRef.current.length > 0,
+    })
   }, [
-    ensureChatId,
     loadChatAttachments,
     loading,
     chatSessionLoading,
-    patchSession,
     refMaterialsOpen,
     selectedId,
   ])
@@ -1230,6 +1223,7 @@ export function ChatPage() {
     const composer = agentSlug === PROPOSAL_COMPOSER_SLUG
     const ylWorker = agentSlug === YL_WORKER2_SLUG
     const currentSession = getAgentSession(sessionsRef.current, agentId)
+    const existingChatId = currentSession.chatId
     const text = currentSession.input.trim()
     if (!text) return
 
@@ -1278,7 +1272,11 @@ export function ChatPage() {
     }))
 
     let attachmentRows = readyAttachments(chatAttachmentsRef.current)
-    if (attachmentRows.length === 0 && chatAttachmentsRef.current.length === 0) {
+    if (
+      existingChatId &&
+      attachmentRows.length === 0 &&
+      chatAttachmentsRef.current.length === 0
+    ) {
       try {
         const rows = await api.listChatAttachments(activeChatId)
         const latestChatId = getAgentSession(sessionsRef.current, agentId).chatId

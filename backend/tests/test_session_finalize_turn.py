@@ -1,4 +1,4 @@
-"""SessionStore finalize_turn incremental working-set merge."""
+"""SessionStore finalize_turn incremental working-set merge and payload overlay."""
 
 import uuid
 from unittest.mock import AsyncMock, MagicMock
@@ -46,3 +46,55 @@ async def test_finalize_turn_merges_rows_without_full_db_scan():
     assert saved_payload["session"]["updated"] is True
     rows = saved_payload["working_set"]["rows"]
     assert [row["sequence"] for row in rows] == [1, 2, 3, 4]
+
+
+@pytest.mark.asyncio
+async def test_load_payload_db_overlays_non_core_keys_onto_redis():
+    chat_id = uuid.uuid4()
+    store = SessionStore(AsyncMock())
+    store._load_payload_from_db = AsyncMock(
+        return_value={
+            "session": {"session_id": "db", "type": "session"},
+            "working_set": {"version": WORKING_SET_VERSION, "rows": []},
+            "proposal_draft": {"version": 1, "meta": {"template_id": "bvi"}},
+            "fulfillment_forms": {"forms": [{"form_id": "f1"}]},
+        }
+    )
+    store._get_from_redis = AsyncMock(
+        return_value={
+            "session": {"session_id": "redis", "type": "session"},
+            "working_set": {"version": WORKING_SET_VERSION, "rows": [{"sequence": 1}]},
+            "proposal_draft": {},
+            "fulfillment_forms": {"forms": []},
+        }
+    )
+
+    payload = await store._load_payload(chat_id)
+
+    assert payload["session"]["session_id"] == "redis"
+    assert payload["working_set"]["rows"] == [{"sequence": 1}]
+    assert payload["proposal_draft"]["meta"]["template_id"] == "bvi"
+    assert payload["fulfillment_forms"]["forms"] == [{"form_id": "f1"}]
+
+
+@pytest.mark.asyncio
+async def test_load_payload_does_not_invent_extension_keys():
+    chat_id = uuid.uuid4()
+    store = SessionStore(AsyncMock())
+    store._load_payload_from_db = AsyncMock(
+        return_value={
+            "session": {"session_id": "db", "type": "session"},
+            "working_set": {"version": WORKING_SET_VERSION, "rows": []},
+        }
+    )
+    store._get_from_redis = AsyncMock(
+        return_value={
+            "session": {"session_id": "redis", "type": "session"},
+            "working_set": {"version": WORKING_SET_VERSION, "rows": []},
+        }
+    )
+
+    payload = await store._load_payload(chat_id)
+
+    assert "proposal_draft" not in payload
+    assert "fulfillment_forms" not in payload

@@ -38,11 +38,11 @@ from app.platform.agent.plugin_registry import (
 from app.platform.runtime.plugin import RunContext
 from app.platform.chat.stream_pipeline import (
     collect_stream_emitters,
+    drain_after_finalize,
     drain_remaining_stream_events,
     drain_stream_events,
     tool_result_stream_events,
 )
-from app.agent_specific.proposal.stream_emitter import proposal_updated_event
 from app.agent_specific.viz.stream_emitter import VizStreamEmitter, viz_spec_payload
 from app.shared.artifacts.stream_emitter import ArtifactStreamEmitter, artifact_spec_payload
 from app.shared.artifacts.context import get_run_artifact_state
@@ -649,9 +649,8 @@ class ChatRunService:
                 accumulator=accumulator,
                 user_row=user_row,
             )
-            preview_event = proposal_updated_event(chat_id)
-            if preview_event is not None:
-                yield preview_event
+            for event in drain_after_finalize(stream_emitters, chat_id, accumulator):
+                yield event
             yield {
                 "event": "done",
                 "data": {
@@ -815,10 +814,6 @@ def _collect_call_context(messages: list[Any]) -> tuple[dict[str, str], dict[str
 def _collect_call_names(messages: list[Any]) -> dict[str, str]:
     names, _ = _collect_call_context(messages)
     return names
-
-
-# Backward-compatible aliases for tests importing from run_service.
-_proposal_updated_event = proposal_updated_event
 
 
 def _emit_pending_artifact_events(

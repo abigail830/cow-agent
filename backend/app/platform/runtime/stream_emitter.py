@@ -40,3 +40,11 @@ class StreamEmitter(ABC):
         accumulator: StreamTurnAccumulator,
     ) -> list[dict[str, Any]]:
         return []
+
+    def events_after_finalize(
+        self,
+        chat_id: uuid.UUID,
+        accumulator: StreamTurnAccumulator,
+    ) -> list[dict[str, Any]]:
+        """SSE events after the turn is persisted (before run_plugin_end)."""
+        return []

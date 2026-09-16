@@ -60,3 +60,14 @@ def tool_result_stream_events(
     for emitter in emitters:
         events.extend(emitter.events_for_tool_result(chat_id, tool_name, accumulator))
     return events
+
+
+def drain_after_finalize(
+    emitters: list[StreamEmitter],
+    chat_id: uuid.UUID,
+    accumulator: StreamTurnAccumulator,
+) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for emitter in emitters:
+        events.extend(emitter.events_after_finalize(chat_id, accumulator))
+    return events
