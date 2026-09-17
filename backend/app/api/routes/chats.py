@@ -39,6 +39,7 @@ from app.agent_specific.proposal.export_service import ProposalExportError, gene
 from app.shared.artifacts.resolver import load_artifact_payload, load_preview_payload
 from app.shared.artifacts.storage import get_chat_artifact_format
 from app.shared.artifacts.preview_html import SLIDE_PREVIEW_CSP, prepare_html_ppt_preview_html, prepare_slide_preview_html
+from app.shared.artifacts.urls import content_disposition_attachment
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
@@ -226,7 +227,7 @@ async def download_artifact(
         content=payload.data,
         media_type=payload.media_type,
         headers={
-            "Content-Disposition": f'attachment; filename="{payload.filename}"',
+            "Content-Disposition": content_disposition_attachment(payload.filename),
             "Content-Length": str(len(payload.data)),
             "Cache-Control": "private, no-store",
         },
