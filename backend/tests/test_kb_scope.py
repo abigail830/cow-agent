@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from types import SimpleNamespace
 
 import pytest
@@ -12,7 +13,12 @@ from app.platform.hooks.kb_scope import (
     resolve_scoped_kb_ids,
 )
 from app.platform.integrations.kb_client import resolve_hybrid_search_api_base
-from app.platform.integrations.kb_preference import agent_supports_kb_scope, enabled_kb_ids
+from app.platform.integrations.kb_preference import (
+    agent_supports_kb_scope,
+    enabled_kb_ids,
+    invalidate_visible_kb_cache,
+    resolve_enabled_kb_ids_for_run,
+)
 
 
 def test_agent_supports_kb_scope_from_allowed_tools() -> None:
@@ -24,6 +30,40 @@ def test_agent_supports_kb_scope_from_allowed_tools() -> None:
 def test_enabled_kb_ids_defaults_all_on() -> None:
     assert enabled_kb_ids(visible_ids=["a", "b"], disabled_ids=[]) == ["a", "b"]
     assert enabled_kb_ids(visible_ids=["a", "b"], disabled_ids=["b"]) == ["a"]
+
+
+@pytest.mark.asyncio
+async def test_resolve_enabled_kb_ids_skips_remote_when_nothing_disabled(monkeypatch) -> None:
+    invalidate_visible_kb_cache()
+
+    class _Repo:
+        async def get_disabled_ids(self, user_id, agent_id):
+            return []
+
+    monkeypatch.setattr(
+        "app.platform.integrations.kb_preference.KbPreferenceRepository",
+        lambda db: _Repo(),
+    )
+
+    called = {"list": False}
+
+    async def _boom(*args, **kwargs):
+        called["list"] = True
+        raise AssertionError("should not list knowledge bases")
+
+    monkeypatch.setattr(
+        "app.platform.integrations.kb_preference.list_visible_knowledge_bases",
+        _boom,
+    )
+
+    result = await resolve_enabled_kb_ids_for_run(
+        object(),  # type: ignore[arg-type]
+        user_id=uuid.uuid4(),
+        agent_id=uuid.uuid4(),
+        api_key="okf_test",
+    )
+    assert result is None
+    assert called["list"] is False
 
 
 def test_resolve_scoped_kb_ids_intersects_request() -> None:

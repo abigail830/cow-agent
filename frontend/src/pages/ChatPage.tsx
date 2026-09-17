@@ -1258,15 +1258,6 @@ export function ChatPage() {
     }
 
     streamRegistryRef.current.bindChat(activeChatId, agentId)
-    const reloadInFlight = reloadInFlightRef.current.get(activeChatId)
-    if (reloadInFlight) {
-      try {
-        await reloadInFlight
-      } catch {
-        /* reload may fail; still attempt send */
-      }
-    }
-
     streamRegistryRef.current.abort(activeChatId)
 
     // Clear transient streaming messages (tool calls, partial text) left over from the
@@ -1285,7 +1276,8 @@ export function ChatPage() {
     if (
       existingChatId &&
       attachmentRows.length === 0 &&
-      chatAttachmentsRef.current.length === 0
+      chatAttachmentsRef.current.length === 0 &&
+      (stagedAttachmentIdsRef.current.length > 0 || text.includes('@'))
     ) {
       try {
         const rows = await api.listChatAttachments(activeChatId)

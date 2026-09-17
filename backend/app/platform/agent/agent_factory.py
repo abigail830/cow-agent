@@ -19,8 +19,7 @@ from app.platform.llm.model_registry import ModelProvider, ModelProviderRegistry
 from app.platform.integrations.kb_client import HybridSearchKbClientError, list_visible_knowledge_bases
 from app.platform.integrations.kb_preference import (
     agent_supports_kb_scope,
-    enabled_kb_ids,
-    get_disabled_kb_ids,
+    resolve_enabled_kb_ids_for_run,
 )
 from app.platform.integrations.providers.hybrid_search import HYBRID_SEARCH_PROVIDER_ID
 from app.platform.integrations.token_service import IntegrationTokenService
@@ -60,21 +59,16 @@ class AgentFactory:
             return None
         if not agent_supports_kb_scope(agent_row.config if isinstance(agent_row.config, dict) else {}):
             return None
-        disabled = await get_disabled_kb_ids(self._db, user_id, agent_id)
         api_key = await IntegrationTokenService(self._db).get_api_key(
             user_id=user_id,
             provider=HYBRID_SEARCH_PROVIDER_ID,
         )
-        if not api_key:
-            # No key → do not install middleware (MCP call will fail on its own).
-            return None
-        try:
-            items = await list_visible_knowledge_bases(api_key=api_key)
-        except HybridSearchKbClientError:
-            # Prefer soft-fail: leave MCP unconstrained rather than blocking the run.
-            return None
-        visible = [str(item.get("id") or "").strip() for item in items if item.get("id")]
-        return enabled_kb_ids(visible_ids=visible, disabled_ids=disabled)
+        return await resolve_enabled_kb_ids_for_run(
+            self._db,
+            user_id=user_id,
+            agent_id=agent_id,
+            api_key=api_key,
+        )
 
     async def build(
         self,
