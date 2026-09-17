@@ -3,7 +3,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -214,17 +214,21 @@ async def download_artifact(
     chat: Chat = Depends(get_owned_chat),
     format: str | None = None,
     db: AsyncSession = Depends(get_db),
-) -> StreamingResponse:
+) -> Response:
     _ = db
     variant = format.strip().lower() if format else None
     payload = load_artifact_payload(chat.id, artifact_id, variant=variant)
     if payload is None:
         raise HTTPException(status_code=404, detail="Artifact not found")
-    return StreamingResponse(
-        iter([payload.data]),
+    # Prefer Response over StreamingResponse so CORSMiddleware always attaches
+    # Access-Control-* on the full body (binary PPTX/DOCX downloads).
+    return Response(
+        content=payload.data,
         media_type=payload.media_type,
         headers={
             "Content-Disposition": f'attachment; filename="{payload.filename}"',
+            "Content-Length": str(len(payload.data)),
+            "Cache-Control": "private, no-store",
         },
     )
 

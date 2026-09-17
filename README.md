@@ -227,12 +227,12 @@ python scripts/sync_vercel_env.py --from .env --include-sensitive --mark-sensiti
 
 ### 方式 B — 跨域直连
 
-1. 前端 Vercel：`VITE_API_BASE_URL=https://你的后端.vercel.app`（build 时注入，改后需 redeploy）。
+1. 前端 Vercel：`VITE_API_FORCE_ABSOLUTE=1` 且 `VITE_API_BASE_URL=https://你的后端.vercel.app`（build 时注入，改后需 redeploy）。
 2. 后端：`CORS_ORIGINS=https://你的前端.vercel.app`，`AUTH_COOKIE_SECURE=true`，`AUTH_COOKIE_SAMESITE=none`。
 
-| | 方式 A | 方式 B |
+| | 方式 A（默认） | 方式 B |
 |--|--------|--------|
-| 前端 env | 无 | `VITE_API_BASE_URL` |
+| 前端 env | 无（忽略 `VITE_API_BASE_URL`） | `VITE_API_FORCE_ABSOLUTE=1` + `VITE_API_BASE_URL` |
 | 后端 CORS | 建议 | **必须** |
 | Cookie | `SameSite=lax` | `SameSite=none` + Secure |
 
