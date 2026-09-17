@@ -73,3 +73,15 @@ export function replacePendingAttachment(
   }
   return prev.map((row) => (row.id === pendingId ? uploaded : row))
 }
+
+/** Staged composer chips plus `@filename` mentions, deduped in order. */
+export function mergeAttachmentIdsForSend(stagedIds: string[], mentionIds: string[]): string[] {
+  const seen = new Set<string>()
+  const merged: string[] = []
+  for (const id of [...stagedIds, ...mentionIds]) {
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    merged.push(id)
+  }
+  return merged
+}

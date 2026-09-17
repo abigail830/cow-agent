@@ -45,7 +45,7 @@ export function AttachmentMentionPopup({
       const anchor = anchorRef.current
       if (!anchor) return
       const rect = anchor.getBoundingClientRect()
-      const panelWidth = Math.min(352, window.innerWidth - 32)
+      const panelWidth = Math.min(480, window.innerWidth - 32)
       const left = Math.min(Math.max(16, rect.left), window.innerWidth - panelWidth - 16)
       setPosition({
         left,

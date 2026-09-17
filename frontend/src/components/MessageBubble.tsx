@@ -45,6 +45,11 @@ function UserMessageBody({
 }) {
   const chatAttachmentRows = toChatAttachments(chatId, attachments)
   const segments = segmentInputByMentions(content, chatAttachmentRows)
+  const mentionedIds = new Set<string>()
+  for (const segment of segments) {
+    if (segment.kind === 'mention') mentionedIds.add(segment.attachment.id)
+  }
+  const unstagedAttachments = attachments.filter((item) => !mentionedIds.has(item.id))
 
   if (segments.length === 0) {
     if (attachments.length === 0) return null
@@ -61,6 +66,11 @@ function UserMessageBody({
 
   return (
     <p className="msg-user-body whitespace-pre-wrap">
+      {unstagedAttachments.map((item) => (
+        <span key={item.id} className="msg-user-attachment-chip" title={item.filename}>
+          {item.filename}
+        </span>
+      ))}
       {segments.map((segment, index) =>
         segment.kind === 'text' ? (
           <span key={index}>{segment.value}</span>

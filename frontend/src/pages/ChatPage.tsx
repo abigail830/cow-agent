@@ -6,6 +6,7 @@ import {
   useState,
   type ChangeEvent,
   type ClipboardEvent,
+  type DragEvent,
 } from 'react'
 import { Paperclip } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
@@ -25,8 +26,8 @@ import { ArtifactPanelHost } from '../components/ArtifactPanelHost'
 import { useArtifactPanel } from '../hooks/useArtifactPanel'
 import { AttachmentMentionPopup } from '../components/AttachmentMentionPopup'
 import { ComposerMentionInput } from '../components/ComposerMentionInput'
+import { ComposerStagedChips } from '../components/ComposerStagedChips'
 import { ModelSelect } from '../components/ModelSelect'
-import { ReferenceMaterialsDropup } from '../components/ReferenceMaterialsDropup'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { PanelLoadingState } from '../components/PanelLoadingState'
 import { NewChatIcon } from '../components/NewChatIcon'
@@ -48,7 +49,9 @@ import {
 } from '../lib/attachments'
 import {
   createPendingAttachment,
+  isAttachmentReady,
   isPendingAttachmentId,
+  mergeAttachmentIdsForSend,
   readyAttachments,
   type ChatAttachmentListItem,
   mergeChatAttachmentList,
@@ -196,15 +199,11 @@ export function ChatPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [sessions, setSessions] = useState<Record<string, AgentChatSession>>({})
   const [attachmentLimits, setAttachmentLimits] = useState<AttachmentLimits>(DEFAULT_ATTACHMENT_LIMITS)
-  const [refMaterialsOpen, setRefMaterialsOpen] = useState(false)
-  const [refMaterialsSearch, setRefMaterialsSearch] = useState('')
   const [chatAttachments, setChatAttachments] = useState<ChatAttachmentListItem[]>([])
   const [chatAttachmentsLoading, setChatAttachmentsLoading] = useState(false)
-  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null)
+  const [stagedAttachmentIds, setStagedAttachmentIds] = useState<string[]>([])
+  const [composerDragOver, setComposerDragOver] = useState(false)
   const [mentionTrigger, setMentionTrigger] = useState<MentionTrigger | null>(null)
-  const [recentlyReferencedAttachmentId, setRecentlyReferencedAttachmentId] = useState<string | null>(
-    null,
-  )
   const [mentionHighlightIndex, setMentionHighlightIndex] = useState(0)
   const composerMentionWrapRef = useRef<HTMLDivElement>(null)
   const mentionDismissedStartRef = useRef<number | null>(null)
@@ -222,9 +221,9 @@ export function ChatPage() {
   const messagesScrollRef = useRef<HTMLDivElement>(null)
   const pinToBottomRef = useRef(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const attachButtonRef = useRef<HTMLButtonElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const chatAttachmentsRef = useRef<ChatAttachmentListItem[]>([])
+  const stagedAttachmentIdsRef = useRef<string[]>([])
   const chatAttachmentsLoadGenRef = useRef(0)
   const prevChatIdRef = useRef<string | null>(null)
   const openChatLoadGenRef = useRef(new Map<string, number>())
@@ -254,6 +253,8 @@ export function ChatPage() {
     setChatAttachments([])
     chatAttachmentsRef.current = []
     setChatAttachmentsLoading(false)
+    setStagedAttachmentIds([])
+    stagedAttachmentIdsRef.current = []
   }, [])
 
   const session = getAgentSession(sessions, selectedId)
@@ -652,8 +653,6 @@ export function ChatPage() {
       if (current.chatId) {
         streamRegistryRef.current.abort(current.chatId)
       }
-      setRefMaterialsOpen(false)
-      setRefMaterialsSearch('')
       setMentionTrigger(null)
       mentionDismissedStartRef.current = null
       discardVisibleChatAttachments()
@@ -893,17 +892,19 @@ export function ChatPage() {
   useEffect(() => {
     const prevChatId = prevChatIdRef.current
     prevChatIdRef.current = chatId ?? null
-    setRefMaterialsOpen(false)
-    setRefMaterialsSearch('')
     setMentionTrigger(null)
     mentionDismissedStartRef.current = null
     if (!chatId) {
+      setStagedAttachmentIds([])
+      stagedAttachmentIdsRef.current = []
       discardVisibleChatAttachments()
       return
     }
     // Switching between two real chats: drop the previous library immediately.
-    // Draft upload may set chatId from null → id; keep in-flight rows.
+    // Draft upload may set chatId from null → id; keep staged chips and in-flight rows.
     if (prevChatId && prevChatId !== chatId) {
+      setStagedAttachmentIds([])
+      stagedAttachmentIdsRef.current = []
       discardVisibleChatAttachments()
     }
     void loadChatAttachments(chatId)
@@ -913,6 +914,25 @@ export function ChatPage() {
     () => readyAttachments(chatAttachments),
     [chatAttachments],
   )
+
+  useEffect(() => {
+    stagedAttachmentIdsRef.current = stagedAttachmentIds
+  }, [stagedAttachmentIds])
+
+  const stagedAttachmentItems = useMemo(
+    () =>
+      stagedAttachmentIds
+        .map((id) => chatAttachments.find((row) => row.id === id))
+        .filter((row): row is ChatAttachmentListItem => row != null),
+    [stagedAttachmentIds, chatAttachments],
+  )
+
+  const stagedUploading = stagedAttachmentItems.some(
+    (row) => row.upload_status === 'uploading' || isPendingAttachmentId(row.id),
+  )
+  const stagedReadyCount = stagedAttachmentItems.filter(isAttachmentReady).length
+  const composerCanSend =
+    !loading && !chatSessionLoading && !stagedUploading && (input.trim().length > 0 || stagedReadyCount > 0)
 
   const refreshMentionTrigger = useCallback(
     (value: string, cursorPos: number) => {
@@ -1021,82 +1041,12 @@ export function ChatPage() {
         mentionDismissedStartRef.current = null
         setMentionTrigger(null)
       }
-      setRecentlyReferencedAttachmentId(attachment.id)
       requestAnimationFrame(() => textarea?.focus())
     },
     [mentionTrigger, patchSession, selectedId],
   )
 
   const composerAttachmentAccept = SUPPORTED_ATTACHMENT_ACCEPT
-
-  useEffect(() => {
-    if (!recentlyReferencedAttachmentId) return
-    const timer = window.setTimeout(() => setRecentlyReferencedAttachmentId(null), 1800)
-    return () => window.clearTimeout(timer)
-  }, [recentlyReferencedAttachmentId])
-
-  const handleDeleteAttachment = useCallback(
-    async (attachment: ChatAttachmentListItem) => {
-      if (!selectedId || deletingAttachmentId) return
-
-      if (isPendingAttachmentId(attachment.id)) {
-        setChatAttachments((prev) => {
-          const next = prev.filter((row) => row.id !== attachment.id)
-          chatAttachmentsRef.current = next
-          return next
-        })
-        return
-      }
-
-      const session = getAgentSession(sessionsRef.current, selectedId)
-      const activeChatId = session.chatId
-      if (!activeChatId) return
-
-      setDeletingAttachmentId(attachment.id)
-      patchSession(selectedId, { error: null })
-      try {
-        await api.deleteChatAttachment(activeChatId, attachment.id)
-        setChatAttachments((prev) => prev.filter((row) => row.id !== attachment.id))
-        chatAttachmentsRef.current = chatAttachmentsRef.current.filter(
-          (row) => row.id !== attachment.id,
-        )
-      } catch (e) {
-        patchSession(selectedId, {
-          error: formatApiError(e, 'Failed to delete attachment'),
-        })
-      } finally {
-        setDeletingAttachmentId(null)
-      }
-    },
-    [deletingAttachmentId, patchSession, selectedId],
-  )
-
-  const toggleRefMaterials = useCallback(() => {
-    if (!selectedId || loading || chatSessionLoading) return
-    if (refMaterialsOpen) {
-      setRefMaterialsOpen(false)
-      return
-    }
-
-    setRefMaterialsOpen(true)
-
-    const session = getAgentSession(sessionsRef.current, selectedId)
-    if (!session.chatId) return
-    void loadChatAttachments(session.chatId, {
-      silent: chatAttachmentsRef.current.length > 0,
-    })
-  }, [
-    loadChatAttachments,
-    loading,
-    chatSessionLoading,
-    refMaterialsOpen,
-    selectedId,
-  ])
-
-  const handleRefMaterialsUpload = () => {
-    if (loading || chatSessionLoading) return
-    fileInputRef.current?.click()
-  }
 
   const patchChatAttachments = useCallback(
     (updater: (prev: ChatAttachmentListItem[]) => ChatAttachmentListItem[]) => {
@@ -1123,7 +1073,11 @@ export function ChatPage() {
 
       const pending = createPendingAttachment(file)
       patchChatAttachments((prev) => [pending, ...prev])
-      setRefMaterialsOpen(true)
+      setStagedAttachmentIds((prev) => {
+        const next = [...prev, pending.id]
+        stagedAttachmentIdsRef.current = next
+        return next
+      })
       patchSession(selectedId, { error: null })
 
       void (async () => {
@@ -1134,15 +1088,25 @@ export function ChatPage() {
           const latestChatId = getAgentSession(sessionsRef.current, selectedId).chatId
           if (latestChatId !== activeChatId) {
             patchChatAttachments((prev) => prev.filter((row) => row.id !== pendingId))
+            setStagedAttachmentIds((prev) => prev.filter((id) => id !== pendingId))
             return
           }
-          patchChatAttachments((prev) => replacePendingAttachment(prev, pendingId, uploaded))
+          patchChatAttachments((prev) => {
+            if (!prev.some((row) => row.id === pendingId)) return prev
+            return replacePendingAttachment(prev, pendingId, uploaded)
+          })
+          setStagedAttachmentIds((prev) => {
+            const next = prev.map((id) => (id === pendingId ? uploaded.id : id))
+            stagedAttachmentIdsRef.current = next
+            return next
+          })
         } catch (e) {
-          patchChatAttachments((prev) =>
-            prev.map((row) =>
+          patchChatAttachments((prev) => {
+            if (!prev.some((row) => row.id === pendingId)) return prev
+            return prev.map((row) =>
               row.id === pendingId ? { ...row, upload_status: 'failed' as const } : row,
-            ),
-          )
+            )
+          })
           patchSession(selectedId, {
             error: formatApiError(e, 'Failed to upload attachment'),
           })
@@ -1159,6 +1123,47 @@ export function ChatPage() {
       selectedId,
     ],
   )
+
+  const removeStagedAttachment = useCallback(
+    (attachmentId: string) => {
+      setStagedAttachmentIds((prev) => prev.filter((id) => id !== attachmentId))
+      patchChatAttachments((prev) => {
+        if (isPendingAttachmentId(attachmentId)) {
+          return prev.filter((row) => row.id !== attachmentId)
+        }
+        return prev
+      })
+    },
+    [patchChatAttachments],
+  )
+
+  const handleAttachFilesClick = () => {
+    if (loading || chatSessionLoading) return
+    fileInputRef.current?.click()
+  }
+
+  const handleComposerDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (loading || chatSessionLoading) return
+    if (!event.dataTransfer.types.includes('Files')) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    setComposerDragOver(true)
+  }
+
+  const handleComposerDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node)) return
+    setComposerDragOver(false)
+  }
+
+  const handleComposerDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setComposerDragOver(false)
+    if (loading || chatSessionLoading) return
+    const files = Array.from(event.dataTransfer.files ?? [])
+    for (const file of files) {
+      uploadToLibrary(file)
+    }
+  }
 
   const handleAttachmentSelected = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
@@ -1225,7 +1230,11 @@ export function ChatPage() {
     const currentSession = getAgentSession(sessionsRef.current, agentId)
     const existingChatId = currentSession.chatId
     const text = currentSession.input.trim()
-    if (!text) return
+    const readyStagedIds = stagedAttachmentIdsRef.current.filter((id) => {
+      const row = chatAttachmentsRef.current.find((item) => item.id === id)
+      return row != null && isAttachmentReady(row)
+    })
+    if (!text && readyStagedIds.length === 0) return
 
     patchSession(agentId, {
       input: '',
@@ -1298,10 +1307,11 @@ export function ChatPage() {
       attachmentRows = readyAttachments(chatAttachmentsRef.current)
     }
 
-    const stillUploading = chatAttachmentsRef.current.some(
-      (row) => row.upload_status === 'uploading',
-    )
-    if (stillUploading) {
+    const stillUploadingStaged = stagedAttachmentIdsRef.current.some((id) => {
+      const row = chatAttachmentsRef.current.find((item) => item.id === id)
+      return row != null && (row.upload_status === 'uploading' || isPendingAttachmentId(row.id))
+    })
+    if (stillUploadingStaged) {
       patchSession(agentId, {
         loading: false,
         error: 'Wait for attachment uploads to finish before sending.',
@@ -1309,7 +1319,12 @@ export function ChatPage() {
       return
     }
 
-    const attachmentIds = parseAttachmentMentionIds(text, attachmentRows)
+    const readyStagedIdsForSend = stagedAttachmentIdsRef.current.filter((id) => {
+      const row = chatAttachmentsRef.current.find((item) => item.id === id)
+      return row != null && isAttachmentReady(row)
+    })
+    const mentionIds = parseAttachmentMentionIds(text, attachmentRows)
+    const attachmentIds = mergeAttachmentIdsForSend(readyStagedIdsForSend, mentionIds)
     if (attachmentIds.length > attachmentLimits.max_files_per_message) {
       patchSession(agentId, {
         loading: false,
@@ -1365,6 +1380,8 @@ export function ChatPage() {
       }
       return { messages: [...prev.messages, optimistic] }
     })
+    setStagedAttachmentIds([])
+    stagedAttachmentIdsRef.current = []
 
     const generation = streamRegistryRef.current.nextGeneration(activeChatId)
     const abortController = new AbortController()
@@ -1888,7 +1905,12 @@ export function ChatPage() {
 
                 <div className="chat-composer-wrap">
                   <div className="chat-content-column">
-                    <div className="chat-composer">
+                    <div
+                      className={`chat-composer${composerDragOver ? ' chat-composer-drag-over' : ''}`}
+                      onDragOver={handleComposerDragOver}
+                      onDragLeave={handleComposerDragLeave}
+                      onDrop={handleComposerDrop}
+                    >
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -1896,6 +1918,11 @@ export function ChatPage() {
                         className="hidden"
                         accept={composerAttachmentAccept}
                         onChange={(e) => void handleAttachmentSelected(e)}
+                      />
+                      <ComposerStagedChips
+                        attachments={stagedAttachmentItems}
+                        onRemove={removeStagedAttachment}
+                        disabled={loading || chatSessionLoading}
                       />
                       <div ref={composerMentionWrapRef} className="chat-composer-mention-wrap">
                         <AttachmentMentionPopup
@@ -1914,7 +1941,7 @@ export function ChatPage() {
                           textareaRef={textareaRef}
                           value={input}
                           attachments={readyChatAttachments}
-                          placeholder="question (type @ to reference attachments)"
+                          placeholder="Message… (type @ to reference attachments)"
                           disabled={loading || chatSessionLoading}
                           onChange={handleComposerInputChange}
                           onSelect={handleComposerSelectionChange}
@@ -1960,42 +1987,23 @@ export function ChatPage() {
                             }
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault()
-                              if (!loading && !chatSessionLoading) void send()
+                              if (composerCanSend) void send()
                             }
                           }}
                         />
                       </div>
                       <div className="chat-composer-footer">
-                        <div className="chat-composer-left chat-composer-ref-wrap">
+                        <div className="chat-composer-left">
                           <button
-                            ref={attachButtonRef}
                             type="button"
-                            data-ref-materials-trigger
-                            className={`chat-composer-attach-btn${refMaterialsOpen ? ' chat-composer-attach-btn-active' : ''}`}
+                            className="chat-composer-attach-btn"
                             disabled={loading || chatSessionLoading}
-                            onClick={toggleRefMaterials}
-                            aria-label="Attachments"
-                            aria-expanded={refMaterialsOpen}
-                            title="Attachments"
+                            onClick={handleAttachFilesClick}
+                            aria-label="Upload attachment"
+                            title="Upload attachment"
                           >
                             <Paperclip size={16} strokeWidth={1.75} aria-hidden="true" />
                           </button>
-                          <ReferenceMaterialsDropup
-                            open={refMaterialsOpen}
-                            onClose={() => setRefMaterialsOpen(false)}
-                            anchorRef={attachButtonRef}
-                            attachments={chatAttachments}
-                            loading={chatAttachmentsLoading}
-                            deletingAttachmentId={deletingAttachmentId}
-                            searchQuery={refMaterialsSearch}
-                            onSearchChange={setRefMaterialsSearch}
-                            onUploadClick={handleRefMaterialsUpload}
-                            onReferenceAttachment={insertAttachmentMention}
-                            onDeleteAttachment={(att) => void handleDeleteAttachment(att)}
-                            referencedAttachmentIds={parseAttachmentMentionIds(input, readyChatAttachments)}
-                            recentlyReferencedId={recentlyReferencedAttachmentId}
-                            disabled={loading || chatSessionLoading}
-                          />
                         </div>
                         <div className="chat-composer-actions">
                           <ModelSelect
@@ -2007,7 +2015,7 @@ export function ChatPage() {
                           <button
                             type="button"
                             onClick={() => (loading ? void stopStreaming() : void send())}
-                            disabled={chatSessionLoading || (!loading && !input.trim())}
+                            disabled={loading ? chatSessionLoading : !composerCanSend}
                             className={`chat-send-btn${loading ? ' chat-send-btn-stop' : ''}`}
                             aria-label={loading ? 'Stop generating' : 'Send'}
                             title={loading ? 'Stop' : 'Send'}
