@@ -14,6 +14,7 @@ SANDBOX_ARTIFACT_TOOL_NAMES = SANDBOX_TOOL_NAMES | PUBLISH_TOOL_NAMES
 # Agents that always use the shared artifact queue (+ optional E2B sandbox namespace).
 _ARTIFACT_E2B_NAMESPACE: dict[str, str | None] = {
     "content-studio": "content-studio",
+    "lrqa-assist": "content-studio",  # reuse okf-content-studio sandbox template
     "napkin-architect": None,
 }
 

@@ -1,0 +1,16 @@
+# MCP servers for lrqa-assist. Auth via backend/.env — never commit keys.
+# Same stack as content-studio (hybrid-search + web + notion).
+servers:
+  hybrid-search:
+    url: ${HYBRID_SEARCH_MCP_URL}
+    auth: api_key
+    integration: hybrid-search
+  zhipu-web-search:
+    url: ${ZHIPU_WEB_SEARCH_MCP_URL}
+    auth: api_key
+    integration: zhipu-web-search
+    auth_scheme: raw
+  notion:
+    url: https://mcp.notion.com/mcp
+    auth: oauth
+    integration: notion
