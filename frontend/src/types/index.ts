@@ -24,6 +24,24 @@ export interface Agent {
   model_name: string
   default_model_id: string | null
   selected_model_id: string | null
+  supports_kb_scope?: boolean
+}
+
+export interface KnowledgeBaseItem {
+  id: string
+  name: string
+  description?: string | null
+  type?: string | null
+  item_count?: number | null
+  is_configured?: boolean | null
+  enabled: boolean
+}
+
+export interface KnowledgeBaseListResult {
+  connected: boolean
+  items: KnowledgeBaseItem[]
+  disabled_kb_ids: string[]
+  message?: string | null
 }
 
 export interface ModelOption {

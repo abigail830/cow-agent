@@ -9,6 +9,7 @@ import {
   type DragEvent,
 } from 'react'
 import { Paperclip } from 'lucide-react'
+import { KbScopePopover } from '../components/KbScopePopover'
 import { useSearchParams } from 'react-router-dom'
 import { api, streamChat } from '../api/client'
 import { useAuth } from '../context/AuthContext'
@@ -2004,6 +2005,12 @@ export function ChatPage() {
                           >
                             <Paperclip size={16} strokeWidth={1.75} aria-hidden="true" />
                           </button>
+                          {selected?.supports_kb_scope ? (
+                            <KbScopePopover
+                              agentId={selected.id}
+                              disabled={loading || chatSessionLoading}
+                            />
+                          ) : null}
                         </div>
                         <div className="chat-composer-actions">
                           <ModelSelect

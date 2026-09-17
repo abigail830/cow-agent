@@ -3,6 +3,7 @@ import type {
   Chat,
   ChatAttachment,
   ChatSummary,
+  KnowledgeBaseListResult,
   MemoryDocument,
   Message,
   ModelOption,
@@ -89,6 +90,15 @@ export const api = {
     request<Agent>(`/agents/${agentId}/model-selection`, {
       method: 'PATCH',
       body: JSON.stringify({ model_id: modelId }),
+    }),
+  listAgentKnowledgeBases: (agentId: string) =>
+    request<KnowledgeBaseListResult>(`/agents/${encodeURIComponent(agentId)}/knowledge-bases`),
+  getAgentKbPreferences: (agentId: string) =>
+    request<{ disabled_kb_ids: string[] }>(`/agents/${encodeURIComponent(agentId)}/kb-preferences`),
+  putAgentKbPreferences: (agentId: string, disabledKbIds: string[]) =>
+    request<{ disabled_kb_ids: string[] }>(`/agents/${encodeURIComponent(agentId)}/kb-preferences`, {
+      method: 'PUT',
+      body: JSON.stringify({ disabled_kb_ids: disabledKbIds }),
     }),
 
   listChats: (agentId: string) =>

@@ -88,6 +88,10 @@ class AgentModel(Base):
         back_populates="agent",
         cascade="all, delete-orphan",
     )
+    kb_preferences: Mapped[list["UserAgentKbPreference"]] = relationship(
+        back_populates="agent",
+        cascade="all, delete-orphan",
+    )
 
 
 class UserAgentModelPreference(Base):
@@ -109,6 +113,29 @@ class UserAgentModelPreference(Base):
     )
 
     agent: Mapped["AgentModel"] = relationship(back_populates="model_preferences")
+
+
+class UserAgentKbPreference(Base):
+    """Per-user per-agent hybrid-search KB scope. Missing row = all KBs enabled."""
+
+    __tablename__ = "user_agent_kb_preferences"
+    __table_args__ = (
+        Index("idx_user_agent_kb_preferences_user_agent", "user_id", "agent_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False
+    )
+    disabled_kb_ids: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    agent: Mapped["AgentModel"] = relationship(back_populates="kb_preferences")
 
 
 class MemorySnapshot(Base):

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.platform.hooks.allowed_tools import AllowedToolsMiddleware
 from app.platform.hooks.audit import AuditMiddleware
 from app.platform.hooks.chat_redaction import ChatPiiRedactionMiddleware
+from app.platform.hooks.kb_scope import KbScopeMiddleware
 from app.platform.hooks.stop_requested import StopRequestedMiddleware
 from app.platform.agent.allowed_tools import runtime_function_allowlist
 from app.platform.hooks.hook_catalog import HOOK_CATALOG, build_hook_middleware
@@ -30,10 +31,20 @@ def resolve_middleware(
     session_store: SessionStore | None = None,
     extra_allowed_tools: set[str] | None = None,
     stop_event: asyncio.Event | None = None,
+    user_id: uuid.UUID | None = None,
+    agent_id: uuid.UUID | None = None,
+    enabled_kb_ids: list[str] | None = None,
 ) -> list:
     cfg = config or {}
     middleware: list = []
-    hook_ctx = HookBuildContext(db=db, chat_id=chat_id, session_store=session_store)
+    hook_ctx = HookBuildContext(
+        db=db,
+        chat_id=chat_id,
+        session_store=session_store,
+        user_id=user_id,
+        agent_id=agent_id,
+        enabled_kb_ids=enabled_kb_ids,
+    )
 
     if stop_event is not None:
         middleware.append(StopRequestedMiddleware(stop_event))
@@ -47,6 +58,9 @@ def resolve_middleware(
         if extra_allowed_tools:
             allowlist = set(allowlist) | extra_allowed_tools
         middleware.append(AllowedToolsMiddleware(allowlist))
+
+    if enabled_kb_ids is not None:
+        middleware.append(KbScopeMiddleware(enabled_kb_ids=enabled_kb_ids))
 
     legacy_guardrails = cfg.get("guardrails")
     for hook_name, params in normalize_hooks(cfg.get("hooks"), legacy_guardrails=legacy_guardrails):

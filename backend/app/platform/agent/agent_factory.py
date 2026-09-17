@@ -16,6 +16,14 @@ from app.platform.hooks.hook_registry import resolve_middleware
 from app.platform.mcp.mcp_registry import McpRegistry
 from app.platform.llm.model_catalog import resolve_agent_model
 from app.platform.llm.model_registry import ModelProvider, ModelProviderRegistry
+from app.platform.integrations.kb_client import HybridSearchKbClientError, list_visible_knowledge_bases
+from app.platform.integrations.kb_preference import (
+    agent_supports_kb_scope,
+    enabled_kb_ids,
+    get_disabled_kb_ids,
+)
+from app.platform.integrations.providers.hybrid_search import HYBRID_SEARCH_PROVIDER_ID
+from app.platform.integrations.token_service import IntegrationTokenService
 from app.platform.agent.platform_instructions import append_platform_instructions
 from app.platform.session.session_store import SessionStore
 from app.platform.agent.skill_registry import SkillRegistry
@@ -40,6 +48,33 @@ class AgentFactory:
         if row is None:
             raise ValueError(f"Agent not found: {agent_id}")
         return row
+
+    async def _resolve_enabled_kb_ids(
+        self,
+        *,
+        agent_row: AgentModel,
+        user_id: uuid.UUID | None,
+        agent_id: uuid.UUID,
+    ) -> list[str] | None:
+        if user_id is None:
+            return None
+        if not agent_supports_kb_scope(agent_row.config if isinstance(agent_row.config, dict) else {}):
+            return None
+        disabled = await get_disabled_kb_ids(self._db, user_id, agent_id)
+        api_key = await IntegrationTokenService(self._db).get_api_key(
+            user_id=user_id,
+            provider=HYBRID_SEARCH_PROVIDER_ID,
+        )
+        if not api_key:
+            # No key → do not install middleware (MCP call will fail on its own).
+            return None
+        try:
+            items = await list_visible_knowledge_bases(api_key=api_key)
+        except HybridSearchKbClientError:
+            # Prefer soft-fail: leave MCP unconstrained rather than blocking the run.
+            return None
+        visible = [str(item.get("id") or "").strip() for item in items if item.get("id")]
+        return enabled_kb_ids(visible_ids=visible, disabled_ids=disabled)
 
     async def build(
         self,
@@ -92,6 +127,12 @@ class AgentFactory:
         always_builtin_names = frozenset({PLATFORM_TIME_TOOL_NAME})
         extra_allowed_tools = set(always_builtin_names) | skill_tools
 
+        scoped_kb_ids = await self._resolve_enabled_kb_ids(
+            agent_row=row,
+            user_id=user_id,
+            agent_id=agent_id,
+        )
+
         middleware = resolve_middleware(
             row.config,
             self._db,
@@ -99,6 +140,9 @@ class AgentFactory:
             session_store=store,
             extra_allowed_tools=extra_allowed_tools or None,
             stop_event=stop_event,
+            user_id=user_id,
+            agent_id=agent_id,
+            enabled_kb_ids=scoped_kb_ids,
         )
 
         function_tools = await self._tools.resolve_for_agent(agent_id)

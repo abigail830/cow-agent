@@ -17,3 +17,6 @@ class HookBuildContext:
     db: AsyncSession | None = None
     chat_id: uuid.UUID | None = None
     session_store: SessionStore | None = None
+    user_id: uuid.UUID | None = None
+    agent_id: uuid.UUID | None = None
+    enabled_kb_ids: list[str] | None = None

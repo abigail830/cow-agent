@@ -187,6 +187,11 @@ class Settings(BaseSettings):
     )
 
     hybrid_search_mcp_url: str | None = Field(default=None, validation_alias="HYBRID_SEARCH_MCP_URL")
+    hybrid_search_api_base: str | None = Field(
+        default=None,
+        validation_alias="HYBRID_SEARCH_API_BASE",
+        description="OpenKMS HTTP base for listing knowledge bases; derived from MCP URL when unset.",
+    )
     zhipu_web_search_mcp_url: str | None = Field(default=None, validation_alias="ZHIPU_WEB_SEARCH_MCP_URL")
 
     app_name: str = "agent-platform"

@@ -24,10 +24,36 @@ class AgentOut(BaseModel):
     model_name: str
     default_model_id: str | None = None
     selected_model_id: str | None = None
+    supports_kb_scope: bool = False
 
 
 class AgentModelSelectionIn(BaseModel):
     model_id: str
+
+
+class AgentKbPreferenceOut(BaseModel):
+    disabled_kb_ids: list[str] = Field(default_factory=list)
+
+
+class AgentKbPreferenceIn(BaseModel):
+    disabled_kb_ids: list[str] = Field(default_factory=list)
+
+
+class KnowledgeBaseOut(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    type: str | None = None
+    item_count: int | None = None
+    is_configured: bool | None = None
+    enabled: bool = True
+
+
+class KnowledgeBaseListOut(BaseModel):
+    connected: bool
+    items: list[KnowledgeBaseOut] = Field(default_factory=list)
+    disabled_kb_ids: list[str] = Field(default_factory=list)
+    message: str | None = None
 
 
 class ModelOut(BaseModel):
