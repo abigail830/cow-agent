@@ -25,7 +25,13 @@ export function ArtifactBubble({ spec, expanded = false, onExpand }: Props) {
   }
 
   if (isContentDocumentArtifact(spec) || isInlineDownloadArtifact(spec)) {
-    return <InlineDownloadArtifactCard spec={spec} />
+    return (
+      <InlineDownloadArtifactCard
+        spec={spec}
+        expanded={expanded}
+        onExpand={onExpand}
+      />
+    )
   }
 
   if (spec.kind === 'proposal_preview') {

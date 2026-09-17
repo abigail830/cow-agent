@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@docmentis/udoc-viewer": "^0.7.17",
     "echarts": "^5.6.0",
     "lucide-react": "^1.17.0",
     "react": "^19.2.6",

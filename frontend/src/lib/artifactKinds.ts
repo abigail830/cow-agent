@@ -17,19 +17,35 @@ export function isInlineDownloadArtifact(spec: ArtifactSpec): boolean {
   return spec.kind === 'proposal_word' || spec.kind === 'proposal_document'
 }
 
+const UDOC_FORMATS = new Set(['pptx', 'docx', 'pdf'])
+
+/** Office/PDF content_document that can open in the udoc side panel. */
+export function isUdocPreviewableArtifact(spec: ArtifactSpec): boolean {
+  if (!isContentDocumentArtifact(spec)) return false
+  if (!spec.download_url?.trim()) return false
+  const format = (spec.format || '').toLowerCase()
+  if (UDOC_FORMATS.has(format)) return true
+  const name = (spec.filename || '').toLowerCase()
+  return name.endsWith('.pptx') || name.endsWith('.docx') || name.endsWith('.pdf')
+}
+
 export function isProposalArtifact(spec: ArtifactSpec): boolean {
   return spec.kind.startsWith('proposal_')
 }
 
 export function isSidePanelArtifact(spec: ArtifactSpec): boolean {
-  return isDiagramArtifact(spec) || isSlideDeckArtifact(spec)
+  return isDiagramArtifact(spec) || isSlideDeckArtifact(spec) || isUdocPreviewableArtifact(spec)
 }
 
-export type SidePanelArtifactKind = Extract<ArtifactKind, 'diagram_svg' | 'slide_deck'>
+export type SidePanelArtifactKind = Extract<
+  ArtifactKind,
+  'diagram_svg' | 'slide_deck' | 'content_document'
+>
 
 export function getSidePanelArtifactKind(spec: ArtifactSpec): SidePanelArtifactKind | null {
   if (isDiagramArtifact(spec)) return 'diagram_svg'
   if (isSlideDeckArtifact(spec)) return 'slide_deck'
+  if (isUdocPreviewableArtifact(spec)) return 'content_document'
   return null
 }
 

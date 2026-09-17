@@ -26,6 +26,7 @@ node_modules/
 frontend/node_modules/
 frontend/dist/
 frontend/dist-ssr/
+frontend/public/udoc/
 
 # Runtime / local dev
 backend/.venv/
