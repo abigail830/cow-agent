@@ -354,10 +354,12 @@ body {
 
 .chat-header {
   position: relative;
+  z-index: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  overflow: visible;
   background: #f3f4f2;
   padding: 0.75rem 1rem;
   min-height: 3rem;
@@ -367,11 +369,30 @@ body {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   margin-left: 0.75rem;
+  overflow: visible;
+}
+
+/* Width matches the visual avatar so the circle is not clipped;
+   height stays 2.5rem so the white body below does not shift. */
+.chat-header-icon-slot {
+  position: relative;
+  display: block;
+  flex-shrink: 0;
+  width: 60px;
+  height: 2.5rem;
+  overflow: visible;
 }
 
 .chat-header-icon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 60px;
+  height: 60px;
+  /* Slight downward shift so a bit sits under the white canvas. */
+  transform: translate(-50%, calc(-50% + 8px));
   color: var(--color-brand-500);
 }
 
@@ -1780,6 +1801,8 @@ body {
 
 /* 20px gray edge → white canvas (rounded top) → centered 80% conversation column */
 .chat-body-frame {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex: 1;
   min-height: 0;

@@ -1792,7 +1792,9 @@ export function ChatPage() {
             <div className="chat-main-inner">
             <div className="chat-header">
               <div className="chat-header-brand">
-                <AgentIcon slug={selected.slug} className="chat-header-icon h-10 w-10 shrink-0" />
+                <span className="chat-header-icon-slot" aria-hidden>
+                  <AgentIcon slug={selected.slug} className="chat-header-icon" />
+                </span>
                 <h1 className="chat-header-title">{selected.name}</h1>
               </div>
               <div className="chat-header-actions">
