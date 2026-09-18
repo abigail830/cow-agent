@@ -21,6 +21,7 @@ from app.platform.integrations.kb_preference import (
     agent_supports_kb_scope,
     get_disabled_kb_ids,
     set_disabled_kb_ids,
+    sync_enabled_kbs_to_agent_memory,
 )
 from app.platform.integrations.providers.hybrid_search import HYBRID_SEARCH_PROVIDER_ID
 from app.platform.integrations.token_service import IntegrationTokenService
@@ -103,6 +104,17 @@ async def put_agent_kb_preferences(
     if not agent_supports_kb_scope(agent.config if isinstance(agent.config, dict) else {}):
         raise HTTPException(status_code=400, detail="This agent does not use hybrid-search knowledge bases")
     disabled = await set_disabled_kb_ids(db, user.id, agent_id, body.disabled_kb_ids)
+    api_key = await IntegrationTokenService(db).get_api_key(
+        user_id=user.id,
+        provider=HYBRID_SEARCH_PROVIDER_ID,
+    )
+    await sync_enabled_kbs_to_agent_memory(
+        db,
+        user_id=user.id,
+        agent_id=agent_id,
+        disabled_kb_ids=disabled,
+        api_key=api_key,
+    )
     await db.commit()
     return AgentKbPreferenceOut(disabled_kb_ids=disabled)
 

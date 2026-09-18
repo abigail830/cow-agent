@@ -170,6 +170,8 @@ export function MemoryPanel({ open, agents, activeAgentId, refreshKey = 0, onClo
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const activeAgent = agents.find((agent) => agent.id === activeAgentId) ?? null
+
   const ensureDraft = useCallback((key: string): DraftState => {
     return drafts[key] ?? { line: '', isConstraint: false }
   }, [drafts])
@@ -183,20 +185,19 @@ export function MemoryPanel({ open, agents, activeAgentId, refreshKey = 0, onClo
     setError(null)
     try {
       const user = await api.getUserMemory()
-      const pairs = await Promise.all(
-        agents.map(async (agent) => {
-          const doc = await api.getAgentMemory(agent.id)
-          return [agent.id, doc] as const
-        }),
-      )
       setUserDoc(user)
-      setAgentDocs(Object.fromEntries(pairs))
+      if (activeAgentId) {
+        const doc = await api.getAgentMemory(activeAgentId)
+        setAgentDocs({ [activeAgentId]: doc })
+      } else {
+        setAgentDocs({})
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load memory')
     } finally {
       setLoading(false)
     }
-  }, [agents])
+  }, [activeAgentId])
 
   useEffect(() => {
     if (!open) return
@@ -208,13 +209,13 @@ export function MemoryPanel({ open, agents, activeAgentId, refreshKey = 0, onClo
     setExpanded((prev) => {
       const next = { ...prev }
       if (!('user' in next)) next.user = true
-      for (const agent of agents) {
-        const key = scopeKeyForAgent(agent.id)
-        if (!(key in next)) next[key] = agent.id === activeAgentId
+      if (activeAgentId) {
+        const key = scopeKeyForAgent(activeAgentId)
+        if (!(key in next)) next[key] = true
       }
       return next
     })
-  }, [open, agents, activeAgentId])
+  }, [open, activeAgentId])
 
   useEffect(() => {
     if (!open) return
@@ -281,6 +282,8 @@ export function MemoryPanel({ open, agents, activeAgentId, refreshKey = 0, onClo
     }
   }
 
+  const activeAgentKey = activeAgent ? scopeKeyForAgent(activeAgent.id) : null
+
   return (
     <aside className={`memory-panel ${open ? 'memory-panel-open' : ''}`} aria-hidden={!open}>
       <div className="memory-panel-inner">
@@ -327,28 +330,22 @@ export function MemoryPanel({ open, agents, activeAgentId, refreshKey = 0, onClo
                 onRemove={(match) => void handleRemove('user', match)}
               />
 
-              {agents.length > 0 && (
+              {activeAgent && activeAgentKey && (
                 <div className="memory-scope-group">
-                  <p className="memory-scope-group-label">Agents</p>
-                  {agents.map((agent) => {
-                    const key = scopeKeyForAgent(agent.id)
-                    return (
-                      <MemoryScopeBlock
-                        key={agent.id}
-                        scopeKey={key}
-                        title={formatAgentLabel(agent)}
-                        doc={agentDocs[agent.id] ?? null}
-                        expanded={!!expanded[key]}
-                        isActive={agent.id === activeAgentId}
-                        saving={saving}
-                        draft={ensureDraft(key)}
-                        onToggle={() => toggleSection(key)}
-                        onDraftChange={(next) => setDraft(key, next)}
-                        onAdd={() => void handleAdd(key)}
-                        onRemove={(match) => void handleRemove(key, match)}
-                      />
-                    )
-                  })}
+                  <p className="memory-scope-group-label">This agent</p>
+                  <MemoryScopeBlock
+                    scopeKey={activeAgentKey}
+                    title={formatAgentLabel(activeAgent)}
+                    doc={agentDocs[activeAgent.id] ?? null}
+                    expanded={!!expanded[activeAgentKey]}
+                    isActive
+                    saving={saving}
+                    draft={ensureDraft(activeAgentKey)}
+                    onToggle={() => toggleSection(activeAgentKey)}
+                    onDraftChange={(next) => setDraft(activeAgentKey, next)}
+                    onAdd={() => void handleAdd(activeAgentKey)}
+                    onRemove={(match) => void handleRemove(activeAgentKey, match)}
+                  />
                 </div>
               )}
             </>
