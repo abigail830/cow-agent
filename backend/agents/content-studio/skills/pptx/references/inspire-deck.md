@@ -53,7 +53,7 @@ Creative Blue ≈ **5–10%** of slide area — subtitles, footer, CTAs only.
 |------|------|-----|--------|
 | Cover / chapter title | Georgia | 40–44 | white on dark |
 | Subtitle (dark slides) | MiSans | 18–22 | `34B3E4` |
-| Slide title | MiSans | 38 | `0A2342` |
+| Slide title | MiSans | 28 | `0A2342` |
 | Kicker | MiSans | 12 uppercase | `34B3E4` |
 | Body | MiSans | 14–16 | `333333` |
 | Footer | MiSans | 10–11 | `34B3E4` |
@@ -126,7 +126,7 @@ function addKicker(slide, text, y = PAD.y) {
 function addSlideTitle(slide, text, y) {
   slide.addText(text, {
     x: PAD.x, y, w: 8.8, h: 0.65,
-    fontFace: INSPIRE.fontHeadline, fontSize: 38, bold: true,
+    fontFace: INSPIRE.fontHeadline, fontSize: 28, bold: true,
     color: INSPIRE.starryBlues, margin: 0,
   });
 }

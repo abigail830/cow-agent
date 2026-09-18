@@ -125,7 +125,7 @@ Copy Part 1 into every deliverable; pick slide patterns from Part 2 — do not i
   font-size: 12px; font-weight: 500; letter-spacing: .14em;
   text-transform: uppercase; color: var(--creative); margin-bottom: 12px;
 }
-.slide-title { font-size: 38px; font-weight: 600; color: var(--starry); line-height: 1.15; }
+.slide-title { font-size: 28px; font-weight: 600; color: var(--starry); line-height: 1.15; }
 ```
 
 Creative Blue is **emphasis only** — subtitles, footer, progress, CTAs; never flood large areas.

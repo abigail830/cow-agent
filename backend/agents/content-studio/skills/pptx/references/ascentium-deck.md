@@ -63,7 +63,7 @@ const ASSETS = '/home/user/content-studio/skills/pptx/assets/ascentium';
 | Role | pt | Weight | Colour |
 |------|-----|--------|--------|
 | Kicker | 12 | 600 | `FF6611`, uppercase |
-| Slide title | 38 | 600 | `0F1514` |
+| Slide title | 28 | 600 | `0F1514` |
 | Cover title | 44–52 | 600 | `0F1514` or white on dark/orange cover |
 | Body / bullets | 16–17 | 400 | `272C2C` |
 | Subtitle | 15 | 400 | `575B5B` |
@@ -134,7 +134,7 @@ function addKicker(slide, text, y = PAD.y) {
 function addSlideTitle(slide, text, y) {
   slide.addText(text, {
     x: PAD.x, y, w: 8.8, h: 0.65,
-    fontFace: ASCENTIUM.fontTitle, fontSize: 38, bold: true,
+    fontFace: ASCENTIUM.fontTitle, fontSize: 28, bold: true,
     color: ASCENTIUM.midnightGreen, margin: 0,
   });
 }

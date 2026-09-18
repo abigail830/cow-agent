@@ -129,7 +129,7 @@ Use variables — **never hardcode hex in pattern CSS** except inside `:root`.
   font-size: 12px; font-weight: 600; letter-spacing: .16em;
   text-transform: uppercase; color: var(--org); margin-bottom: 12px;
 }
-.slide-title { font-size: 38px; font-weight: 600; color: var(--gd); line-height: 1.15; margin-bottom: 8px; }
+.slide-title { font-size: 28px; font-weight: 600; color: var(--gd); line-height: 1.15; margin-bottom: 8px; }
 .slide-sub { font-size: 15px; color: var(--g3); line-height: 1.55; }
 .accent { color: var(--org); }
 .emphasis { font-weight: 500; }
@@ -156,7 +156,7 @@ Use variables — **never hardcode hex in pattern CSS** except inside `:root`.
 }
 ```
 
-Typography scale: **kicker** 12px uppercase orange · **slide-title** 38px · **cover h1** 56–64px · **key stat** 48–56px · body ≤4 bullets per slide · footnotes 11–12px `var(--g4)`.
+Typography scale: **kicker** 12px uppercase orange · **slide-title** 28px · **cover h1** 56–64px · **key stat** 48–56px · body ≤4 bullets per slide · footnotes 11–12px `var(--g4)`.
 
 ### 5. Brand image assets (sandbox → embed before publish)
 
