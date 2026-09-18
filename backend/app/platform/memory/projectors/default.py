@@ -6,7 +6,7 @@ from typing import Any
 
 from app.platform.memory.memory_config import MemorySlimConfig
 from app.platform.memory.projectors.base import SlimCallResult, SlimResult
-from app.platform.memory.projectors.utils import mark_slimmed, preview_json, preview_text
+from app.platform.memory.projectors.utils import mark_slimmed, preview_json, preview_text, truncate_long_strings
 
 
 class DefaultMemoryProjector:
@@ -24,9 +24,8 @@ class DefaultMemoryProjector:
         config: MemorySlimConfig,
     ) -> SlimCallResult:
         chars = config.request_chars_for(tool_name)
-        preview = preview_json(arguments, chars)
         return SlimCallResult(
-            arguments={"_memory_preview": preview},
+            arguments=truncate_long_strings(arguments, chars),
             metadata=mark_slimmed(metadata, projector=self.name),
         )
 

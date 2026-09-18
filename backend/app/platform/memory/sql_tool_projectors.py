@@ -11,24 +11,18 @@ from app.platform.memory.projectors.utils import (
     extract_row_count,
     is_truncated,
     mark_slimmed,
-    preview_json,
-    preview_text,
+    truncate_long_strings,
+    truncate_named_string_fields,
 )
 from app.platform.hooks.sql_tools import is_sql_run_query
 
-
-def _sql_from_arguments(arguments: Any) -> str:
-    args = ensure_dict(arguments)
-    for key in ("sql", "query", "statement"):
-        value = args.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return ""
+_SQL_TEXT_KEYS = ("sql", "query", "statement")
+_TABLE_NAME_KEYS = ("table", "table_name", "name")
 
 
 def _table_from_arguments(arguments: Any) -> str:
     args = ensure_dict(arguments)
-    for key in ("table", "table_name", "name"):
+    for key in _TABLE_NAME_KEYS:
         value = args.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
@@ -65,10 +59,9 @@ class SqlRunQueryMemoryProjector:
         config: MemorySlimConfig,
     ) -> SlimCallResult:
         chars = config.request_chars_for(tool_name, default=self.DEFAULT_REQUEST_CHARS)
-        sql = _sql_from_arguments(arguments)
-        preview = preview_text(sql, chars, label="SQL: ")
+        # Focus: only the SQL text is large; keep limit/params/etc. intact.
         return SlimCallResult(
-            arguments={"_memory_preview": preview},
+            arguments=truncate_named_string_fields(arguments, _SQL_TEXT_KEYS, chars),
             metadata=mark_slimmed(metadata, projector=self.name),
         )
 
@@ -103,9 +96,8 @@ class SqlListTablesMemoryProjector:
         config: MemorySlimConfig,
     ) -> SlimCallResult:
         chars = config.request_chars_for(tool_name, default=self.DEFAULT_REQUEST_CHARS)
-        preview = preview_json(arguments, chars)
         return SlimCallResult(
-            arguments={"_memory_preview": preview},
+            arguments=truncate_long_strings(arguments, chars),
             metadata=mark_slimmed(metadata, projector=self.name),
         )
 
@@ -140,9 +132,8 @@ class SqlDescribeTableMemoryProjector:
         config: MemorySlimConfig,
     ) -> SlimCallResult:
         chars = config.request_chars_for(tool_name, default=self.DEFAULT_REQUEST_CHARS)
-        preview = preview_json(arguments, chars)
         return SlimCallResult(
-            arguments={"_memory_preview": preview},
+            arguments=truncate_named_string_fields(arguments, _TABLE_NAME_KEYS, chars),
             metadata=mark_slimmed(metadata, projector=self.name),
         )
 

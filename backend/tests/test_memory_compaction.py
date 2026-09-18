@@ -97,7 +97,9 @@ async def test_platform_slim_compaction_strategy_slims_tool_history():
     assert changed is True
 
     rows = maf_messages_to_projection_rows(messages)
-    assert rows[0]["metadata"]["arguments"]["_memory_preview"].startswith("SQL:")
+    assert "sql" in rows[0]["metadata"]["arguments"]
+    assert rows[0]["metadata"]["arguments"]["sql"].startswith("SELECT")
+    assert "_memory_preview" not in rows[0]["metadata"]["arguments"]
     assert rows[1]["content"] == "SQL 已执行 | rows=3 | truncated=False"
 
 
@@ -180,4 +182,6 @@ def test_function_call_arguments_slimmed_in_assistant_message():
     ]
     rows = maf_messages_to_projection_rows(messages)
     projected = HistoryProjection().project_rows(rows, memory_config)
-    assert projected[0]["metadata"]["arguments"]["_memory_preview"].startswith("SQL:")
+    assert "sql" in projected[0]["metadata"]["arguments"]
+    assert projected[0]["metadata"]["arguments"]["sql"].startswith("SELECT")
+    assert "_memory_preview" not in projected[0]["metadata"]["arguments"]
