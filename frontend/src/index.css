@@ -19,6 +19,8 @@
   --color-surface-raised: #ffffff;
   /* Warm paper chrome — header + gutters around white canvas */
   --color-chrome: oklch(0.975 0.006 75);
+  /* Same paper tone for soft fills (code / tool panels) */
+  --cover-paper: oklch(0.975 0.006 75);
   /* User message bubble (warm cream, not brand orange) */
   --color-user-bubble: #efeae3;
   --color-border: #e4e4e7;
@@ -1752,14 +1754,14 @@ body {
   font-size: 0.9em;
   padding: 0.1em 0.35em;
   border-radius: 4px;
-  background: var(--color-surface);
+  background: color-mix(in oklab, var(--cover-paper) 68%, transparent);
 }
 
 .markdown-body pre {
   margin: 0.5em 0;
   padding: 0.625rem 0.75rem;
   border-radius: 6px;
-  background: var(--color-surface);
+  background: color-mix(in oklab, var(--cover-paper) 68%, transparent);
   overflow-x: auto;
 }
 
@@ -1789,7 +1791,7 @@ body {
 }
 
 .markdown-body th {
-  background: var(--color-surface);
+  background: color-mix(in oklab, var(--cover-paper) 72%, oklch(0.90 0.018 75));
   font-weight: 600;
 }
 
@@ -1978,7 +1980,7 @@ body {
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: #f9f9f9;
+  background: color-mix(in oklab, var(--cover-paper) 68%, transparent);
 }
 
 .process-step-section + .process-step-section {
