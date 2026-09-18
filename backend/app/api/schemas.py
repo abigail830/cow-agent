@@ -77,6 +77,19 @@ class ChatOut(BaseModel):
     title: str | None
 
 
+class ChatForkSourceOut(BaseModel):
+    chat_id: uuid.UUID
+    title: str | None
+
+
+class ChatForkOut(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    agent_id: uuid.UUID
+    title: str | None
+    forked_from: ChatForkSourceOut
+
+
 class ChatListOut(BaseModel):
     id: uuid.UUID
     agent_id: uuid.UUID

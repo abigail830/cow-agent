@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.schemas import (
     AttachmentOut,
     ChatCreate,
+    ChatForkOut,
+    ChatForkSourceOut,
     ChatListOut,
     ChatOut,
     MessageCreate,
@@ -27,6 +29,7 @@ from app.platform.auth.current_user import get_current_user, get_current_user_id
 from app.db.session import get_db
 from app.platform.attachments.service import AttachmentService
 from app.platform.chat.run_service import ChatRunService, list_chat_messages
+from app.platform.chat.fork_service import fork_chat
 from app.platform.llm.stream_errors import user_facing_stream_error
 from app.agent_specific.proposal.preview_service import get_chat_proposal_draft, get_chat_proposal_preview, load_chat_proposal_draft
 from app.agent_specific.yl_worker2.fulfillment.service import (
@@ -90,6 +93,22 @@ async def create_chat(
     await db.commit()
     await db.refresh(chat)
     return ChatOut(id=chat.id, user_id=chat.user_id, agent_id=chat.agent_id, title=chat.title)
+
+
+@router.post("/{chat_id}/fork", response_model=ChatForkOut, status_code=201)
+async def fork_chat_route(
+    chat: Chat = Depends(get_owned_chat),
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> ChatForkOut:
+    new_chat, source = await fork_chat(db, source=chat, user_id=user_id)
+    return ChatForkOut(
+        id=new_chat.id,
+        user_id=new_chat.user_id,
+        agent_id=new_chat.agent_id,
+        title=new_chat.title,
+        forked_from=ChatForkSourceOut(chat_id=source.id, title=source.title),
+    )
 
 
 @router.get("/{chat_id}/messages", response_model=list[MessageOut])

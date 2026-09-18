@@ -59,6 +59,13 @@ export interface Chat {
   title: string | null
 }
 
+export interface ChatForkResult extends Chat {
+  forked_from: {
+    chat_id: string
+    title: string | null
+  }
+}
+
 export interface ChatSummary {
   id: string
   agent_id: string

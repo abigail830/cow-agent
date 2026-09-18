@@ -1,5 +1,5 @@
 import { ProcessStepCard } from './ProcessStepCard'
-import { AssistantTurnCopyRow, MessageBubble } from './MessageBubble'
+import { AssistantTurnActionRow, MessageBubble } from './MessageBubble'
 import { VizBubble } from './VizBubble'
 import { ArtifactBubble } from './ArtifactBubble'
 import { FulfillmentInlineBlock } from './fulfillment/FulfillmentInlineBlock'
@@ -14,6 +14,8 @@ import { isProposalArtifact } from '../lib/artifactKinds'
 import type { ArtifactSpec } from '../types/artifact'
 import type { FulfillmentForm } from '../types/fulfillmentForms'
 import type { Message } from '../types'
+import type { ForkBannerState } from '../lib/forkBanner'
+import { ArtifactForkIcon } from './ArtifactForkIcon'
 
 type Props = {
   messages: Message[]
@@ -27,6 +29,9 @@ type Props = {
   fulfillmentFormsLoading?: boolean
   fulfillmentFormsError?: string | null
   onFulfillmentFormsChange?: (forms: FulfillmentForm[]) => void
+  onForkChat?: () => void
+  forkingChat?: boolean
+  forkBanner?: ForkBannerState | null
 }
 
 function PendingIndicator({ hint }: { hint?: string | null }) {
@@ -108,6 +113,9 @@ export function ChatMessageList({
   fulfillmentFormsLoading = false,
   fulfillmentFormsError = null,
   onFulfillmentFormsChange,
+  onForkChat,
+  forkingChat = false,
+  forkBanner = null,
 }: Props) {
   const blocks = groupMessages(messages, { streaming: loading })
   const assistantCopyByIndex = resolveAssistantTurnCopyByBlockIndex(blocks, { loading })
@@ -125,6 +133,7 @@ export function ChatMessageList({
         const key = block.kind === 'bubble' ? block.message.id : `${block.kind}-${block.id}-${index}`
         const node = renderBlock(block, proposalPanelOpen, expandedArtifactId, onExpandArtifact)
         const turnCopy = assistantCopyByIndex.get(index)
+        const showActions = Boolean(turnCopy)
 
         const attachAfter =
           showInlineFulfillment &&
@@ -132,11 +141,19 @@ export function ChatMessageList({
           block.kind === 'process' &&
           block.id === proposeBlockId
 
+        const actions = showActions ? (
+          <AssistantTurnActionRow
+            copyText={turnCopy ?? ''}
+            onFork={onForkChat}
+            forking={forkingChat}
+          />
+        ) : null
+
         if (!attachAfter || !fulfillmentChatId || !onFulfillmentFormsChange) {
           return (
             <div key={key}>
               {node}
-              {turnCopy ? <AssistantTurnCopyRow text={turnCopy} /> : null}
+              {actions}
             </div>
           )
         }
@@ -153,7 +170,7 @@ export function ChatMessageList({
                 onFormsChange={onFulfillmentFormsChange}
               />
             </div>
-            {turnCopy ? <AssistantTurnCopyRow text={turnCopy} /> : null}
+            {actions}
           </div>
         )
       })}
@@ -176,6 +193,19 @@ export function ChatMessageList({
       {(showPending || showSyncStatus) && (
         <PendingIndicator hint={showSyncStatus ? turnSyncHint : null} />
       )}
+
+      {forkBanner ? (
+        <div className="chat-fork-banner" role="note">
+          <span className="chat-fork-banner-rule" aria-hidden />
+          <span className="chat-fork-banner-label">
+            <ArtifactForkIcon size={12} />
+            <span className="chat-fork-banner-text">
+              Forked from “{forkBanner.sourceTitle || 'New Chat'}”
+            </span>
+          </span>
+          <span className="chat-fork-banner-rule" aria-hidden />
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -3275,6 +3275,7 @@ body {
 .msg-copy-row {
   display: flex;
   align-items: center;
+  gap: 0.125rem;
   min-height: 1.25rem;
 }
 
@@ -3319,6 +3320,49 @@ body {
 
 .msg-copy-btn-copied {
   color: #15803d;
+}
+
+.chat-fork-banner {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: var(--chat-assistant-max-width, 78%);
+  margin-top: 1rem;
+  margin-bottom: 0.25rem;
+  padding: 0 0.5rem;
+  box-sizing: border-box;
+}
+
+.chat-fork-banner-rule {
+  flex: 1 1 0;
+  min-width: 1.5rem;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.chat-fork-banner-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 1 auto;
+  max-width: 70%;
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.chat-fork-banner-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.msg-fork-spinner {
+  width: 14px;
+  height: 14px;
 }
 
 ::-webkit-scrollbar {

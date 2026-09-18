@@ -2,6 +2,7 @@ import type {
   Agent,
   Chat,
   ChatAttachment,
+  ChatForkResult,
   ChatSummary,
   KnowledgeBaseListResult,
   MemoryDocument,
@@ -107,6 +108,10 @@ export const api = {
     request<Chat>('/chats', {
       method: 'POST',
       body: JSON.stringify({ agent_id: agentId }),
+    }),
+  forkChat: (chatId: string) =>
+    request<ChatForkResult>(`/chats/${encodeURIComponent(chatId)}/fork`, {
+      method: 'POST',
     }),
   listMessages: (chatId: string) => request<Message[]>(`/chats/${chatId}/messages`),
 

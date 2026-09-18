@@ -28,6 +28,12 @@ import { useArtifactPanel } from '../hooks/useArtifactPanel'
 import { AttachmentMentionPopup } from '../components/AttachmentMentionPopup'
 import { ComposerMentionInput } from '../components/ComposerMentionInput'
 import { ComposerStagedChips } from '../components/ComposerStagedChips'
+import {
+  clearForkBanner,
+  readForkBanner,
+  writeForkBanner,
+  type ForkBannerState,
+} from '../lib/forkBanner'
 import { ModelSelect } from '../components/ModelSelect'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { PanelLoadingState } from '../components/PanelLoadingState'
@@ -219,6 +225,8 @@ export function ChatPage() {
   const proposalStateFetchGenRef = useRef(new Map<string, number>())
   const proposalPanelTabRef = useRef(new Map<string, ProposalPanelTab>())
   const [memoryRefreshKey, setMemoryRefreshKey] = useState(0)
+  const [forkingChat, setForkingChat] = useState(false)
+  const [forkBannerByChatId, setForkBannerByChatId] = useState<Record<string, ForkBannerState>>({})
   const messagesScrollRef = useRef<HTMLDivElement>(null)
   const pinToBottomRef = useRef(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -1670,6 +1678,66 @@ export function ChatPage() {
   }
 
   useEffect(() => {
+    if (!chatId) return
+    const cached = readForkBanner(chatId)
+    if (!cached) return
+    setForkBannerByChatId((prev) => (prev[chatId] ? prev : { ...prev, [chatId]: cached }))
+  }, [chatId])
+
+  useEffect(() => {
+    if (!chatId) return
+    const banner = forkBannerByChatId[chatId]
+    if (!banner) return
+    if (messages.length <= banner.baselineMessageCount) return
+    clearForkBanner(chatId)
+    setForkBannerByChatId((prev) => {
+      if (!prev[chatId]) return prev
+      const next = { ...prev }
+      delete next[chatId]
+      return next
+    })
+  }, [chatId, messages.length, forkBannerByChatId])
+
+  const handleForkChat = useCallback(async () => {
+    if (!selectedId || !chatId || forkingChat || loading || chatSessionLoading) return
+    setForkingChat(true)
+    // Let the fork button paint its spinner before the network request.
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve())
+      })
+    })
+    try {
+      const forked = await api.forkChat(chatId)
+      const banner: ForkBannerState = {
+        sourceChatId: forked.forked_from.chat_id,
+        sourceTitle: forked.forked_from.title || 'New Chat',
+        baselineMessageCount: messages.length,
+      }
+      writeForkBanner(forked.id, banner)
+      setForkBannerByChatId((prev) => ({ ...prev, [forked.id]: banner }))
+      await openChatById(selectedId, forked.id)
+      await refreshChatHistory(selectedId)
+    } catch (e) {
+      patchSession(selectedId, {
+        error: e instanceof Error ? e.message : 'Failed to fork conversation',
+      })
+    } finally {
+      setForkingChat(false)
+    }
+  }, [
+    selectedId,
+    chatId,
+    forkingChat,
+    loading,
+    chatSessionLoading,
+    messages.length,
+    openChatById,
+    refreshChatHistory,
+    patchSession,
+  ])
+
+  useEffect(() => {
     return () => {
       streamRegistryRef.current.abortAll()
     }
@@ -1884,6 +1952,9 @@ export function ChatPage() {
                           fulfillmentFormsLoading={isYlWorker2 ? fulfillmentFormsLoading : false}
                           fulfillmentFormsError={isYlWorker2 ? fulfillmentFormsError : null}
                           onFulfillmentFormsChange={isYlWorker2 ? fulfillment.setForms : undefined}
+                          onForkChat={chatId ? () => void handleForkChat() : undefined}
+                          forkingChat={forkingChat}
+                          forkBanner={chatId ? forkBannerByChatId[chatId] ?? null : null}
                         />
                       </>
                     )}

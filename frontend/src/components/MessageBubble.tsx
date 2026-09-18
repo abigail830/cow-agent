@@ -4,6 +4,8 @@ import { MarkdownContent } from './MarkdownContent'
 import { segmentInputByMentions } from '../lib/attachmentMentions'
 import { formatUserFacingError } from '../lib/userFacingError'
 import { ArtifactCopyIcon } from './ArtifactCopyIcon'
+import { ArtifactForkIcon } from './ArtifactForkIcon'
+import { LoadingSpinner } from './LoadingSpinner'
 
 interface Props {
   message: Message
@@ -126,16 +128,42 @@ function MessageCopyButton({ text }: { text: string }) {
   )
 }
 
-/** Copy control used at the end of an assistant turn (joined reply text only). */
-export function AssistantTurnCopyRow({ text }: { text: string }) {
-  if (!text.trim()) return null
+/** Actions at the end of an assistant turn: copy reply text + fork chat. */
+export function AssistantTurnActionRow({
+  copyText,
+  onFork,
+  forking = false,
+}: {
+  copyText: string
+  onFork?: () => void
+  forking?: boolean
+}) {
+  if (!copyText.trim() && !onFork) return null
   return (
     <div className="msg-wrap msg-wrap-assistant">
       <div className="msg-copy-row">
-        <MessageCopyButton text={text} />
+        {copyText.trim() ? <MessageCopyButton text={copyText} /> : null}
+        {onFork ? (
+          <button
+            type="button"
+            className="msg-copy-btn"
+            aria-label={forking ? 'Forking chat' : 'Fork chat'}
+            title={forking ? 'Forking…' : 'Fork'}
+            disabled={forking}
+            aria-busy={forking}
+            onClick={() => onFork()}
+          >
+            {forking ? <LoadingSpinner size="sm" className="msg-fork-spinner" /> : <ArtifactForkIcon />}
+          </button>
+        ) : null}
       </div>
     </div>
   )
+}
+
+/** @deprecated use AssistantTurnActionRow */
+export function AssistantTurnCopyRow({ text }: { text: string }) {
+  return <AssistantTurnActionRow copyText={text} />
 }
 
 export function MessageBubble({ message }: Props) {
