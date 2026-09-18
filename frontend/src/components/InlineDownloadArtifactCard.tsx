@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ArtifactSpec } from '../types/artifact'
-import { artifactCardSubtitle, isUdocPreviewableArtifact } from '../lib/artifactKinds'
+import { artifactCardSubtitle, isUdocPreviewableArtifact, isMarkdownPreviewableArtifact } from '../lib/artifactKinds'
 import {
   ArtifactCoverIllustration,
   resolveArtifactCoverKind,
@@ -29,7 +29,7 @@ export function InlineDownloadArtifactCard({
 }: Props) {
   const [downloading, setDownloading] = useState(false)
   const canDownload = showDownload && canDownloadSpec(spec)
-  const canPreview = isUdocPreviewableArtifact(spec)
+  const canPreview = isUdocPreviewableArtifact(spec) || isMarkdownPreviewableArtifact(spec)
   const coverKind = resolveArtifactCoverKind(spec)
 
   async function handleDownload() {

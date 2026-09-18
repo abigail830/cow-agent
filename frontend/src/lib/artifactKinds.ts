@@ -19,13 +19,31 @@ export function isInlineDownloadArtifact(spec: ArtifactSpec): boolean {
 
 const UDOC_FORMATS = new Set(['pptx', 'docx', 'pdf'])
 
+function contentDocumentFormat(spec: ArtifactSpec): string {
+  return (spec.format || '').toLowerCase()
+}
+
+function contentDocumentFilename(spec: ArtifactSpec): string {
+  return (spec.filename || '').toLowerCase()
+}
+
+/** Markdown content_document that can open as a rendered preview in the side panel. */
+export function isMarkdownPreviewableArtifact(spec: ArtifactSpec): boolean {
+  if (!isContentDocumentArtifact(spec)) return false
+  const format = contentDocumentFormat(spec)
+  const name = contentDocumentFilename(spec)
+  const isMd = format === 'markdown' || format === 'md' || name.endsWith('.md')
+  if (!isMd) return false
+  return Boolean(spec.content?.trim()) || Boolean(spec.download_url?.trim())
+}
+
 /** Office/PDF content_document that can open in the udoc side panel. */
 export function isUdocPreviewableArtifact(spec: ArtifactSpec): boolean {
   if (!isContentDocumentArtifact(spec)) return false
   if (!spec.download_url?.trim()) return false
-  const format = (spec.format || '').toLowerCase()
+  const format = contentDocumentFormat(spec)
   if (UDOC_FORMATS.has(format)) return true
-  const name = (spec.filename || '').toLowerCase()
+  const name = contentDocumentFilename(spec)
   return name.endsWith('.pptx') || name.endsWith('.docx') || name.endsWith('.pdf')
 }
 
@@ -34,7 +52,12 @@ export function isProposalArtifact(spec: ArtifactSpec): boolean {
 }
 
 export function isSidePanelArtifact(spec: ArtifactSpec): boolean {
-  return isDiagramArtifact(spec) || isSlideDeckArtifact(spec) || isUdocPreviewableArtifact(spec)
+  return (
+    isDiagramArtifact(spec) ||
+    isSlideDeckArtifact(spec) ||
+    isUdocPreviewableArtifact(spec) ||
+    isMarkdownPreviewableArtifact(spec)
+  )
 }
 
 export type SidePanelArtifactKind = Extract<
@@ -45,7 +68,7 @@ export type SidePanelArtifactKind = Extract<
 export function getSidePanelArtifactKind(spec: ArtifactSpec): SidePanelArtifactKind | null {
   if (isDiagramArtifact(spec)) return 'diagram_svg'
   if (isSlideDeckArtifact(spec)) return 'slide_deck'
-  if (isUdocPreviewableArtifact(spec)) return 'content_document'
+  if (isUdocPreviewableArtifact(spec) || isMarkdownPreviewableArtifact(spec)) return 'content_document'
   return null
 }
 

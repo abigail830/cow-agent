@@ -1,8 +1,10 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { ArtifactDownloadIcon } from './ArtifactDownloadIcon'
 import { LoadingSpinner } from './LoadingSpinner'
+import { MarkdownContent } from './MarkdownContent'
 import { downloadArtifactFile } from '../lib/artifactDownload'
-import { artifactCardSubtitle } from '../lib/artifactKinds'
+import { resolveApiPath, toSameOriginApiUrl } from '../lib/apiBase'
+import { artifactCardSubtitle, isMarkdownPreviewableArtifact } from '../lib/artifactKinds'
 import type { ArtifactSpec } from '../types/artifact'
 
 const UDocArtifactViewer = lazy(async () => {
@@ -15,9 +17,87 @@ type Props = {
   onClose: () => void
 }
 
+async function loadMarkdownText(spec: ArtifactSpec): Promise<string> {
+  const inline = spec.content?.trim()
+  if (inline) return spec.content
+  const url = spec.download_url?.trim()
+  if (!url) return ''
+  const res = await fetch(toSameOriginApiUrl(resolveApiPath(url)), { credentials: 'include' })
+  if (!res.ok) {
+    throw new Error(await res.text())
+  }
+  return await res.text()
+}
+
+function MarkdownDocumentBody({ spec }: { spec: ArtifactSpec }) {
+  const [text, setText] = useState(spec.content?.trim() ? spec.content : '')
+  const [loading, setLoading] = useState(!spec.content?.trim())
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const inline = spec.content?.trim()
+    if (inline) {
+      setText(spec.content)
+      setLoading(false)
+      setError(null)
+      return
+    }
+    setLoading(true)
+    setError(null)
+    void loadMarkdownText(spec)
+      .then((body) => {
+        if (cancelled) return
+        setText(body)
+        setLoading(false)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : 'Failed to load markdown')
+        setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [spec])
+
+  if (loading) {
+    return (
+      <div className="panel-loading-state" role="status">
+        <LoadingSpinner />
+        <span>Loading markdown…</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="panel-loading-state" role="alert">
+        <span>{error}</span>
+      </div>
+    )
+  }
+
+  if (!text.trim()) {
+    return (
+      <div className="panel-loading-state" role="status">
+        <span>No preview content</span>
+      </div>
+    )
+  }
+
+  return (
+    <MarkdownContent
+      content={text}
+      className="markdown-body artifact-markdown-body"
+    />
+  )
+}
+
 export function ContentDocumentPanel({ spec, onClose }: Props) {
   const [downloading, setDownloading] = useState(false)
-  const canDownload = Boolean(spec.download_url?.trim())
+  const canDownload = Boolean(spec.download_url?.trim()) || Boolean(spec.content?.trim())
+  const isMarkdown = isMarkdownPreviewableArtifact(spec)
 
   async function handleDownload() {
     if (!canDownload || downloading) return
@@ -77,16 +157,20 @@ export function ContentDocumentPanel({ spec, onClose }: Props) {
         </div>
       </div>
       <div className="artifact-side-panel-scroll artifact-side-panel-scroll-document">
-        <Suspense
-          fallback={
-            <div className="panel-loading-state" role="status">
-              <LoadingSpinner />
-              <span>Loading viewer…</span>
-            </div>
-          }
-        >
-          <UDocArtifactViewer spec={spec} />
-        </Suspense>
+        {isMarkdown ? (
+          <MarkdownDocumentBody spec={spec} />
+        ) : (
+          <Suspense
+            fallback={
+              <div className="panel-loading-state" role="status">
+                <LoadingSpinner />
+                <span>Loading viewer…</span>
+              </div>
+            }
+          >
+            <UDocArtifactViewer spec={spec} />
+          </Suspense>
+        )}
       </div>
     </>
   )

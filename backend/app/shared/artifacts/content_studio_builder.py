@@ -66,6 +66,10 @@ def build_content_studio_artifact_spec(
                 file_format=fmt,  # type: ignore[arg-type]
             )
             download_url = artifact_download_url(chat_id, artifact_id)
+            if fmt == "markdown":
+                md_text = file_bytes.decode("utf-8", errors="replace")
+                preview_truncated = len(md_text) > _PREVIEW_CHAR_LIMIT
+                preview_content = "" if preview_truncated else md_text
 
         return ArtifactSpec(
             kind=kind,  # type: ignore[arg-type]
