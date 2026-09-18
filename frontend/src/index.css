@@ -17,6 +17,10 @@
 
   --color-surface: #f4f4f5;
   --color-surface-raised: #ffffff;
+  /* Warm paper chrome — header + gutters around white canvas */
+  --color-chrome: oklch(0.975 0.006 75);
+  /* User message bubble (warm cream, not brand orange) */
+  --color-user-bubble: #efeae3;
   --color-border: #e4e4e7;
   --color-border-strong: #d4d4d8;
   --color-ink: #18181b;
@@ -354,13 +358,14 @@ body {
 
 .chat-header {
   position: relative;
-  z-index: 0;
+  /* Above .chat-body-frame (z-index: 1) so action tooltips are not clipped. */
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   overflow: visible;
-  background: #f3f4f2;
+  background: var(--color-chrome);
   padding: 0.75rem 1rem;
   min-height: 3rem;
 }
@@ -447,7 +452,7 @@ body {
   position: absolute;
   top: calc(100% + 0.375rem);
   left: 50%;
-  z-index: 20;
+  z-index: 30;
   transform: translateX(-50%) translateY(2px);
   padding: 0.25rem 0.5rem;
   border-radius: 6px;
@@ -785,7 +790,7 @@ body {
   width: 0;
   overflow: hidden;
   transition: width 0.22s ease;
-  background: #f3f4f2;
+  background: var(--color-chrome);
 }
 
 .chat-history-panel-open {
@@ -1796,7 +1801,7 @@ body {
 
 /* Right panel */
 .chat-main {
-  background: #f3f4f2;
+  background: var(--color-chrome);
 }
 
 /* 20px gray edge → white canvas (rounded top) → centered 80% conversation column */
@@ -2215,12 +2220,16 @@ body {
 }
 
 .chat-model-select-wrap {
+  position: relative;
   display: inline-flex;
   align-items: center;
 }
 
 .chat-model-select {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   border: none;
   background: transparent;
   color: var(--color-muted);
@@ -2237,14 +2246,84 @@ body {
   transition: color 0.12s, background-color 0.12s;
 }
 
-.chat-model-select:hover:not(:disabled) {
+.chat-model-select-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-model-select:hover:not(:disabled),
+.chat-model-select-open:not(:disabled) {
   color: var(--color-ink);
-  background-color: var(--color-surface);
+  background-color: var(--color-chrome);
 }
 
 .chat-model-select:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.chat-model-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.375rem);
+  z-index: 40;
+  min-width: 11.5rem;
+  margin: 0;
+  padding: 0.35rem;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px rgba(24, 24, 27, 0.12);
+}
+
+.chat-model-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.chat-model-menu-item:hover:not(:disabled):not(.chat-model-menu-item-selected) {
+  background: var(--color-chrome);
+}
+
+.chat-model-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.chat-model-menu-item-selected {
+  background: var(--color-brand-500);
+  color: #fff;
+}
+
+.chat-model-menu-item-selected:hover:not(:disabled) {
+  background: var(--color-brand-600);
+  color: #fff;
+}
+
+.chat-model-menu-check {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 0.875rem;
+  height: 0.875rem;
 }
 
 .chat-composer-add {
@@ -3051,9 +3130,9 @@ body {
   align-items: center;
   max-width: min(100%, 18rem);
   border-radius: 4px;
-  background-color: var(--color-brand-50);
-  color: var(--color-brand-800);
-  box-shadow: 0 0 0 1px var(--color-brand-200);
+  background-color: color-mix(in srgb, var(--color-user-bubble) 60%, #fff);
+  color: var(--color-ink);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-user-bubble) 55%, #cfc8bf);
   font-size: 11px;
   line-height: 1.4;
   padding: 0.1em 0.35em;
@@ -3162,8 +3241,8 @@ body {
 }
 
 .msg-user {
-  background: var(--color-brand-50);
-  border: 1px solid var(--color-brand-100);
+  background: var(--color-user-bubble);
+  border: 1px solid color-mix(in srgb, var(--color-user-bubble) 70%, #d6d0c8);
   color: var(--color-ink);
 }
 
@@ -3171,6 +3250,71 @@ body {
   background: transparent;
   border: none;
   color: var(--color-ink);
+}
+
+.msg-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.msg-wrap-user {
+  align-items: flex-end;
+}
+
+.msg-wrap-assistant {
+  align-items: flex-start;
+}
+
+.msg-copy-row {
+  display: flex;
+  align-items: center;
+  min-height: 1.25rem;
+}
+
+.msg-wrap-user .msg-copy-row {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.msg-wrap-user:hover .msg-copy-row,
+.msg-wrap-user:focus-within .msg-copy-row {
+  opacity: 1;
+}
+
+.msg-wrap-assistant .msg-copy-row {
+  opacity: 1;
+}
+
+.msg-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+
+.msg-copy-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.msg-copy-btn:hover {
+  color: var(--color-ink);
+  background: var(--color-chrome);
+}
+
+.msg-copy-btn-copied {
+  color: #15803d;
 }
 
 ::-webkit-scrollbar {
@@ -3437,26 +3581,94 @@ body {
   min-width: 0;
 }
 
-/* Inline artifact cards — flat horizontal row (icon · title · actions) */
+/* Inline artifact cards — cover illustration · title · actions */
 .artifact-inline-card {
+  --line-art: oklch(0.24 0.008 70);
+  --cover-paper: oklch(0.975 0.006 75);
+  --cover-word: oklch(0.82 0.09 230);
+  --cover-slides: oklch(0.85 0.11 68);
+  --cover-web: oklch(0.81 0.1 166);
+  --cover-diagram: oklch(0.84 0.08 330);
+  --cover-pdf: oklch(0.82 0.1 25);
+  --cover-markdown: oklch(0.86 0.02 260);
+  --cover-generic: oklch(0.88 0.015 80);
+  --cover-accent: var(--cover-generic);
+
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  align-items: stretch;
+  gap: 0.875rem;
   width: 100%;
-  max-width: 85%;
-  min-width: min(100%, 16rem);
+  max-width: 68%;
+  min-width: min(100%, 14rem);
   margin-top: 0.125rem;
-  padding: 0.8125rem 0.875rem;
+  padding: 0.625rem 0.75rem 0.625rem 0.625rem;
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: 12px;
   background: #fff;
 }
 
 .artifact-inline-card-expanded {
-  border-color: rgba(234, 88, 12, 0.45);
-  box-shadow: inset 0 0 0 1px rgba(234, 88, 12, 0.12);
+  border-color: rgba(234, 88, 12, 0.55);
+  box-shadow: 0 0 0 1px rgba(234, 88, 12, 0.2), 0 4px 14px rgba(234, 88, 12, 0.08);
 }
 
+.artifact-cover {
+  flex-shrink: 0;
+  width: 5.75rem;
+  min-height: 86px;
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--cover-paper);
+}
+
+.artifact-cover svg {
+  width: 100%;
+  height: 100%;
+  padding: 5px;
+  fill: none;
+  stroke: var(--line-art);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.artifact-cover .cover-fill {
+  fill: color-mix(in oklab, var(--cover-paper) 65%, var(--cover-accent));
+  stroke: var(--line-art);
+}
+
+.artifact-cover.artifact-word {
+  --cover-accent: var(--cover-word);
+}
+
+.artifact-cover.artifact-slides {
+  --cover-accent: var(--cover-slides);
+}
+
+.artifact-cover.artifact-web {
+  --cover-accent: var(--cover-web);
+}
+
+.artifact-cover.artifact-diagram {
+  --cover-accent: var(--cover-diagram);
+}
+
+.artifact-cover.artifact-pdf {
+  --cover-accent: var(--cover-pdf);
+}
+
+.artifact-cover.artifact-markdown {
+  --cover-accent: var(--cover-markdown);
+}
+
+.artifact-cover.artifact-generic {
+  --cover-accent: var(--cover-generic);
+}
+
+/* Legacy letter badges — keep for any leftover markup */
 .artifact-inline-card-icon {
   flex-shrink: 0;
   display: grid;
@@ -3516,29 +3728,35 @@ body {
 .artifact-inline-card-main {
   min-width: 0;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.125rem 0;
 }
 
 .artifact-inline-card-title {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  line-height: 1.45;
+  line-height: 1.4;
   color: var(--color-ink);
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 
 .artifact-inline-card-subtitle {
-  margin: 0.1875rem 0 0;
+  margin: 0.25rem 0 0;
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.35;
   color: var(--color-subtle);
 }
 
 .artifact-inline-card-actions {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
   padding-left: 0.25rem;
 }
 
@@ -3581,8 +3799,28 @@ body {
 }
 
 .artifact-inline-action-btn-active {
-  color: var(--color-brand-700, #c2410c);
-  background: var(--color-brand-50, #fff7ed);
+  color: #fff;
+  background: var(--color-brand-500);
+}
+
+.artifact-inline-action-btn-active:hover:not(:disabled) {
+  color: #fff;
+  background: var(--color-brand-600);
+}
+
+/* Compact: icon-only while the side panel is open for this card */
+.artifact-inline-card-expanded .artifact-inline-action-btn {
+  gap: 0;
+  min-width: 2.125rem;
+  padding: 0 0.55rem;
+}
+
+.artifact-inline-card-expanded .artifact-inline-action-btn > span {
+  display: none;
+}
+
+.artifact-inline-card-expanded .artifact-inline-action-divider {
+  display: none;
 }
 
 .artifact-inline-action-divider {
@@ -4182,7 +4420,7 @@ body {
   min-width: 0;
   padding: 0.625rem 0.75rem;
   border-bottom: 1px solid var(--color-border);
-  background: #f3f4f2;
+  background: var(--color-chrome);
 }
 
 .artifact-side-panel-title {

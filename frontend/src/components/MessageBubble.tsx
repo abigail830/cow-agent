@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import type { ChatAttachment, Message, MessageAttachmentMeta } from '../types'
 import { MarkdownContent } from './MarkdownContent'
 import { segmentInputByMentions } from '../lib/attachmentMentions'
 import { formatUserFacingError } from '../lib/userFacingError'
+import { ArtifactCopyIcon } from './ArtifactCopyIcon'
 
 interface Props {
   message: Message
@@ -88,9 +90,58 @@ function UserMessageBody({
   )
 }
 
+function CopyCheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M5 13l4 4L19 7" />
+    </svg>
+  )
+}
+
+function MessageCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  const trimmed = text.trim()
+  if (!trimmed) return null
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(trimmed)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      className={`msg-copy-btn${copied ? ' msg-copy-btn-copied' : ''}`}
+      aria-label={copied ? 'Copied' : 'Copy message'}
+      title={copied ? 'Copied' : 'Copy'}
+      onClick={() => void handleCopy()}
+    >
+      {copied ? <CopyCheckIcon /> : <ArtifactCopyIcon />}
+    </button>
+  )
+}
+
+/** Copy control used at the end of an assistant turn (joined reply text only). */
+export function AssistantTurnCopyRow({ text }: { text: string }) {
+  if (!text.trim()) return null
+  return (
+    <div className="msg-wrap msg-wrap-assistant">
+      <div className="msg-copy-row">
+        <MessageCopyButton text={text} />
+      </div>
+    </div>
+  )
+}
+
 export function MessageBubble({ message }: Props) {
   const isUser = message.role === 'user'
   const attachments = messageAttachments(message)
+  const userCopyText = isUser ? (message.content ?? '').trim() : ''
 
   if (message.message_type === 'run_cancelled') {
     return (
@@ -112,7 +163,7 @@ export function MessageBubble({ message }: Props) {
 
   if (message.message_type === 'cancelled' && message.metadata?.original_type === 'text') {
     return (
-      <div className="flex justify-start">
+      <div className="msg-wrap msg-wrap-assistant">
         <div className="chat-assistant-block msg-assistant msg-assistant-cancelled rounded-sm px-3 py-2 text-[12px] leading-relaxed">
           <MarkdownContent content={message.content ?? ''} />
         </div>
@@ -127,7 +178,7 @@ export function MessageBubble({ message }: Props) {
   const streaming = message.metadata?.streaming === true
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`msg-wrap ${isUser ? 'msg-wrap-user' : 'msg-wrap-assistant'}`}>
       <div
         className={`rounded-sm px-3 py-2 text-[12px] leading-relaxed ${
           isUser ? 'msg-user max-w-[78%]' : 'chat-assistant-block msg-assistant'
@@ -148,6 +199,11 @@ export function MessageBubble({ message }: Props) {
           </>
         )}
       </div>
+      {isUser && userCopyText ? (
+        <div className="msg-copy-row">
+          <MessageCopyButton text={userCopyText} />
+        </div>
+      ) : null}
     </div>
   )
 }

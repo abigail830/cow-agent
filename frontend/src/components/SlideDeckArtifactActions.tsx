@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ArtifactSpec } from '../types/artifact'
 import { ArtifactDownloadIcon } from './ArtifactDownloadIcon'
+import { ArtifactPreviewIcon } from './ArtifactPreviewIcon'
 import { LoadingSpinner } from './LoadingSpinner'
 import { downloadArtifactFile } from '../lib/artifactDownload'
 
@@ -40,10 +41,7 @@ export function SlideDeckArtifactActions({ spec, variant, expanded = false, onEx
           disabled={!canPreview}
           onClick={() => onExpand?.(spec)}
         >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
+          <ArtifactPreviewIcon />
           <span>Preview</span>
         </button>
         <span className="artifact-inline-action-divider" aria-hidden />

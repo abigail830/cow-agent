@@ -3,8 +3,8 @@ import type { ArtifactSpec } from '../types/artifact'
 import { copyArtifactSource, downloadArtifactFile, canDownloadDiagramPng } from '../lib/artifactDownload'
 import { ArtifactCopyIcon } from './ArtifactCopyIcon'
 import { ArtifactDownloadIcon } from './ArtifactDownloadIcon'
+import { ArtifactPreviewIcon } from './ArtifactPreviewIcon'
 import { LoadingSpinner } from './LoadingSpinner'
-import { VizMaximizeIcon } from './VizMaximizeIcon'
 
 type DownloadVariant = 'png' | 'svg'
 
@@ -50,7 +50,7 @@ export function DiagramArtifactActions({
             aria-pressed={expanded}
             onClick={() => onExpand?.(spec)}
           >
-            <VizMaximizeIcon />
+            <ArtifactPreviewIcon />
             <span>Preview</span>
           </button>
           <span className="artifact-inline-action-divider" aria-hidden />

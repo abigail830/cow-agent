@@ -1,9 +1,14 @@
 import { ProcessStepCard } from './ProcessStepCard'
-import { MessageBubble } from './MessageBubble'
+import { AssistantTurnCopyRow, MessageBubble } from './MessageBubble'
 import { VizBubble } from './VizBubble'
 import { ArtifactBubble } from './ArtifactBubble'
 import { FulfillmentInlineBlock } from './fulfillment/FulfillmentInlineBlock'
-import { groupMessages, shouldShowPendingIndicator, type ChatBlock } from '../lib/messageActivity'
+import {
+  groupMessages,
+  resolveAssistantTurnCopyByBlockIndex,
+  shouldShowPendingIndicator,
+  type ChatBlock,
+} from '../lib/messageActivity'
 import { isArtifactExpandedInSidePanel } from '../lib/artifactRegistry'
 import { isProposalArtifact } from '../lib/artifactKinds'
 import type { ArtifactSpec } from '../types/artifact'
@@ -105,6 +110,7 @@ export function ChatMessageList({
   onFulfillmentFormsChange,
 }: Props) {
   const blocks = groupMessages(messages, { streaming: loading })
+  const assistantCopyByIndex = resolveAssistantTurnCopyByBlockIndex(blocks, { loading })
   const showPending = shouldShowPendingIndicator(loading, messages)
   const showSyncStatus = Boolean(turnSyncHint)
   const proposeBlockId = latestProposeFulfillmentBlockId(blocks)
@@ -118,6 +124,7 @@ export function ChatMessageList({
       {blocks.map((block, index) => {
         const key = block.kind === 'bubble' ? block.message.id : `${block.kind}-${block.id}-${index}`
         const node = renderBlock(block, proposalPanelOpen, expandedArtifactId, onExpandArtifact)
+        const turnCopy = assistantCopyByIndex.get(index)
 
         const attachAfter =
           showInlineFulfillment &&
@@ -126,7 +133,12 @@ export function ChatMessageList({
           block.id === proposeBlockId
 
         if (!attachAfter || !fulfillmentChatId || !onFulfillmentFormsChange) {
-          return <div key={key}>{node}</div>
+          return (
+            <div key={key}>
+              {node}
+              {turnCopy ? <AssistantTurnCopyRow text={turnCopy} /> : null}
+            </div>
+          )
         }
 
         return (
@@ -141,6 +153,7 @@ export function ChatMessageList({
                 onFormsChange={onFulfillmentFormsChange}
               />
             </div>
+            {turnCopy ? <AssistantTurnCopyRow text={turnCopy} /> : null}
           </div>
         )
       })}

@@ -55,7 +55,7 @@ Brand styling comes from **reference pattern libraries** (markdown with copy-pas
 |-------|----------------|-------|
 | **`inspire`** (default for Content Studio) | `references/inspire-deck.md` | Inspire — MiSans + Georgia; PNGs in `assets/inspire/` |
 | **`ascentium`** | `references/ascentium-deck.md` | Ascentium — Poppins + Noto Sans SC; PNGs in `assets/ascentium/` |
-| **`lrqa`** (default for LRQA Assist) | `references/lrqa-deck.md` | LRQA — Arial; navy/teal; PNG in `assets/lrqa/` |
+| **`lrqa`** (default for LRQA Assist) | `references/lrqa-deck.md` | LRQA — Lato + Noto Sans SC; navy/teal; PNG in `assets/lrqa/` |
 
 Each reference contains:
 

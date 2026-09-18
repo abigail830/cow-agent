@@ -19,6 +19,60 @@ export type ChatBlock =
   | { kind: 'viz'; id: string; spec: VizSpec }
   | { kind: 'artifact'; id: string; spec: ArtifactSpec; createdAt?: string | null }
 
+/** Map block index → joined assistant reply text; one entry per turn at the last block. */
+export function resolveAssistantTurnCopyByBlockIndex(
+  blocks: ChatBlock[],
+  options?: { loading?: boolean },
+): Map<number, string> {
+  const result = new Map<number, string>()
+  let texts: string[] = []
+  let lastBlockIndex = -1
+  let turnStreaming = false
+
+  const flush = () => {
+    if (texts.length > 0 && lastBlockIndex >= 0 && !turnStreaming) {
+      result.set(lastBlockIndex, texts.join('\n\n'))
+    }
+    texts = []
+    lastBlockIndex = -1
+    turnStreaming = false
+  }
+
+  for (let i = 0; i < blocks.length; i += 1) {
+    const block = blocks[i]
+    if (block.kind === 'bubble' && block.message.role === 'user') {
+      flush()
+      continue
+    }
+
+    if (block.kind === 'bubble' && block.message.role === 'assistant') {
+      lastBlockIndex = i
+      if (block.message.metadata?.streaming === true) turnStreaming = true
+      const isReplyText =
+        block.message.message_type === 'text' ||
+        (block.message.message_type === 'cancelled' &&
+          block.message.metadata?.original_type === 'text')
+      const text = (block.message.content ?? '').trim()
+      if (isReplyText && text) texts.push(text)
+      continue
+    }
+
+    if (block.kind === 'process' || block.kind === 'viz' || block.kind === 'artifact') {
+      lastBlockIndex = i
+    }
+  }
+
+  // While the active turn is still running, don't show a copy affordance yet.
+  if (options?.loading) {
+    texts = []
+    lastBlockIndex = -1
+    turnStreaming = false
+  } else {
+    flush()
+  }
+  return result
+}
+
 function parseArtifactSpec(metadata: Record<string, unknown> | undefined): ArtifactSpec | null {
   const raw = metadata?.spec
   if (!raw || typeof raw !== 'object') return null

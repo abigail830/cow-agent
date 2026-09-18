@@ -12,10 +12,10 @@ Copy Part 1 into every deliverable; pick slide patterns from Part 2 — do not i
 
 ### 1. Self-contained deliverable
 
-- One `.html` file; **all CSS in `<style>`**, reveal.js from CDN only.
+- One `.html` file; **all CSS in `<style>`**, reveal.js + Google Fonts from CDN only.
 - No `<link href="themes/…">` — published attachments have no sibling files.
 - **Brand PNG** (`lrqa_logo.png`) must be embedded as `data:image/png;base64,…` in `<img src>` before `publish_artifact` (see §5).
-- Fonts: system **Arial** / **Helvetica** stack (widely available).
+- Fonts: **Lato** (Latin) + **Noto Sans SC** (CJK) via Google Fonts — match visual weight of PPT/Word decks (those use Arial/YaHei system fonts).
 
 ### 2. reveal.js shell (copy verbatim, then fill slides)
 
@@ -27,6 +27,7 @@ Copy Part 1 into every deliverable; pick slide patterns from Part 2 — do not i
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Presentation Title</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4/dist/reveal.css">
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     /* === Paste PART 1 §3–4 CSS here === */
     /* === Paste PART 2 pattern CSS for slides you use === */
@@ -72,16 +73,30 @@ Copy Part 1 into every deliverable; pick slide patterns from Part 2 — do not i
   --slide-px: 64px;
   --slide-py: 48px;
   --footer-h: 56px;
+  --font: 'Lato', 'Noto Sans SC', Arial, Helvetica, sans-serif;
 }
 ```
+
+### Typography vs PPT (keep HTML ≥ these px)
+
+| Role | PPT (pt) | HTML (px) | Class / selector |
+|------|----------|-----------|------------------|
+| Cover / section title | 36–42 | **44** | `.lrqa-title-teal` on dark |
+| Section kicker | 14 | **16** | `.lrqa-kicker` |
+| Subtitle (dark) | 16–18 | **20** | `.cover-sub` |
+| Content slide title | 28–32 | **36** | `.slide-title` |
+| Body | 14–16 | **18** (base) | `.reveal` |
+| Footer title / page # | 11–12 | **14** | `.deck-title` / `.page-num` |
+
+Use **absolute `px`** for titles (not only `em`) so reveal.css defaults cannot shrink them.
 
 ### 4. Base reveal overrides (include in every deck)
 
 ```css
 .reveal-viewport { background: var(--mist); }
 .reveal {
-  font-family: Arial, Helvetica, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  font-size: 20px; font-weight: 400; color: var(--text);
+  font-family: var(--font);
+  font-size: 18px; font-weight: 400; color: var(--text);
 }
 .reveal .slides section {
   position: absolute; box-sizing: border-box;
@@ -94,18 +109,29 @@ Copy Part 1 into every deliverable; pick slide patterns from Part 2 — do not i
   margin: 0; border: none; box-shadow: none; background: transparent;
   object-fit: contain; aspect-ratio: 1 / 1;
 }
-.reveal h1, .reveal h2 { font-weight: 700; color: var(--text); text-transform: none; }
-.reveal h3, .reveal h4 { font-weight: 600; color: var(--text); }
+.reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+  font-family: var(--font);
+  font-weight: 700; color: var(--text); text-transform: none;
+  letter-spacing: -0.01em;
+}
+.reveal p, .reveal li { font-size: 18px; line-height: 1.45; }
 .reveal a { color: var(--teal); }
 .reveal .progress span { background: var(--teal); }
 .reveal .controls button { color: var(--teal); }
 
-.lrqa-title-teal { color: var(--teal); font-weight: 700; }
-.lrqa-kicker {
-  font-size: 14px; font-weight: 700; letter-spacing: .06em;
-  color: var(--white); margin-bottom: 12px;
+.lrqa-title-teal {
+  color: var(--teal); font-weight: 700;
+  font-size: 44px; line-height: 1.15;
+  margin: 0 0 16px;
 }
-.slide-title { font-size: 32px; font-weight: 700; color: var(--text); line-height: 1.15; }
+.lrqa-kicker {
+  font-size: 16px; font-weight: 700; letter-spacing: .06em;
+  color: var(--white); margin: 0 0 14px;
+}
+.slide-title {
+  font-size: 36px; font-weight: 700; color: var(--text);
+  line-height: 1.2; margin: 0 0 20px;
+}
 
 /* Content footer bar */
 .lrqa-footer-bar {
@@ -120,11 +146,11 @@ Copy Part 1 into every deliverable; pick slide patterns from Part 2 — do not i
 .lrqa-footer-bar .lrqa-logo { width: 28px; height: 28px; flex-shrink: 0; }
 .lrqa-footer-bar .deck-title {
   margin-left: 14px; flex: 1;
-  font-size: 12px; color: var(--white); white-space: nowrap;
+  font-size: 14px; color: var(--white); white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
 .lrqa-footer-bar .page-num {
-  font-size: 13px; color: var(--white); margin-right: 28px;
+  font-size: 14px; color: var(--white); margin-right: 28px;
 }
 .lrqa-footer-bar .teal-corner {
   position: absolute; right: 0; bottom: 0;
@@ -190,17 +216,17 @@ Replace `__LRQA_LOGO__` placeholders with the data URI before `publish_artifact`
 }
 .reveal .slides section.s-cover-dark .cover-body {
   position: relative; z-index: 1;
-  padding: 200px var(--slide-px) 96px;
-  max-width: 720px;
+  padding: 168px var(--slide-px) 96px;
+  max-width: 780px;
 }
 .reveal .slides section.s-cover-dark .lrqa-title-teal {
-  font-size: 2.6em; line-height: 1.12; margin-bottom: 16px;
+  font-size: 44px; line-height: 1.15; margin-bottom: 18px;
 }
 .reveal .slides section.s-cover-dark .cover-sub {
-  font-size: 1.1em; color: var(--white); font-weight: 400; margin-bottom: 28px;
+  font-size: 20px; color: var(--white); font-weight: 400; margin: 0 0 28px; line-height: 1.4;
 }
 .reveal .slides section.s-cover-dark .cover-meta {
-  font-size: 0.85em; color: var(--white); line-height: 1.5;
+  font-size: 16px; color: var(--white); line-height: 1.5; margin: 0;
 }
 ```
 
@@ -219,7 +245,7 @@ Replace `__LRQA_LOGO__` placeholders with the data URI before `publish_artifact`
 
 ### Section divider
 
-Same dark chrome as cover; kicker + teal title + white subtitle.
+Same dark chrome as cover; kicker + **teal** title (`.lrqa-title-teal`, 44px) + white subtitle. Do **not** use `.slide-title` on dark slides.
 
 ```html
 <section class="s-cover-dark">
@@ -263,7 +289,7 @@ Same dark chrome as cover; kicker + teal title + white subtitle.
 
 ```css
 .reveal .slides section.s-light table {
-  width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.85em;
+  width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 16px;
 }
 .reveal .slides section.s-light th {
   background: var(--navy); color: var(--white); text-align: left;
@@ -280,6 +306,6 @@ Same dark chrome as cover; kicker + teal title + white subtitle.
 
 | Class / pattern | Chrome | Notes |
 |-----------------|--------|-------|
-| `s-cover-dark` | CSS diagonal + teal corner + logo | Title / section |
-| `s-light` + `lrqa-footer-bar` | Navy footer | Content |
+| `s-cover-dark` | CSS diagonal + teal corner + logo | Title / section — title **44px teal** |
+| `s-light` + `lrqa-footer-bar` | Navy footer | Content — `.slide-title` **36px** |
 | Table in `s-light` | Footer bar | Navy header cells |
