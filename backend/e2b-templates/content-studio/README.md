@@ -18,16 +18,17 @@ Also baked into the image:
 |------|----------|
 | `/home/user/content-studio/skills/docx/scripts` | docx skill scripts |
 | `/home/user/content-studio/skills/pptx/scripts` | pptx skill scripts |
-| `/home/user/content-studio/skills/pptx/references` | `pptxgenjs.md`, `ascentium-deck.md`, `inspire-deck.md` |
-| `/home/user/content-studio/skills/pptx/assets` | `ascentium/*.png`, `inspire/*.png` (brand chrome) |
-| `/home/user/content-studio/skills/html-slides/references` | `ascentium-deck.md`, `inspire-deck.md` |
-| `/home/user/content-studio/skills/html-slides/assets` | `ascentium/*.png`, `inspire/*.png` (brand chrome) |
+| `/home/user/content-studio/skills/pptx/references` | `pptxgenjs.md`, `ascentium-deck.md`, `inspire-deck.md`, `lrqa-deck.md` |
+| `/home/user/content-studio/skills/pptx/assets` | `ascentium/*.png`, `inspire/*.png`, `lrqa/*.png` (brand chrome) |
+| `/home/user/content-studio/skills/html-slides/references` | `ascentium-deck.md`, `inspire-deck.md`, `lrqa-deck.md` |
+| `/home/user/content-studio/skills/html-slides/assets` | `ascentium/*.png`, `inspire/*.png`, `lrqa/*.png` (brand chrome) |
 
 ## Build
 
 ```bash
-cd agent-backend
+cd backend
 export E2B_API_KEY=...
+npm install   # once — installs e2b + tsx
 npm run e2b:build-content-studio-template
 ```
 
@@ -41,12 +42,14 @@ npm run e2b:build-content-studio-template
 
 First build can take several minutes (LibreOffice is large).
 
+Copy source paths are under `agents/content-studio/skills/` (relative to `backend/` as `fileContextPath`).
+
 ## Wire into agents
 
 ```yaml
 sandbox:
   provider: e2b
-  templateId: okf-content-studio:1.14   # alias:tag — bare alias also resolves via platform default tag
+  templateId: okf-content-studio:1.15   # alias:tag — bare alias also resolves via platform default tag
   cwd: /home/user/content-studio
 ```
 
@@ -62,6 +65,7 @@ python3 -c "import markitdown, lxml, defusedxml; from PIL import Image; print('p
 soffice --version
 pdftoppm -v
 pandoc --version
+ls /home/user/content-studio/skills/pptx/assets/lrqa/lrqa_logo.png
 ```
 
 ## Updating
@@ -69,8 +73,10 @@ pandoc --version
 1. Edit `template.ts` (and keep `Dockerfile` in sync for readability).
 2. Bump `E2B_CONTENT_STUDIO_TEMPLATE_TAG` or change the tag in `template.ts` defaults.
 3. Re-run the build script.
-4. Update `agent.yaml`, `sandbox/e2b-content-studio.yaml`, and `src/sandboxes/e2b-templates.ts` default tag to match.
+4. Update `E2B_CONTENT_STUDIO_TEMPLATE` in backend `.env` / deploy env to match.
 5. Redeploy backend — no code change needed if alias name unchanged.
+
+**1.15** — LRQA theme (`lrqa-deck.md` + `assets/lrqa/`); copy source fixed to `agents/content-studio/skills/`.
 
 **1.14** — Brand chrome sizing: Ascentium content corner/logo scale-down; Inspire logo/corner aspect-ratio fixes (html-slides + pptx refs).
 

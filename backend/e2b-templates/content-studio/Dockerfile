@@ -42,12 +42,12 @@ WORKDIR /home/user/content-studio
 RUN npm init -y && npm install docx pptxgenjs react react-dom react-icons sharp
 
 # Skill helper scripts (also copied via template.ts during E2B build)
-COPY agent-assets/skills/docx/scripts /home/user/content-studio/skills/docx/scripts
-COPY agent-assets/skills/pptx/scripts /home/user/content-studio/skills/pptx/scripts
-COPY agent-assets/skills/pptx/references /home/user/content-studio/skills/pptx/references
-COPY agent-assets/skills/pptx/assets /home/user/content-studio/skills/pptx/assets
-COPY agent-assets/skills/html-slides/references /home/user/content-studio/skills/html-slides/references
-COPY agent-assets/skills/html-slides/assets /home/user/content-studio/skills/html-slides/assets
+COPY agents/content-studio/skills/docx/scripts /home/user/content-studio/skills/docx/scripts
+COPY agents/content-studio/skills/pptx/scripts /home/user/content-studio/skills/pptx/scripts
+COPY agents/content-studio/skills/pptx/references /home/user/content-studio/skills/pptx/references
+COPY agents/content-studio/skills/pptx/assets /home/user/content-studio/skills/pptx/assets
+COPY agents/content-studio/skills/html-slides/references /home/user/content-studio/skills/html-slides/references
+COPY agents/content-studio/skills/html-slides/assets /home/user/content-studio/skills/html-slides/assets
 
 WORKDIR /home/user
 

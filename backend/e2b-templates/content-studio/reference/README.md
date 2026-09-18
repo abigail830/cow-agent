@@ -1,12 +1,14 @@
-# Ascentium / Inspire HTML slide brand assets (reference)
+# Content Studio HTML / PPTX brand assets (reference)
 
 Canonical files live in:
 
-`agent-backend/agent-assets/skills/html-slides/assets/{ascentium,inspire}/`
+`backend/agents/content-studio/skills/html-slides/assets/{ascentium,inspire,lrqa}/`
 
 Pattern libraries (markdown) live in:
 
-`agent-backend/agent-assets/skills/html-slides/references/`
+`backend/agents/content-studio/skills/html-slides/references/`
+
+(PPTX mirrors the same themes under `skills/pptx/assets/` and `skills/pptx/references/`.)
 
 The E2B template copies both trees into the sandbox:
 

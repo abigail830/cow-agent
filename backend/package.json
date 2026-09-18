@@ -1,0 +1,13 @@
+{
+  "name": "agent-platform-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2b:build-content-studio-template": "tsx e2b-templates/content-studio/build.ts"
+  },
+  "devDependencies": {
+    "e2b": "^2.8.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -167,7 +167,7 @@ class Settings(BaseSettings):
     # Sandbox (content-studio) — E2B command/file workspace
     e2b_api_key: str | None = Field(default=None, validation_alias="E2B_API_KEY")
     e2b_content_studio_template: str | None = Field(
-        default="okf-content-studio:1.14",
+        default="okf-content-studio:1.15",
         validation_alias="E2B_CONTENT_STUDIO_TEMPLATE",
     )
     sandbox_timeout_seconds: float = Field(default=180.0, validation_alias="SANDBOX_TIMEOUT_SECONDS")

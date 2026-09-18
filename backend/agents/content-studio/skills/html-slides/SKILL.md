@@ -16,10 +16,12 @@ html-slides/
 ├── SKILL.md                 # workflow (this file)
 ├── references/              # theme pattern libraries (markdown only)
 │   ├── ascentium-deck.md
-│   └── inspire-deck.md
+│   ├── inspire-deck.md
+│   └── lrqa-deck.md
 ├── assets/                  # brand PNGs (sandbox / E2B; embed as base64 in HTML)
 │   ├── ascentium/
-│   └── inspire/
+│   ├── inspire/
+│   └── lrqa/
 └── LICENSE.txt
 ```
 
@@ -33,11 +35,12 @@ Brand styling comes from **reference pattern libraries** (markdown with copy-pas
 ## How to Use
 
 1. Clarify topic, audience, and slide count if missing.
-2. **Pick theme:** `ascentium` (default) or `inspire`. Never mix brands.
+2. **Pick theme:** `inspire` (default for Content Studio), `ascentium`, or `lrqa` (default for LRQA Assist). Never mix brands.
 3. `activate_skill` for `html-slides`.
 4. **`read`** the theme reference from the **sandbox mirror** (same pattern as pptx/docx themes):
    - Ascentium → `/home/user/content-studio/skills/html-slides/references/ascentium-deck.md`
    - Inspire → `/home/user/content-studio/skills/html-slides/references/inspire-deck.md`
+   - LRQA → `/home/user/content-studio/skills/html-slides/references/lrqa-deck.md`
 5. Assemble the deliverable:
    - Copy **Part 1** (shell + tokens + base CSS) into one `<style>` block.
    - For each slide, copy **Part 2** pattern CSS (only patterns you use) + adapt the HTML into `<section>`.
@@ -50,8 +53,9 @@ Brand styling comes from **reference pattern libraries** (markdown with copy-pas
 
 | Theme | Reference file | Brand |
 |-------|----------------|-------|
-| **`ascentium`** (default) | `references/ascentium-deck.md` | Ascentium — Poppins + Noto Sans SC; PNGs in `assets/ascentium/` |
-| **`inspire`** | `references/inspire-deck.md` | Inspire — MiSans + Georgia; PNGs in `assets/inspire/` |
+| **`inspire`** (default for Content Studio) | `references/inspire-deck.md` | Inspire — MiSans + Georgia; PNGs in `assets/inspire/` |
+| **`ascentium`** | `references/ascentium-deck.md` | Ascentium — Poppins + Noto Sans SC; PNGs in `assets/ascentium/` |
+| **`lrqa`** (default for LRQA Assist) | `references/lrqa-deck.md` | LRQA — Arial; navy/teal; PNG in `assets/lrqa/` |
 
 Each reference contains:
 
@@ -77,6 +81,8 @@ Theme references and brand PNGs live in the sandbox (preinstalled in Content Stu
 | Ascentium PNGs | `/home/user/content-studio/skills/html-slides/assets/ascentium/` |
 | Inspire patterns | `/home/user/content-studio/skills/html-slides/references/inspire-deck.md` |
 | Inspire PNGs | `/home/user/content-studio/skills/html-slides/assets/inspire/` |
+| LRQA patterns | `/home/user/content-studio/skills/html-slides/references/lrqa-deck.md` |
+| LRQA PNGs | `/home/user/content-studio/skills/html-slides/assets/lrqa/` |
 
 `read_skill_resource` only accepts the **full** path shown after `read_skill_resource` in `<skill_resources>` (starts with `/.flue/packaged-skills/`). Short paths like `references/ascentium-deck.md` **will fail** — prefer the sandbox paths above. Binary PNGs are **not** packaged into the skill store; use sandbox `assets/` only.
 
@@ -129,4 +135,4 @@ Theme references and brand PNGs live in the sandbox (preinstalled in Content Stu
 ## Resources
 
 - [reveal.js documentation](https://revealjs.com/)
-- Theme pattern libraries: `references/ascentium-deck.md`, `references/inspire-deck.md`
+- Theme pattern libraries: `references/ascentium-deck.md`, `references/inspire-deck.md`, `references/lrqa-deck.md`

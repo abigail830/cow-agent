@@ -94,6 +94,6 @@ Produce polished deliverables via the matching skill.
 
 ### Format hints
 
-- **docx** — reports, memos; default **Ascentium** theme (`themes/ascentium.md`), or **Inspire** when requested.
-- **pptx** — visual decks; default **Ascentium** references + assets. Use async IIFE + `await pres.writeFile()`; run `cd /home/user/content-studio && node script.js` (`2>&1` on failure).
-- **html-slides** — reveal.js deck; read `references/ascentium-deck.md` or `inspire-deck.md`; **1280×720** frame.
+- **docx** — reports, memos; default **Inspire** theme (`themes/inspire.md`); **Ascentium** or **LRQA** when requested (`themes/ascentium.md` / `themes/lrqa.md`).
+- **pptx** — visual decks; default **Inspire** references + assets; **Ascentium** / **LRQA** when requested. Use async IIFE + `await pres.writeFile()`; run `cd /home/user/content-studio && node script.js` (`2>&1` on failure).
+- **html-slides** — reveal.js deck; default **Inspire** (`references/inspire-deck.md`); or `ascentium-deck.md` / `lrqa-deck.md` when requested; **1280×720** frame.

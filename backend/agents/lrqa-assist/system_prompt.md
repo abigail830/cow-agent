@@ -191,6 +191,6 @@ Produce polished deliverables via the matching skill.
 
 ### Format hints
 
-- **docx** — design docs, SOW, status reports, meeting digests; default **Ascentium** theme (`themes/ascentium.md`), or **Inspire** when requested.
-- **pptx** — steering / workshop / proposal decks; default **Ascentium** references + assets. Use async IIFE + `await pres.writeFile()`; run `cd /home/user/content-studio && node script.js` (`2>&1` on failure).
-- **html-slides** — reveal.js deck; read `references/ascentium-deck.md` or `inspire-deck.md`; **1280×720** frame.
+- **docx** — design docs, SOW, status reports, meeting digests; default **LRQA** theme (`themes/lrqa.md`); use **Ascentium** / **Inspire** only when the user asks.
+- **pptx** — steering / workshop / proposal decks; default **LRQA** (`references/lrqa-deck.md` + `assets/lrqa/`). Use async IIFE + `await pres.writeFile()`; run `cd /home/user/content-studio && node script.js` (`2>&1` on failure).
+- **html-slides** — reveal.js deck; default **LRQA** (`references/lrqa-deck.md`); **1280×720** frame. Ascentium/Inspire only when requested.

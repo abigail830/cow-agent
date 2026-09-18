@@ -12,7 +12,7 @@ export const CONTENT_STUDIO_TEMPLATE_NAME =
   process.env.E2B_CONTENT_STUDIO_TEMPLATE?.trim() || 'okf-content-studio';
 
 export const CONTENT_STUDIO_TEMPLATE_TAG =
-  process.env.E2B_CONTENT_STUDIO_TEMPLATE_TAG?.trim() || '1.14';
+  process.env.E2B_CONTENT_STUDIO_TEMPLATE_TAG?.trim() || '1.15';
 
 export function defineContentStudioTemplate(options?: { fileContextPath?: string }) {
   const builder = options?.fileContextPath
@@ -53,28 +53,29 @@ export function defineContentStudioTemplate(options?: { fileContextPath?: string
         'cd /home/user/content-studio && npm init -y && npm install docx pptxgenjs react react-dom react-icons sharp',
         { user: 'user' },
       )
+      // Canonical skill source: agents/content-studio/skills (not legacy agent-assets/)
       .copy(
-        'agent-assets/skills/docx/scripts',
+        'agents/content-studio/skills/docx/scripts',
         '/home/user/content-studio/skills/docx/scripts',
       )
       .copy(
-        'agent-assets/skills/pptx/scripts',
+        'agents/content-studio/skills/pptx/scripts',
         '/home/user/content-studio/skills/pptx/scripts',
       )
       .copy(
-        'agent-assets/skills/pptx/references',
+        'agents/content-studio/skills/pptx/references',
         '/home/user/content-studio/skills/pptx/references',
       )
       .copy(
-        'agent-assets/skills/pptx/assets',
+        'agents/content-studio/skills/pptx/assets',
         '/home/user/content-studio/skills/pptx/assets',
       )
       .copy(
-        'agent-assets/skills/html-slides/references',
+        'agents/content-studio/skills/html-slides/references',
         '/home/user/content-studio/skills/html-slides/references',
       )
       .copy(
-        'agent-assets/skills/html-slides/assets',
+        'agents/content-studio/skills/html-slides/assets',
         '/home/user/content-studio/skills/html-slides/assets',
       )
       .setWorkdir('/home/user')

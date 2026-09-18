@@ -285,7 +285,7 @@ Content Studio 有两条 skill 访问路径，**不要混用**：
 | 环境变量 | 默认值 | 说明 |
 |----------|--------|------|
 | `E2B_API_KEY` | — | **必填**；无则 `ContentStudioSandboxError` |
-| `E2B_CONTENT_STUDIO_TEMPLATE` | `okf-content-studio:1.14` | E2B 模板 alias[:tag] |
+| `E2B_CONTENT_STUDIO_TEMPLATE` | `okf-content-studio:1.15` | E2B 模板 alias[:tag] |
 | `SANDBOX_TIMEOUT_SECONDS` | `180` | 传给 `Sandbox.create(timeout=...)`；单命令 `commands.run` 默认超时同值；最小 30 |
 | `SANDBOX_REUSE_SESSION` | `true` | 同 run 内复用 VM；关闭则每次新建 |
 
@@ -311,7 +311,7 @@ Content Studio 有两条 skill 访问路径，**不要混用**：
 
 ```bash
 E2B_API_KEY=e2b_...
-# E2B_CONTENT_STUDIO_TEMPLATE=okf-content-studio:1.14
+# E2B_CONTENT_STUDIO_TEMPLATE=okf-content-studio:1.15
 # SANDBOX_TIMEOUT_SECONDS=600    # 长 docx/pptx 构建可调大
 # SANDBOX_REUSE_SESSION=true
 # SANDBOX_REAPER_IDLE_HOURS=1    # P0-b：pause 超 1h 即 kill
@@ -539,7 +539,7 @@ flowchart LR
     "sandbox_id": "sbx_...",
     "namespace": "content-studio",
     "paused_at": "2025-03-13T08:00:00Z",
-    "template": "okf-content-studio:1.14"
+    "template": "okf-content-studio:1.15"
   }
 }
 ```

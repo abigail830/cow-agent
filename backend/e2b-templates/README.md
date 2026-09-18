@@ -23,7 +23,7 @@ Any catalog agent:
 ```yaml
 sandbox:
   provider: e2b
-  templateId: okf-content-studio:1.14   # or bare okf-content-studio (tag resolved in code)
+  templateId: okf-content-studio:1.15   # or bare okf-content-studio (tag resolved in code)
   cwd: /home/user/content-studio
 ```
 

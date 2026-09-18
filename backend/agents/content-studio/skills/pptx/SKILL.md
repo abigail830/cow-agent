@@ -21,13 +21,14 @@ A `.pptx` is a ZIP of XML parts. Pick the path by task:
 | `references/pptxgenjs.md` | **API** — text, lists, shapes, images, tables, charts, script shell, pitfalls |
 | `references/ascentium-deck.md` | **Ascentium theme** — colours, typography, brand chrome, slide patterns |
 | `references/inspire-deck.md` | **Inspire theme** — same for Inspire |
+| `references/lrqa-deck.md` | **LRQA theme** — navy/teal chrome, square logo, slide patterns |
 
 Sandbox mirror: `/home/user/content-studio/skills/pptx/references/`  
 Brand PNGs: `/home/user/content-studio/skills/pptx/assets/<theme>/`
 
 ## Create workflow
 
-1. Clarify topic, audience, slide count, and theme (`ascentium` default, `inspire` when requested).
+1. Clarify topic, audience, slide count, and theme (`inspire` default for Content Studio; `ascentium` or `lrqa` when requested; LRQA Assist defaults to `lrqa`).
 2. **`read` `pptxgenjs.md`** — script shell + element APIs you will need.
 3. **`read` the theme `*-deck.md`** — copy Part 1 helpers; build slides from Part 2 patterns.
 4. Write `build-deck.js` in `/home/user/content-studio/`; run `node build-deck.js` (`2>&1` on failure).

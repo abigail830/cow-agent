@@ -5,8 +5,9 @@ Read **both** the API reference and one theme deck when creating a deck.
 | File | Scope | Read for |
 |------|--------|----------|
 | **`pptxgenjs.md`** | **Theme-neutral** pptxgenjs API | Script shell, layout sizes, `addText` / bullets / shapes / images / icons / tables / charts, corruption pitfalls |
-| **`ascentium-deck.md`** | **Ascentium brand** (default) | Palette, fonts, logo/corner placement, slide patterns, branded coordinates |
-| **`inspire-deck.md`** | **Inspire brand** | Same as above for Inspire |
+| **`inspire-deck.md`** | **Inspire brand** (default for Content Studio) | Same as above for Inspire |
+| **`ascentium-deck.md`** | **Ascentium brand** | Palette, fonts, logo/corner placement, slide patterns, branded coordinates |
+| **`lrqa-deck.md`** | **LRQA brand** (default for LRQA Assist) | Navy/teal palette, square logo, shape chrome, slide patterns |
 
 **Division of labour**
 
@@ -16,4 +17,4 @@ Read **both** the API reference and one theme deck when creating a deck.
 Sandbox paths:
 
 - `/home/user/content-studio/skills/pptx/references/`
-- `/home/user/content-studio/skills/pptx/assets/{ascentium,inspire}/`
+- `/home/user/content-studio/skills/pptx/assets/{ascentium,inspire,lrqa}/`

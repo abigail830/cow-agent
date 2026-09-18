@@ -21,8 +21,8 @@ Paths below are relative to this skill directory unless noted.
 **Workflow**
 
 1. Clarify purpose, audience, length, and brand theme if missing.
-2. **Default theme: `ascentium`** — use `themes/inspire.md` only when the user asks for Inspire.
-3. Read the matching theme file for colours, fonts, document patterns, and the `ASCENTIUM` / `INSPIRE` constant object.
+2. **Default theme: `inspire`** — use `themes/ascentium.md` when the user asks for Ascentium; `themes/lrqa.md` when they ask for LRQA (LRQA Assist agents should default to `lrqa`).
+3. Read the matching theme file for colours, fonts, document patterns, and the `ASCENTIUM` / `INSPIRE` / `LRQA` constant object.
 4. Write a **Node.js script** using the `docx` package; export with `Packer.toBuffer()` / `writeFileSync`.
 5. Optionally spot-check structure with `pandoc -t markdown output.docx` (headings, order, obvious gaps).
 6. **`publish_artifact`** on the final `.docx` — not PDF previews or validate scratch files.
@@ -33,12 +33,13 @@ Paths below are relative to this skill directory unless noted.
 
 ## Brand themes
 
-Two **independent** themes. **Never mix** colours, fonts, or styling cues.
+Three **independent** themes. **Never mix** colours, fonts, or styling cues.
 
 | Theme | Brand | Spec file | When |
 |-------|-------|-----------|------|
-| **`ascentium`** (default) | Ascentium | `themes/ascentium.md` | Corporate reports, memos, client Word deliverables |
-| **`inspire`** | Inspire | `themes/inspire.md` | Inspire / Inspire AI materials |
+| **`inspire`** (default for Content Studio) | Inspire | `themes/inspire.md` | Inspire / Inspire AI materials |
+| **`ascentium`** | Ascentium | `themes/ascentium.md` | Corporate reports, memos, client Word deliverables |
+| **`lrqa`** (default for LRQA Assist) | LRQA | `themes/lrqa.md` | LRQA engagement docs, assurance / migration deliverables |
 
 Each theme file includes:
 
@@ -47,7 +48,7 @@ Each theme file includes:
 - Cover, heading, body, table, and footer patterns
 - A minimal `docx` script starter
 
-Do not invent a third palette unless the user explicitly opts out of brand themes.
+Do not invent a fourth palette unless the user explicitly opts out of brand themes.
 
 ## docx-js gotchas
 
