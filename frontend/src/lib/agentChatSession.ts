@@ -4,7 +4,7 @@ import type { TurnSyncPhase } from './turnSync'
 import type { ArtifactSpec } from '../types/artifact'
 import type { ProposalPreview } from '../types/proposalPreview'
 import type { FulfillmentForm } from '../types/fulfillmentForms'
-import type { ChatSummary, Message } from '../types'
+import type { ChatSummary, ContextUsage, Message } from '../types'
 
 export type AgentChatSession = {
   agentId: string
@@ -35,6 +35,7 @@ export type AgentChatSession = {
   fulfillmentForms: FulfillmentForm[]
   fulfillmentFormsLoading: boolean
   fulfillmentFormsError: string | null
+  contextUsage: ContextUsage | null
 }
 
 export function createEmptyAgentSession(agentId: string): AgentChatSession {
@@ -66,6 +67,7 @@ export function createEmptyAgentSession(agentId: string): AgentChatSession {
     fulfillmentForms: [],
     fulfillmentFormsLoading: false,
     fulfillmentFormsError: null,
+    contextUsage: null,
   }
 }
 

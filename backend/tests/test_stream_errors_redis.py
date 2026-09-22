@@ -8,5 +8,6 @@ def test_redis_connection_error_is_user_friendly():
             "nodename nor servname provided, or not known."
         )
     )
-    assert "Redis" in msg
+    assert "Session cache (Redis)" in msg
     assert "REDIS_URL" in msg
+    assert "PostgreSQL" in msg

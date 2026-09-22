@@ -6,6 +6,7 @@ import uuid
 from types import SimpleNamespace
 
 import pytest
+from agent_framework import Content, Message
 
 from app.platform.chat.fork_service import build_fork_title, fork_chat
 
@@ -22,12 +23,12 @@ def test_build_fork_title_prefixes_and_truncates() -> None:
 
 
 @pytest.mark.asyncio
-async def test_fork_chat_copies_messages_and_rewrites_parents(monkeypatch) -> None:
+async def test_fork_chat_copies_messages_and_annotations(monkeypatch) -> None:
     user_id = uuid.uuid4()
     agent_id = uuid.uuid4()
     source_id = uuid.uuid4()
-    parent_id = uuid.uuid4()
-    child_id = uuid.uuid4()
+    turn_id = uuid.uuid4()
+    message_id = uuid.uuid4()
 
     source = SimpleNamespace(
         id=source_id,
@@ -35,32 +36,15 @@ async def test_fork_chat_copies_messages_and_rewrites_parents(monkeypatch) -> No
         agent_id=agent_id,
         title="LRQ overview",
     )
-    source_events = [
+    source_messages = [
         SimpleNamespace(
-            id=parent_id,
+            id=message_id,
             sequence=1,
-            event_type="message",
-            payload={
-                "role": "user",
-                "content": "hi",
-                "message_type": "text",
-                "metadata": {},
-                "parent_id": None,
-            },
-        ),
-        SimpleNamespace(
-            id=child_id,
-            sequence=2,
-            event_type="message",
-            payload={
-                "role": "assistant",
-                "content": "hello",
-                "message_type": "text",
-                "metadata": {"streaming": False},
-                "parent_id": str(parent_id),
-            },
+            turn_id=turn_id,
+            body=Message(role="user", contents=[Content.from_text("hi")]).to_dict(),
         ),
     ]
+    source_annotations: list[SimpleNamespace] = []
 
     added: list[object] = []
     flushed = {"count": 0}
@@ -82,24 +66,32 @@ async def test_fork_chat_copies_messages_and_rewrites_parents(monkeypatch) -> No
         async def refresh(self, obj):
             return None
 
-    class _Repo:
+    class _MessageRepo:
         def __init__(self, db):
             self._db = db
 
         async def list_by_chat(self, chat_id):
             assert chat_id == source_id
-            return source_events
+            return source_messages
 
         async def insert_many(self, chat_id, rows, *, flush=True):
-            assert len(rows) == 2
-            assert rows[0]["sequence"] == 1
-            assert rows[1]["sequence"] == 2
-            assert rows[1]["parent_id"] == rows[0]["message_id"]
-            assert rows[0]["content"] == "hi"
-            assert rows[1]["content"] == "hello"
+            assert len(rows) == 1
+            assert rows[0]["body"]["role"] == "user"
             return []
 
-    monkeypatch.setattr("app.platform.chat.fork_service.ChatEventRepository", _Repo)
+    class _AnnotationRepo:
+        def __init__(self, db):
+            self._db = db
+
+        async def list_by_chat(self, chat_id):
+            assert chat_id == source_id
+            return source_annotations
+
+        async def insert_many(self, chat_id, rows, *, flush=True):
+            return []
+
+    monkeypatch.setattr("app.platform.chat.fork_service.ChatMessageRepository", _MessageRepo)
+    monkeypatch.setattr("app.platform.chat.fork_service.ChatUiAnnotationRepository", _AnnotationRepo)
     monkeypatch.setattr(
         "app.platform.chat.fork_service.Chat",
         lambda **kwargs: SimpleNamespace(id=None, **kwargs),
@@ -120,7 +112,15 @@ async def test_fork_chat_rejects_other_user() -> None:
         id=uuid.uuid4(),
         user_id=uuid.uuid4(),
         agent_id=uuid.uuid4(),
-        title="x",
+        title="Private",
     )
+
+    class _Db:
+        def add(self, obj):
+            pass
+
+        async def flush(self):
+            pass
+
     with pytest.raises(PermissionError):
-        await fork_chat(object(), source=source, user_id=uuid.uuid4())  # type: ignore[arg-type]
+        await fork_chat(_Db(), source=source, user_id=uuid.uuid4())

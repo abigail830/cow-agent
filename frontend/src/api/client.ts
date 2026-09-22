@@ -4,6 +4,8 @@ import type {
   ChatAttachment,
   ChatForkResult,
   ChatSummary,
+  ChatTimeline,
+  ContextUsage,
   KnowledgeBaseListResult,
   MemoryDocument,
   Message,
@@ -114,6 +116,9 @@ export const api = {
       method: 'POST',
     }),
   listMessages: (chatId: string) => request<Message[]>(`/chats/${chatId}/messages`),
+  listTimeline: (chatId: string) => request<ChatTimeline>(`/chats/${chatId}/timeline`),
+  getContextUsage: (chatId: string) =>
+    request<ContextUsage>(`/chats/${encodeURIComponent(chatId)}/context-usage`),
 
   getAttachmentConfig: () =>
     request<AttachmentLimits>('/config/attachments').catch(() => DEFAULT_ATTACHMENT_LIMITS),

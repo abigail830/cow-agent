@@ -22,6 +22,7 @@ class RunContext:
     session_store: SessionStore
     agent_slug: str | None
     run_id: uuid.UUID | None = None
+    context_usage: dict[str, Any] | None = None
 
 
 class AgentPlugin(ABC):

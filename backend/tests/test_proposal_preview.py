@@ -58,41 +58,46 @@ def test_recover_proposal_draft_from_latest_draft_tool_result():
     import asyncio
     import uuid
 
+    from agent_framework import Content, Message
+
     from app.agent_specific.proposal.preview_service import _recover_proposal_draft_from_messages
+    from app.platform.memory.maf_mapping import PLATFORM_METADATA_KEY
 
     old_draft = {"facts": {"client": {"company_name": "Old Ltd"}}}
     latest_draft = {"facts": {"client": {"company_name": "Latest Ltd"}}}
-    events = [
-        SimpleNamespace(
-            id=uuid.uuid4(),
-            chat_id=uuid.uuid4(),
-            sequence=1,
-            event_type="message",
-            payload={
-                "role": "tool",
-                "message_type": "tool_result",
-                "metadata": {
-                    "tool_name": "initialize_proposal_draft",
-                    "result": {"status": "ok", "draft": old_draft},
-                },
+    turn_id = uuid.uuid4()
+    chat_id = uuid.uuid4()
+
+    def _tool_message(tool_name: str, result: dict, sequence: int) -> SimpleNamespace:
+        body = Message(
+            role="tool",
+            contents=[
+                Content.from_function_result(
+                    call_id=f"call-{tool_name}",
+                    result=json.dumps(result),
+                )
+            ],
+            additional_properties={
+                PLATFORM_METADATA_KEY: {
+                    "tool_name": tool_name,
+                    "call_id": f"call-{tool_name}",
+                    "result": result,
+                }
             },
-            created_at=None,
-        ),
-        SimpleNamespace(
+        ).to_dict()
+        return SimpleNamespace(
             id=uuid.uuid4(),
-            chat_id=uuid.uuid4(),
-            sequence=2,
-            event_type="message",
-            payload={
-                "role": "tool",
-                "message_type": "tool_result",
-                "metadata": {
-                    "tool_name": "patch_proposal_draft",
-                    "result": json.dumps({"status": "ok", "draft": latest_draft}),
-                },
-            },
+            chat_id=chat_id,
+            sequence=sequence,
+            turn_id=turn_id,
+            role="tool",
+            body=body,
             created_at=None,
-        ),
+        )
+
+    messages = [
+        _tool_message("initialize_proposal_draft", {"status": "ok", "draft": old_draft}, 1),
+        _tool_message("patch_proposal_draft", {"status": "ok", "draft": latest_draft}, 2),
     ]
 
     class FakeRepo:
@@ -100,11 +105,11 @@ def test_recover_proposal_draft_from_latest_draft_tool_result():
             pass
 
         async def list_by_chat(self, _chat_id):
-            return events
+            return messages
 
     async def _run():
-        with patch("app.agent_specific.proposal.draft.preview_service.ChatEventRepository", FakeRepo):
-            return await _recover_proposal_draft_from_messages(None, uuid.uuid4())
+        with patch("app.agent_specific.proposal.draft.preview_service.ChatMessageRepository", FakeRepo):
+            return await _recover_proposal_draft_from_messages(None, chat_id)
 
     recovered = asyncio.run(_run())
     assert recovered == latest_draft

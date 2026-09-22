@@ -9,6 +9,7 @@ import {
   type DragEvent,
 } from 'react'
 import { Paperclip } from 'lucide-react'
+import { ContextUsageIndicator } from '../components/ContextUsageIndicator'
 import { KbScopePopover } from '../components/KbScopePopover'
 import { useSearchParams } from 'react-router-dom'
 import { api, streamChat } from '../api/client'
@@ -81,12 +82,14 @@ import {
   applyStreamToolCall,
   applyStreamToolResult,
   applyStreamViz,
-  applyDoneTurnMessages,
   finalizeStreamLocalMessages,
+  isActiveStreamPlaceholder,
   finalizeStreamReasoning,
   mergeMessagesFromApi,
   parseDoneTurnMessages,
 } from '../lib/messageActivity'
+import { parseContextUsage } from '../lib/contextUsage'
+import { timelineToMessages } from '../lib/timelineAdapter'
 import { turnSyncStatusLabel } from '../lib/turnSync'
 import type { ArtifactSpec } from '../types/artifact'
 import type { VizSpec } from '../types/viz'
@@ -292,6 +295,7 @@ export function ChatPage() {
     fulfillmentForms,
     fulfillmentFormsLoading,
     fulfillmentFormsError,
+    contextUsage,
   } = session
 
   const SCROLL_PIN_THRESHOLD_PX = 80
@@ -632,7 +636,8 @@ export function ChatPage() {
     })
     resetProposalPanel(agentId)
     try {
-      const rows = await api.listMessages(id)
+      const timeline = await api.listTimeline(id)
+      const rows = timelineToMessages(timeline)
       if (loadGen !== openChatLoadGenRef.current.get(agentId)) return
       patchSession(agentId, {
         messages: rows,
@@ -643,7 +648,15 @@ export function ChatPage() {
         chatSessionLoading: false,
         initialized: true,
         error: null,
+        contextUsage: null,
       })
+      void api
+        .getContextUsage(id)
+        .then((usage) => {
+          if (loadGen !== openChatLoadGenRef.current.get(agentId)) return
+          patchSession(agentId, { contextUsage: usage })
+        })
+        .catch(() => {})
       setStoredChatId(agentId, id)
       streamRegistryRef.current.bindChat(id, agentId)
     } catch (e) {
@@ -685,6 +698,7 @@ export function ChatPage() {
           chatSessionLoading: false,
           initialized: true,
           error: null,
+          contextUsage: null,
         })
         void refreshChatHistory(agentId)
         return chat.id
@@ -838,7 +852,8 @@ export function ChatPage() {
   const reloadMessagesAfterStream = useCallback(
     async (agentId: string, id: string) => {
       const task = (async () => {
-        const rows = await api.listMessages(id)
+        const timeline = await api.listTimeline(id)
+        const rows = timelineToMessages(timeline)
         patchSession(agentId, (prev) => ({
           messages: mergeMessagesFromApi(rows, prev.messages),
         }))
@@ -1266,18 +1281,32 @@ export function ChatPage() {
     }
 
     streamRegistryRef.current.bindChat(activeChatId, agentId)
+
+    const pendingReload = reloadInFlightRef.current.get(activeChatId)
+    if (pendingReload) {
+      try {
+        await pendingReload
+      } catch {
+        /* ignore reload failure */
+      }
+    }
+
+    const previousStream = streamRegistryRef.current.get(activeChatId)
     streamRegistryRef.current.abort(activeChatId)
 
-    // Clear transient streaming messages (tool calls, partial text) left over from the
-    // aborted previous turn.  When a turn is aborted its finishTurnAfterStream never
-    // runs, so local-* messages never get flushed by the DB reload.  If we leave them
-    // in place the new optimistic user message gets a sequence that lands in the
-    // middle of the stale local messages, making the new bubble appear above the
-    // AI's previous (partial) response.
+    if (previousStream?.streamIdleSeen && !previousStream.reloadedAfterStream) {
+      try {
+        await reloadMessagesAfterStream(agentId, activeChatId)
+        previousStream.reloadedAfterStream = true
+      } catch {
+        /* ignore reload failure */
+      }
+    }
+
+    // Drop only active SSE placeholders from an aborted/incomplete stream. Committed
+    // local-* rows from a finished turn must stay until timeline reload replaces them.
     patchSession(agentId, (prev) => ({
-      messages: prev.messages.filter(
-        (msg) => !msg.metadata?.local || (msg.id.startsWith('tmp-') && msg.role === 'user'),
-      ),
+      messages: prev.messages.filter((msg) => !isActiveStreamPlaceholder(msg)),
     }))
 
     let attachmentRows = readyAttachments(chatAttachmentsRef.current)
@@ -1401,7 +1430,7 @@ export function ChatPage() {
       isYlWorker2: ylWorker,
       fulfillmentFormsFromStream: false,
       doneTurnMessages: null,
-      turnStartSequence: null,
+      turnStartDisplaySequence: null,
       messagesSyncedFromDone: false,
     }
     streamRegistryRef.current.set(activeChatId, streamHandle)
@@ -1424,33 +1453,15 @@ export function ChatPage() {
       if (!handle || handle.generation !== generation || handle.reloadedAfterStream) return
       handle.reloadedAfterStream = true
       try {
-        if (!handle.streamIdleSeen) {
-          patchStreamSession({
-            loading: false,
-            activeRunId: null,
-          })
-          patchStreamSession((prev) => ({
-            messages: finalizeStreamLocalMessages(prev.messages),
-          }))
-        }
-
-        if (!handle.messagesSyncedFromDone) {
-          const canPatchFromDone =
-            handle.doneTurnMessages != null && handle.turnStartSequence != null
-          if (canPatchFromDone) {
-            patchStreamSession((prev) => ({
-              messages: applyDoneTurnMessages(
-                prev.messages,
-                handle.doneTurnMessages!,
-                handle.turnStartSequence!,
-              ),
-            }))
-          } else {
-            patchStreamSession({ turnSyncPhase: 'saving-messages' })
-            await reloadMessagesAfterStream(agentId, activeChatId)
-            patchStreamSession({ turnSyncPhase: null })
-          }
-        }
+        patchStreamSession({
+          loading: false,
+          activeRunId: null,
+          turnSyncPhase: 'saving-messages',
+        })
+        patchStreamSession((prev) => ({
+          messages: finalizeStreamLocalMessages(prev.messages),
+        }))
+        await reloadMessagesAfterStream(agentId, activeChatId)
 
         if (composer && !handle.previewFreshFromStream) {
           void fetchProposalPreview(agentId, activeChatId)
@@ -1586,29 +1597,33 @@ export function ChatPage() {
           }
           if (ev.event === 'stream_idle') {
             handle.streamIdleSeen = true
+            const streamContextUsage = parseContextUsage(ev.data.context_usage)
             patchStreamSession((prev) => ({
               loading: false,
               activeRunId: null,
               messages: finalizeStreamLocalMessages(prev.messages),
+              ...(streamContextUsage != null ? { contextUsage: streamContextUsage } : {}),
             }))
           }
           if (ev.event === 'done') {
             const doneMessages = parseDoneTurnMessages(ev.data.messages)
-            const turnStartSequence =
-              typeof ev.data.turn_start_sequence === 'number'
-                ? ev.data.turn_start_sequence
+            const doneContextUsage = parseContextUsage(ev.data.context_usage)
+            const turnStartDisplaySequence =
+              typeof ev.data.turn_start_display_sequence === 'number'
+                ? ev.data.turn_start_display_sequence
                 : null
             if (doneMessages != null) {
               handle.doneTurnMessages = doneMessages
             }
-            if (turnStartSequence != null) {
-              handle.turnStartSequence = turnStartSequence
+            if (turnStartDisplaySequence != null) {
+              handle.turnStartDisplaySequence = turnStartDisplaySequence
             }
-            if (doneMessages != null && turnStartSequence != null) {
+            if (doneMessages != null && turnStartDisplaySequence != null) {
               handle.messagesSyncedFromDone = true
-              patchStreamSession((prev) => ({
-                turnSyncPhase: null,
-                messages: applyDoneTurnMessages(prev.messages, doneMessages, turnStartSequence),
+            }
+            if (doneContextUsage != null) {
+              patchStreamSession(() => ({
+                contextUsage: doneContextUsage,
               }))
             }
           }
@@ -1623,8 +1638,18 @@ export function ChatPage() {
       if (!streamRegistryRef.current.isActive(activeChatId, generation)) return
       await finishTurnAfterStream()
     } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') {
+        if (streamHandle.streamIdleSeen && !streamHandle.reloadedAfterStream) {
+          try {
+            await reloadMessagesAfterStream(agentId, activeChatId)
+            streamHandle.reloadedAfterStream = true
+          } catch {
+            /* ignore reload failure */
+          }
+        }
+        return
+      }
       if (!streamRegistryRef.current.isActive(activeChatId, generation)) return
-      if (e instanceof Error && e.name === 'AbortError') return
       patchSession(agentId, {
         error: formatUserFacingError(e, 'Failed to send message'),
         proposalTurnSyncing: false,
@@ -2076,6 +2101,7 @@ export function ChatPage() {
                               disabled={loading || chatSessionLoading}
                             />
                           ) : null}
+                          <ContextUsageIndicator usage={contextUsage} />
                         </div>
                         <div className="chat-composer-actions">
                           <ModelSelect

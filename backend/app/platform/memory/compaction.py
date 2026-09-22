@@ -15,7 +15,7 @@ from agent_framework import (
 
 from app.platform.memory.maf_mapping import maf_messages_to_projection_rows, to_maf_messages
 from app.platform.memory.memory_config import MemoryConfig
-from app.platform.memory.redis_history import HISTORY_SOURCE_ID
+from app.platform.memory.history_constants import HISTORY_SOURCE_ID
 from app.platform.memory.slimmer import HistoryProjection
 
 logger = logging.getLogger(__name__)
@@ -24,14 +24,21 @@ logger = logging.getLogger(__name__)
 class PlatformSlimCompactionStrategy:
     """Apply HistoryProjection slim rules to prior-turn MAF messages.
 
-    Used only via PlatformCompactionProvider.before_run on the redis-history
-    bucket. Do NOT attach as Agent.compaction_strategy: MAF apply_compaction runs
+    Used only via PlatformCompactionProvider.before_run on the postgres-history
+    bucket (HISTORY_SOURCE_ID). Do NOT attach as Agent.compaction_strategy: MAF apply_compaction runs
     on the full in-flight list (history + current turn), which would strip live
     skill/SQL payloads the model still needs within the same run.
     """
 
-    def __init__(self, memory_config: MemoryConfig, *, projection: HistoryProjection | None = None) -> None:
+    def __init__(
+        self,
+        memory_config: MemoryConfig,
+        *,
+        model_provider: str | None = None,
+        projection: HistoryProjection | None = None,
+    ) -> None:
         self._memory_config = memory_config
+        self._model_provider = model_provider
         self._projection = projection or HistoryProjection()
 
     async def __call__(self, messages: list[Message]) -> bool:
@@ -43,7 +50,7 @@ class PlatformSlimCompactionStrategy:
         if _rows_unchanged(rows, projected):
             return False
 
-        slimmed = to_maf_messages(projected)
+        slimmed = to_maf_messages(projected, model_provider=self._model_provider)
         messages.clear()
         messages.extend(slimmed)
         return True
@@ -97,6 +104,7 @@ def build_in_run_compaction_strategy(memory_config: MemoryConfig) -> ContextWind
 def build_platform_compaction(
     memory_config: MemoryConfig,
     *,
+    model_provider: str | None = None,
     summarization_client: Any | None = None,
 ) -> tuple[ContextWindowCompactionStrategy | None, PlatformCompactionProvider | None]:
     """Return (in_run_strategy, compaction_provider).
@@ -106,7 +114,10 @@ def build_platform_compaction(
     """
     before_strategy: PlatformSlimCompactionStrategy | None = None
     if memory_config.slim.enabled:
-        before_strategy = PlatformSlimCompactionStrategy(memory_config)
+        before_strategy = PlatformSlimCompactionStrategy(
+            memory_config,
+            model_provider=model_provider,
+        )
 
     after_strategy: SummarizationStrategy | ToolResultCompactionStrategy | None = None
     compaction = memory_config.compaction

@@ -8,8 +8,9 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import AgentModel, Chat
-from app.db.repositories.chat_events import ChatEventRepository
-from app.platform.chat.event_projection import event_to_dict
+from app.db.repositories.chat_messages import ChatMessageRepository
+from app.platform.memory.maf_mapping import PLATFORM_METADATA_KEY
+from app.platform.memory.message_validate import message_from_body
 from app.platform.session.session_store import SessionStore
 from app.agent_specific.proposal.draft.draft import build_draft_preview
 from app.agent_specific.proposal.draft.preview import proposal_state_fingerprint
@@ -42,15 +43,22 @@ async def _recover_proposal_draft_from_messages(
     db: AsyncSession,
     chat_id: uuid.UUID,
 ) -> dict | None:
-    events = await ChatEventRepository(db).list_by_chat(chat_id)
-    for event in reversed(events):
-        row = event_to_dict(event)
-        if row.get("message_type") != "tool_result":
+    messages = await ChatMessageRepository(db).list_by_chat(chat_id)
+    for message in reversed(messages):
+        if message.role != "tool":
             continue
-        meta = row.get("metadata") or {}
-        if meta.get("tool_name") not in _DRAFT_RESULT_TOOLS:
+        maf = message_from_body(message.body)
+        props = maf.additional_properties or {}
+        meta = props.get(PLATFORM_METADATA_KEY) or props.get("platform") or {}
+        tool_name = meta.get("tool_name")
+        if tool_name not in _DRAFT_RESULT_TOOLS:
             continue
         result = _coerce_tool_result(meta.get("result"))
+        if result is None:
+            for content in maf.contents or []:
+                if getattr(content, "type", None) == "function_result":
+                    result = _coerce_tool_result(getattr(content, "result", None))
+                    break
         if not isinstance(result, dict) or result.get("status") != "ok":
             continue
         draft = result.get("draft")

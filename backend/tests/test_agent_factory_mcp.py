@@ -35,8 +35,8 @@ async def test_build_attaches_mcp_tools_to_agent():
     with (
         patch.object(AgentFactory, "get_agent_row", AsyncMock(return_value=mock_row)),
         patch(
-            "app.platform.agent.agent_factory.create_history_provider",
-            AsyncMock(return_value=MagicMock()),
+            "app.platform.agent.agent_factory.create_postgres_history_provider",
+            return_value=MagicMock(),
         ),
         patch("app.platform.agent.agent_factory.SkillRegistry") as skill_reg_cls,
         patch("app.platform.agent.agent_factory.ToolRegistry") as tool_reg_cls,

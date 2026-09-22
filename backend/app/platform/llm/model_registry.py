@@ -2,7 +2,7 @@ from enum import Enum
 
 from agent_framework import Agent
 from app.platform.llm.anthropic_client import FILES_API_BETA, PlatformAnthropicClient
-from app.platform.llm.deepseek_client import PlatformDeepSeekClient
+from app.platform.llm.openai_compatible_client import OpenAICompatibleReasoningClient
 from agent_framework.openai import OpenAIChatClient, OpenAIChatCompletionClient
 
 from app.config import Settings, get_settings
@@ -85,25 +85,26 @@ class ModelProviderRegistry:
             api_key_env="SILICONFLOW_API_KEY",
         )
 
-    def create_dashscope_client(self, *, model: str | None = None) -> OpenAIChatCompletionClient:
-        """Alibaba DashScope compatible-mode Chat Completions API."""
+    def create_dashscope_client(self, *, model: str | None = None) -> OpenAICompatibleReasoningClient:
+        """Alibaba DashScope compatible-mode Chat Completions (Qwen thinking + tool calls)."""
         return self._create_openai_compatible_client(
             api_key=self._settings.dashscope_api_key,
             base_url=self._settings.dashscope_base_url,
             model=model or self._settings.dashscope_default_model,
             provider_label="DashScope",
             api_key_env="DASHSCOPE_API_KEY",
+            client_cls=OpenAICompatibleReasoningClient,
         )
 
-    def create_deepseek_client(self, *, model: str | None = None) -> PlatformDeepSeekClient:
-        """DeepSeek OpenAI-compatible Chat Completions API (thinking-mode aware)."""
+    def create_deepseek_client(self, *, model: str | None = None) -> OpenAICompatibleReasoningClient:
+        """DeepSeek OpenAI-compatible Chat Completions (thinking-mode aware)."""
         return self._create_openai_compatible_client(
             api_key=self._settings.deepseek_api_key,
             base_url=self._settings.deepseek_base_url,
             model=model or self._settings.deepseek_default_model,
             provider_label="DeepSeek",
             api_key_env="DEEPSEEK_API_KEY",
-            client_cls=PlatformDeepSeekClient,
+            client_cls=OpenAICompatibleReasoningClient,
         )
 
     def _create_openai_compatible_client(

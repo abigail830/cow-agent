@@ -41,14 +41,14 @@ async def lifespan(app: FastAPI):
             logger.info("Redis connection OK")
         else:
             logger.warning(
-                "Redis connection failed — agent history will use in-memory fallback when "
-                "REDIS_HISTORY_FALLBACK=in_memory or REDIS_HISTORY_REQUIRED=false; "
-                "otherwise chat runs will fail until Redis is reachable."
+                "Redis connection failed — session hot cache unavailable; "
+                "SessionStore will fall back to chats.session_state in PostgreSQL. "
+                "Chat transcript is stored in PostgreSQL and is unaffected."
             )
     except Exception:
         logger.warning(
-            "Redis connection failed — session cache will use DB only; "
-            "agent history requires Redis unless REDIS_HISTORY_FALLBACK=in_memory"
+            "Redis connection failed — session hot cache unavailable; "
+            "SessionStore will fall back to chats.session_state in PostgreSQL."
         )
     try:
         factory = get_async_session_factory()

@@ -52,6 +52,12 @@ export interface ModelOption {
   available?: boolean
 }
 
+export interface ContextUsage {
+  tokens: number
+  budget_tokens: number
+  percent: number
+}
+
 export interface Chat {
   id: string
   user_id: string
@@ -104,6 +110,55 @@ export interface Message {
   parent_id: string | null
   sequence: number
   created_at: string | null
+}
+
+export interface MafMessageBody {
+  type?: string
+  role?: string
+  message_id?: string
+  contents?: Array<Record<string, unknown>>
+  additional_properties?: Record<string, unknown>
+}
+
+export interface TimelineMessageItem {
+  kind: 'message'
+  id: string
+  sequence: number
+  turn_id: string
+  message: MafMessageBody
+  created_at: string | null
+}
+
+export interface TimelineAnnotationItem {
+  kind: 'ui_annotation'
+  id: string
+  sequence: number
+  turn_id: string
+  annotation: {
+    kind: string
+    ref: string
+    display: Record<string, unknown>
+    anchor_message_id?: string | null
+  }
+  created_at: string | null
+}
+
+export type TimelineItem = TimelineMessageItem | TimelineAnnotationItem
+
+export interface ChatRun {
+  id: string
+  status: string
+  error: string | null
+  user_message_id: string | null
+  model_id: string | null
+  started_at: string | null
+  finished_at: string | null
+}
+
+export interface ChatTimeline {
+  chat_id: string
+  items: TimelineItem[]
+  runs: ChatRun[]
 }
 
 export interface StreamEvent {

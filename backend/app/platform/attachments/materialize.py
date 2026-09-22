@@ -39,6 +39,27 @@ def _format_size(size_bytes: int) -> str:
     return f"{size_bytes / (1024 * 1024):.1f} MB"
 
 
+ATTACHMENT_BLOCK_MARKER = "\n\n### "
+
+
+def split_user_prompt_text(text: str) -> str:
+    """User-visible prompt only (strip legacy merged attachment materialization tails)."""
+    stripped = (text or "").strip()
+    if not stripped:
+        return ""
+    marker = stripped.find(ATTACHMENT_BLOCK_MARKER)
+    if marker >= 0:
+        return stripped[:marker].strip()
+    if stripped.startswith("### ") and "```" in stripped:
+        return ""
+    return stripped
+
+
+def is_attachment_materialization_text(text: str) -> bool:
+    stripped = (text or "").strip()
+    return stripped.startswith("### ") and "```" in stripped
+
+
 def _text_block(
     *,
     filename: str,
@@ -230,26 +251,14 @@ def build_user_message_with_attachments(
     if not text and not parts:
         return text
     contents: list[Content] = []
-    text_chunks: list[str] = []
-    binary: list[Content] = []
     if text:
-        text_chunks.append(text)
+        contents.append(Content.from_text(text))
     for part in parts:
-        if getattr(part, "type", None) == "text":
-            chunk = getattr(part, "text", None) or ""
-            if chunk:
-                text_chunks.append(chunk)
-        else:
-            binary.append(part)
-    if text_chunks:
-        contents.append(Content.from_text("\n\n".join(text_chunks).strip()))
-    contents.extend(binary)
+        contents.append(part)
     if not contents:
         return text
-    if len(contents) == 1 and getattr(contents[0], "type", None) == "text" and not binary:
-        merged = (getattr(contents[0], "text", None) or "").strip()
-        if merged == text:
-            return text
+    if not parts:
+        return text
     return Message(role="user", contents=contents)
 
 

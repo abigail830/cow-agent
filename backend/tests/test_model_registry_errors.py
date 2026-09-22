@@ -67,7 +67,7 @@ def test_siliconflow_requires_api_key():
 
 def test_dashscope_client_uses_chat_completions_api():
     registry = ModelProviderRegistry()
-    with patch("app.platform.llm.model_registry.OpenAIChatCompletionClient") as mock_cls:
+    with patch("app.platform.llm.model_registry.OpenAICompatibleReasoningClient") as mock_cls:
         with patch.object(
             registry,
             "_settings",
@@ -101,7 +101,7 @@ def test_dashscope_requires_api_key():
 
 def test_deepseek_client_uses_chat_completions_api():
     registry = ModelProviderRegistry()
-    with patch("app.platform.llm.model_registry.PlatformDeepSeekClient") as mock_cls:
+    with patch("app.platform.llm.model_registry.OpenAICompatibleReasoningClient") as mock_cls:
         with patch.object(
             registry,
             "_settings",

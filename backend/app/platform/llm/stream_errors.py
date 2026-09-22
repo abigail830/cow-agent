@@ -27,14 +27,14 @@ def user_facing_stream_error(exc: Exception | str) -> str:
         )
     if "redis" in lower and ("connect" in lower or "connection" in lower or "nodename" in lower):
         return (
-            "Conversation history storage (Redis) is unreachable. "
-            "For local dev: run Redis locally (redis-server) and set REDIS_URL=redis://localhost:6379/0, "
-            "or set REDIS_HISTORY_FALLBACK=in_memory in backend/.env."
+            "Session cache (Redis) is unreachable. "
+            "For local dev: run Redis locally (redis-server) and set REDIS_URL=redis://localhost:6379/0. "
+            "Chat transcript is stored in PostgreSQL; session state falls back to the database when Redis is down."
         )
     if "agent conversation history requires redis" in lower:
         return (
-            "Conversation history storage (Redis) is required but unavailable. "
-            "Check REDIS_URL or use REDIS_HISTORY_FALLBACK=in_memory for local dev."
+            "Legacy Redis history error (removed). Chat transcript now lives in PostgreSQL. "
+            "If this persists, restart the backend after alembic upgrade and check DATABASE_URL."
         )
     if "mcp server" in lower and "failed to initialize" in lower:
         if "cancel scope" in lower or "cancelled" in lower:

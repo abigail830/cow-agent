@@ -1,4 +1,5 @@
 import type { Message } from '../types'
+import { splitUserPromptText } from './userMessageDisplay'
 import type { ArtifactSpec } from '../types/artifact'
 import type { VizSpec } from '../types/viz'
 import { isProposalArtifact } from './artifactKinds'
@@ -469,11 +470,11 @@ function attachmentIds(metadata: Record<string, unknown> | undefined): string[] 
 }
 
 function userMessageConfirmed(persisted: Message[], optimistic: Message): boolean {
-  const content = (optimistic.content ?? '').trim()
+  const content = splitUserPromptText(optimistic.content)
   const optimisticAttachmentIds = attachmentIds(optimistic.metadata)
   return persisted.some((row) => {
     if (row.role !== 'user') return false
-    if ((row.content ?? '').trim() !== content) return false
+    if (splitUserPromptText(row.content) !== content) return false
     const persistedAttachmentIds = attachmentIds(row.metadata)
     if (optimisticAttachmentIds.length !== persistedAttachmentIds.length) return false
     return optimisticAttachmentIds.every((id, index) => id === persistedAttachmentIds[index])
@@ -501,25 +502,34 @@ export function mergeMessagesFromApi(persisted: Message[], local: Message[]): Me
   return Array.from(merged.values()).sort((a, b) => a.sequence - b.sequence)
 }
 
+/** Active SSE placeholders only — committed local-* rows stay until timeline reload. */
 function isEphemeralLocalMessage(message: Message): boolean {
   if (message.id === LOCAL_STREAM_TEXT_ID || message.id === LOCAL_STREAM_REASONING_ID) {
     return true
   }
-  if (message.id.startsWith('local-')) return true
-  if (message.metadata?.local === true) return true
-  return false
+  return message.metadata?.streaming === true
+}
+
+function dropConfirmedTmpUsers(messages: Message[]): Message[] {
+  const persisted = messages.filter((message) => !message.id.startsWith('tmp-'))
+  return messages.filter((message) => {
+    if (!message.id.startsWith('tmp-') || message.role !== 'user' || message.message_type !== 'text') {
+      return true
+    }
+    return !userMessageConfirmed(persisted, message)
+  })
 }
 
 /** Patch persisted turn rows from done SSE; drop streaming placeholders for this turn. */
 export function applyDoneTurnMessages(
   local: Message[],
   doneMessages: Message[],
-  turnStartSequence: number,
+  turnStartDisplaySequence: number,
 ): Message[] {
   const merged = new Map<string, Message>()
 
   for (const message of local) {
-    if (message.sequence < turnStartSequence && !isEphemeralLocalMessage(message)) {
+    if (message.sequence < turnStartDisplaySequence && !isEphemeralLocalMessage(message)) {
       merged.set(message.id, message)
     }
   }
@@ -543,7 +553,17 @@ export function applyDoneTurnMessages(
     }
   }
 
-  return Array.from(merged.values()).sort((a, b) => a.sequence - b.sequence)
+  return dropConfirmedTmpUsers(
+    Array.from(merged.values()).sort((a, b) => a.sequence - b.sequence),
+  )
+}
+
+/** In-flight SSE placeholders removed before the next send; not committed turn rows. */
+export function isActiveStreamPlaceholder(message: Message): boolean {
+  if (message.id === LOCAL_STREAM_TEXT_ID || message.id === LOCAL_STREAM_REASONING_ID) {
+    return true
+  }
+  return message.metadata?.streaming === true
 }
 
 export function parseDoneTurnMessages(raw: unknown): Message[] | null {

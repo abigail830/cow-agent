@@ -7,25 +7,34 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
-from agent_framework import MiddlewareTermination
+from agent_framework import Content, Message, MiddlewareTermination
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import AgentModel, Chat, ChatEvent
-from app.db.repositories.attachments import AttachmentRepository
-from app.db.repositories.chat_events import ChatEventRepository
-from app.platform.chat.event_projection import build_turn_message_outs, event_to_dict
+from app.db.models import AgentModel, Chat, ChatMessage
+from app.db.repositories.chat_messages import ChatMessageRepository
+from app.db.repositories.chat_runs import ChatRunRepository
+from app.db.repositories.chat_ui_annotations import ChatUiAnnotationRepository
+from app.platform.chat.timeline_projection import (
+    build_turn_message_outs,
+    display_sequence,
+    merge_timeline_to_message_outs,
+)
 from app.platform.memory.long_term import try_handle_memory_command
-from app.platform.memory.maf_mapping import maf_message_to_rows, row_to_dict
-from app.platform.memory.memory_config import MemoryConfig, parse_memory_config
+from app.platform.memory.context_budget import estimate_context_usage
+from app.platform.memory.memory_config import (
+    MemoryConfig,
+    apply_model_compaction_defaults,
+    parse_memory_config,
+)
 from app.platform.agent.agent_factory import AgentFactory
 from app.platform.mcp.mcp_connect import disconnect_bundle, iter_mcp_connect_keepalive
 from app.platform.mcp.mcp_pool import McpPoolKey, get_mcp_connection_pool
-from app.platform.agent.platform_instructions import RUN_CANCELLED_USER_TEXT
 from app.platform.session.session_store import SessionStore
 from app.platform.session.user_message_input import link_attachments_metadata
 from app.platform.attachments.materialize import build_user_message_with_attachments
+from app.platform.chat.user_message_commit import build_user_maf_message, persist_user_maf_message
 from app.platform.attachments.service import AttachmentService
 from app.platform.llm.chat_model import resolve_chat_model
 from app.platform.llm.stream_errors import user_facing_stream_error
@@ -60,7 +69,9 @@ _TOOL_ROW_TYPES = frozenset({"tool_call", "tool_result", "mcp_call", "mcp_result
 class ChatRunService:
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
-        self._events = ChatEventRepository(db)
+        self._messages = ChatMessageRepository(db)
+        self._annotations = ChatUiAnnotationRepository(db)
+        self._runs = ChatRunRepository(db)
         self._sessions = SessionStore(db)
         self._factory = AgentFactory(db)
 
@@ -126,6 +137,8 @@ class ChatRunService:
         chat: Chat,
         *,
         model_id: str | None,
+        turn_id: uuid.UUID | None = None,
+        run_id: uuid.UUID | None = None,
         stop_event: asyncio.Event | None = None,
         session_store: SessionStore | None = None,
     ) -> Any:
@@ -155,6 +168,8 @@ class ChatRunService:
                 chat_id=chat.id,
                 user_id=chat.user_id,
                 model_id=model_id,
+                turn_id=turn_id,
+                run_id=run_id,
                 stop_event=stop_event,
                 session_store=session_store,
                 mcp_tools=handle.tools,
@@ -176,16 +191,39 @@ class ChatRunService:
             return
         await pool.release(handle)
 
+    async def _insert_assistant_text(
+        self,
+        chat_id: uuid.UUID,
+        *,
+        turn_id: uuid.UUID,
+        text: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> ChatMessage:
+        props: dict[str, Any] = {"platform": dict(metadata or {})}
+        body = Message(
+            role="assistant",
+            contents=[Content.from_text(text)],
+            additional_properties=props,
+        ).to_dict()
+        return await self._messages.insert(
+            chat_id=chat_id,
+            turn_id=turn_id,
+            body=body,
+        )
+
     async def _commit_user_turn(
         self,
         chat: Chat,
         content: str,
         *,
+        turn_id: uuid.UUID | None = None,
+        run_id: uuid.UUID | None = None,
         attachments: list | None = None,
         attachment_ids: list[uuid.UUID] | None = None,
         metadata: dict[str, Any] | None = None,
-    ) -> ChatEvent:
-        """Persist the user message immediately so it survives agent failures."""
+        commit: bool = True,
+    ) -> ChatMessage:
+        """Persist the user MAF message immediately so it survives agent failures."""
         resolved = (
             attachments
             if attachments is not None
@@ -193,20 +231,27 @@ class ChatRunService:
         )
         if metadata is None:
             metadata = await self._prepare_user_turn_metadata(chat, resolved)
-        row = await self._events.insert(
-            chat_id=chat.id,
-            role="user",
-            message_type="text",
-            content=content,
-            metadata=metadata or None,
+        model_id, model_provider = await self._resolve_run_model(chat)
+        turn = turn_id or uuid.uuid4()
+        message = build_user_maf_message(
+            chat.id,
+            content,
+            resolved,
+            model_id=model_id,
+            model_provider=model_provider,
+            metadata=metadata,
         )
-        if resolved:
-            await AttachmentRepository(self._db).link_to_message(
-                [att.id for att in resolved],
-                row.id,
-            )
+        row = await persist_user_maf_message(
+            self._db,
+            chat_id=chat.id,
+            turn_id=turn,
+            message=message,
+            run_id=run_id,
+            attachment_ids=[att.id for att in resolved] if resolved else None,
+        )
         await self._maybe_set_chat_title(chat, content, resolved)
-        await self._db.commit()
+        if commit:
+            await self._db.commit()
         return row
 
     async def _ensure_db_connection(self) -> None:
@@ -228,18 +273,22 @@ class ChatRunService:
         chat_id: uuid.UUID,
         run_id: uuid.UUID,
         accumulator: "_StreamTurnAccumulator",
+        *,
+        turn_id: uuid.UUID | None = None,
     ) -> None:
-        """Persist partial assistant output and a user-visible cancellation marker."""
+        """Persist partial assistant output and mark the run cancelled."""
         try:
-            if accumulator.has_content():
-                await accumulator.persist_cancelled(self._events, chat_id, run_id)
-            await self._events.insert(
-                chat_id=chat_id,
-                role="user",
-                message_type="run_cancelled",
-                content=RUN_CANCELLED_USER_TEXT,
-                metadata={"run_id": str(run_id), "cancelled_by": "user"},
-            )
+            if turn_id is not None:
+                await accumulator.persist_ui_annotations(self._annotations, chat_id, turn_id)
+                if accumulator.has_content():
+                    await accumulator.persist_partial_assistant(
+                        self._messages,
+                        chat_id,
+                        turn_id=turn_id,
+                        run_id=run_id,
+                        cancelled=True,
+                    )
+            await self._runs.cancel(run_id)
             await self._db.commit()
         except Exception:
             logger.exception("Failed to persist cancelled turn for chat %s", chat_id)
@@ -247,7 +296,23 @@ class ChatRunService:
 
     async def _memory_config_for_chat(self, chat: Chat) -> MemoryConfig:
         agent = await self._db.get(AgentModel, chat.agent_id)
-        return parse_memory_config(agent.config if agent else {})
+        base = parse_memory_config(agent.config if agent else {})
+        model_entry = await resolve_chat_model(self._db, chat)
+        return apply_model_compaction_defaults(base, model_entry)
+
+    async def snapshot_context_usage(self, chat: Chat, *, memory_config: MemoryConfig | None = None) -> dict[str, Any] | None:
+        resolved = memory_config or await self._memory_config_for_chat(chat)
+        snapshot = await estimate_context_usage(
+            db=self._db,
+            chat_id=chat.id,
+            memory_config=resolved,
+        )
+        return snapshot.to_dict() if snapshot is not None else None
+
+    async def get_cached_context_usage(self, chat_id: uuid.UUID) -> dict[str, Any] | None:
+        payload = await self._sessions.get_payload(chat_id)
+        cached = payload.get("context_usage")
+        return cached if isinstance(cached, dict) else None
 
     async def _agent_slug_for_chat(self, chat: Chat) -> str | None:
         agent = await self._db.get(AgentModel, chat.agent_id)
@@ -277,29 +342,42 @@ class ChatRunService:
         memory_config: MemoryConfig | None = None,
         run_ctx: RunContext | None = None,
         accumulator: "_StreamTurnAccumulator | None" = None,
-        user_event: ChatEvent | None = None,
+        user_message: ChatMessage | None = None,
+        turn_id: uuid.UUID | None = None,
+        run_id: uuid.UUID | None = None,
     ) -> list[dict[str, Any]]:
-        turn_rows: list[dict[str, Any]] = []
-        if accumulator is not None and accumulator.has_content():
+        if accumulator is not None:
             accumulator.enrich_tool_arguments_from_response(response)
-            turn_rows = await accumulator.persist(self._events, chat_id, memory_config=memory_config)
-        else:
-            turn_rows = await self._persist_agent_messages(
-                chat_id,
-                response,
-                skip_tool_rows=False,
-                memory_config=memory_config,
-            )
+            if turn_id is not None:
+                await accumulator.persist_ui_annotations(self._annotations, chat_id, turn_id)
+        if run_id is not None:
+            await self._runs.complete(run_id)
         payload_extensions: dict[str, Any] = {}
         if run_ctx is not None:
             payload_extensions = await run_plugin_finalize_success(run_ctx, accumulator=accumulator)
+        if run_ctx is not None and run_ctx.context_usage is not None:
+            payload_extensions["context_usage"] = run_ctx.context_usage
         await self._sessions.finalize_run(
             chat_id,
             session,
             payload_extensions=payload_extensions or None,
         )
         await self._db.commit()
-        return build_turn_message_outs(chat_id, user_event, turn_rows)
+        if turn_id is None or user_message is None:
+            return []
+        turn_messages = await self._messages.list_by_turn(chat_id, turn_id)
+        turn_annotations = [
+            row
+            for row in await self._annotations.list_by_chat(chat_id)
+            if row.turn_id == turn_id
+        ]
+        assistant_messages = [row for row in turn_messages if row.id != user_message.id]
+        return build_turn_message_outs(
+            chat_id,
+            user_message,
+            assistant_messages,
+            turn_annotations,
+        )
 
     async def _finalize_failure(
         self,
@@ -310,35 +388,38 @@ class ChatRunService:
         run_ctx: RunContext | None = None,
         accumulator: "_StreamTurnAccumulator | None" = None,
         memory_config: MemoryConfig | None = None,
+        turn_id: uuid.UUID | None = None,
+        run_id: uuid.UUID | None = None,
     ) -> None:
-        """Best-effort persist of partial assistant output plus an error row."""
+        """Best-effort persist of partial assistant output plus run failure status."""
         try:
-            if response is not None:
-                await self._persist_agent_messages(chat_id, response, memory_config=memory_config)
-            elif accumulator is not None and accumulator.has_content():
-                await accumulator.persist(self._events, chat_id, memory_config=memory_config)
+            if accumulator is not None and turn_id is not None:
+                await accumulator.persist_ui_annotations(self._annotations, chat_id, turn_id)
+                if accumulator.has_content():
+                    await accumulator.persist_partial_assistant(
+                        self._messages,
+                        chat_id,
+                        turn_id=turn_id,
+                        run_id=run_id,
+                        cancelled=False,
+                    )
             if run_ctx is not None:
                 extensions = await run_plugin_finalize_failure(run_ctx, accumulator=accumulator)
                 for key, value in extensions.items():
                     await self._sessions.merge_extension(chat_id, key, value)
-            await self._persist_run_error(chat_id, exc)
+            if run_id is not None:
+                await self._runs.fail(run_id, error=user_facing_stream_error(exc)[:4000])
             await self._db.commit()
         except Exception:
             logger.exception("Failed to persist partial turn for chat %s", chat_id)
             await self._db.rollback()
 
-    async def _persist_run_error(self, chat_id: uuid.UUID, exc: Exception) -> None:
-        message = user_facing_stream_error(exc)
-        await self._events.insert(
-            chat_id=chat_id,
-            role="assistant",
-            message_type="error",
-            content=message[:4000],
-            metadata={"error_type": type(exc).__name__},
-        )
-        await self._db.flush()
-
-    async def _persist_pending_artifacts(self, chat_id: uuid.UUID) -> None:
+    async def _persist_pending_artifacts(
+        self,
+        chat_id: uuid.UUID,
+        *,
+        turn_id: uuid.UUID,
+    ) -> None:
         specs: list[ArtifactSpec] = []
         proposal_ctx = get_run_proposal_state()
         if proposal_ctx is not None:
@@ -346,18 +427,18 @@ class ChatRunService:
         artifact_ctx = get_run_artifact_state()
         if artifact_ctx is not None:
             specs.extend(artifact_ctx.drain_pending_artifacts())
-        pending_rows: list[dict[str, Any]] = []
+        rows: list[dict[str, Any]] = []
         for spec in specs:
-            pending_rows.append(
+            rows.append(
                 {
-                    "role": "assistant",
-                    "message_type": "artifact",
-                    "content": spec.title,
-                    "metadata": {"spec": artifact_spec_payload(spec)},
+                    "turn_id": turn_id,
+                    "kind": "artifact",
+                    "ref": spec.artifact_id,
+                    "display": {"title": spec.title, "spec": artifact_spec_payload(spec)},
                 }
             )
-        if pending_rows:
-            await self._events.insert_many(chat_id, pending_rows)
+        if rows:
+            await self._annotations.insert_many(chat_id, rows)
 
     async def run_message(
         self,
@@ -374,12 +455,24 @@ class ChatRunService:
         attachments = await self._resolve_attachments(chat, attachment_ids or [])
         if not content.strip() and not attachments:
             raise ValueError("Message content or attachments required")
-        user_event = await self._commit_user_turn(
+        turn_id = uuid.uuid4()
+        run_id = uuid.uuid4()
+        user_message = await self._commit_user_turn(
             chat,
             content,
+            turn_id=turn_id,
+            run_id=run_id,
             attachments=attachments,
             attachment_ids=attachment_ids,
+            commit=False,
         )
+        await self._runs.create(
+            chat_id=chat_id,
+            run_id=run_id,
+            user_message_id=user_message.id,
+            model_id=model_id,
+        )
+        await self._db.commit()
         run_input = await self._build_run_input(
             chat,
             content,
@@ -395,13 +488,13 @@ class ChatRunService:
         )
         if memory_result and memory_result.handled:
             if memory_result.is_pure_command:
-                await self._events.insert(
-                    chat_id=chat_id,
-                    role="assistant",
-                    message_type="text",
-                    content=memory_result.confirmation,
+                await self._insert_assistant_text(
+                    chat_id,
+                    turn_id=turn_id,
+                    text=memory_result.confirmation,
                     metadata={"source": "memory_command"},
                 )
+                await self._runs.complete(run_id)
             await self._db.commit()
             if memory_result.is_pure_command:
                 reset_run_viz_state()
@@ -410,23 +503,34 @@ class ChatRunService:
         bundle = await self._build_pooled_bundle(
             chat,
             model_id=model_id,
+            turn_id=turn_id,
+            run_id=run_id,
             session_store=self._sessions,
         )
         try:
             async with bundle as agent:
                 result = await agent.run(run_input, session=session)
-            await self._persist_pending_artifacts(chat_id)
+            await self._persist_pending_artifacts(chat_id, turn_id=turn_id)
             await self._finalize_success(
                 chat_id,
                 session,
                 result,
                 memory_config=memory_config,
                 run_ctx=run_ctx,
-                user_event=user_event,
+                user_message=user_message,
+                turn_id=turn_id,
+                run_id=run_id,
             )
             return result.text or ""
         except Exception as exc:
-            await self._finalize_failure(chat_id, exc, run_ctx=run_ctx, memory_config=memory_config)
+            await self._finalize_failure(
+                chat_id,
+                exc,
+                run_ctx=run_ctx,
+                memory_config=memory_config,
+                turn_id=turn_id,
+                run_id=run_id,
+            )
             raise
         finally:
             reset_run_viz_state()
@@ -447,11 +551,14 @@ class ChatRunService:
         attachments = await self._resolve_attachments(chat, attachment_ids or [])
         if not content.strip() and not attachments:
             raise ValueError("Message content or attachments required")
-        user_event = await self._commit_user_turn(
+        turn_id = uuid.uuid4()
+        user_message = await self._commit_user_turn(
             chat,
             content,
+            turn_id=turn_id,
             attachments=attachments,
             attachment_ids=attachment_ids,
+            commit=False,
         )
         run_input = await self._build_run_input(
             chat,
@@ -468,11 +575,10 @@ class ChatRunService:
         )
         if memory_result and memory_result.handled:
             if memory_result.is_pure_command:
-                await self._events.insert(
-                    chat_id=chat_id,
-                    role="assistant",
-                    message_type="text",
-                    content=memory_result.confirmation,
+                await self._insert_assistant_text(
+                    chat_id,
+                    turn_id=turn_id,
+                    text=memory_result.confirmation,
                     metadata={"source": "memory_command"},
                 )
             await self._db.commit()
@@ -483,22 +589,31 @@ class ChatRunService:
             if memory_result.is_pure_command:
                 reset_run_viz_state()
                 await run_plugin_end(run_ctx)
-                turn_messages = await self._list_turn_messages_since(chat_id, user_event.sequence)
+                turn_messages = await self._list_turn_messages_since(chat_id, user_message.sequence)
                 yield {
                     "event": "done",
                     "data": {
                         "text": memory_result.confirmation,
-                        "turn_start_sequence": user_event.sequence,
+                        "turn_start_sequence": user_message.sequence,
+                        "turn_start_display_sequence": display_sequence(user_message.sequence),
                         "messages": turn_messages,
                     },
                 }
                 return
 
         run_manager = get_run_manager()
-        run = await run_manager.start_run(chat_id, user_event.id)
+        run = await run_manager.start_run(chat_id, user_message.id)
         run_ctx.run_id = run.run_id
+        await self._runs.create(
+            chat_id=chat_id,
+            run_id=run.run_id,
+            user_message_id=user_message.id,
+            model_id=model_id,
+        )
+        user_message.run_id = run.run_id
+        await self._db.commit()
         stream_emitters = collect_stream_emitters(run_ctx.agent_slug)
-        accumulator = _StreamTurnAccumulator()
+        accumulator = _StreamTurnAccumulator(turn_id=turn_id)
 
         emitter = _StreamSseEmitter(
             chat_id,
@@ -507,7 +622,12 @@ class ChatRunService:
         )
 
         async def finalize_cancel_once() -> None:
-            await self._finalize_cancel(chat_id, run.run_id, accumulator)
+            await self._finalize_cancel(
+                chat_id,
+                run.run_id,
+                accumulator,
+                turn_id=turn_id,
+            )
 
         await run_manager.register_finalize(run.run_id, finalize_cancel_once)
         yield {
@@ -515,7 +635,7 @@ class ChatRunService:
             "data": {
                 "run_id": str(run.run_id),
                 "chat_id": str(chat_id),
-                "user_message_id": str(user_event.id),
+                "user_message_id": str(user_message.id),
             },
         }
 
@@ -532,6 +652,8 @@ class ChatRunService:
             bundle = await self._build_pooled_bundle(
                 chat,
                 model_id=model_id,
+                turn_id=turn_id,
+                run_id=run.run_id,
                 stop_event=run.stop_event,
                 session_store=self._sessions,
             )
@@ -568,10 +690,20 @@ class ChatRunService:
             finally:
                 await self._release_bundle(bundle)
 
+            context_usage = await self.snapshot_context_usage(chat, memory_config=memory_config)
+            if context_usage is not None:
+                run_ctx.context_usage = context_usage
+
             # Unlock client UI before DB/session persistence (can take seconds on tool-heavy turns).
+            stream_idle_data: dict[str, Any] = {
+                "chat_id": str(chat_id),
+                "run_id": str(run.run_id),
+            }
+            if context_usage is not None:
+                stream_idle_data["context_usage"] = context_usage
             yield {
                 "event": "stream_idle",
-                "data": {"chat_id": str(chat_id), "run_id": str(run.run_id)},
+                "data": stream_idle_data,
             }
 
             await self._ensure_db_connection()
@@ -582,17 +714,23 @@ class ChatRunService:
                 memory_config=memory_config,
                 run_ctx=run_ctx,
                 accumulator=accumulator,
-                user_event=user_event,
+                user_message=user_message,
+                turn_id=turn_id,
+                run_id=run.run_id,
             )
             for event in drain_after_finalize(stream_emitters, chat_id, accumulator):
                 yield event
+            done_data: dict[str, Any] = {
+                "text": final.text or "",
+                "turn_start_sequence": user_message.sequence,
+                "turn_start_display_sequence": display_sequence(user_message.sequence),
+                "messages": turn_messages,
+            }
+            if context_usage is not None:
+                done_data["context_usage"] = context_usage
             yield {
                 "event": "done",
-                "data": {
-                    "text": final.text or "",
-                    "turn_start_sequence": user_event.sequence,
-                    "messages": turn_messages,
-                },
+                "data": done_data,
             }
         except MiddlewareTermination:
             if run.stop_event.is_set():
@@ -619,6 +757,8 @@ class ChatRunService:
                 accumulator=accumulator,
                 run_ctx=run_ctx,
                 memory_config=memory_config,
+                turn_id=turn_id,
+                run_id=run.run_id,
             )
             raise
         finally:
@@ -629,54 +769,13 @@ class ChatRunService:
     async def _list_turn_messages_since(
         self, chat_id: uuid.UUID, turn_start_sequence: int
     ) -> list[dict[str, Any]]:
-        rows = await self._events.list_by_chat_since(chat_id, turn_start_sequence)
-        return [event_to_dict(row) for row in rows]
-
-    async def _persist_agent_messages(
-        self,
-        chat_id: uuid.UUID,
-        response: Any,
-        *,
-        skip_tool_rows: bool = False,
-        memory_config: MemoryConfig | None = None,
-    ) -> list[dict[str, Any]]:
-        call_names, call_arguments = _collect_call_context(getattr(response, "messages", None) or [])
-        rows_to_insert: list[dict[str, Any]] = []
-        next_seq = await self._events.next_sequence(chat_id)
-        for message in getattr(response, "messages", None) or []:
-            for row in maf_message_to_rows(
-                str(chat_id),
-                message,
-                start_sequence=next_seq,
-                call_names=call_names,
-                call_arguments=call_arguments,
-            ):
-                if skip_tool_rows and row["message_type"] in _TOOL_ROW_TYPES:
-                    continue
-                rows_to_insert.append(
-                    {
-                        "role": row["role"],
-                        "message_type": row["message_type"],
-                        "content": row.get("content"),
-                        "metadata": row.get("metadata"),
-                        "sequence": row["sequence"],
-                    }
-                )
-                next_seq = row["sequence"] + 1
-        text = getattr(response, "text", None)
-        if text and not rows_to_insert:
-            rows_to_insert.append(
-                {
-                    "role": "assistant",
-                    "message_type": "text",
-                    "content": text,
-                    "metadata": {},
-                }
-            )
-        if not rows_to_insert:
-            return []
-        saved = await self._events.insert_many(chat_id, rows_to_insert)
-        return [row_to_dict(row) for row in saved]
+        messages = await self._messages.list_by_chat_since(chat_id, turn_start_sequence)
+        annotations = await self._annotations.list_by_chat_since(chat_id, turn_start_sequence)
+        return merge_timeline_to_message_outs(
+            chat_id=chat_id,
+            messages=messages,
+            annotations=annotations,
+        )
 
 
 def _json_safe(value: Any) -> Any:
@@ -766,10 +865,12 @@ def _emit_pending_viz_events(
 
 
 class StreamTurnAccumulator:
-    """Tracks streamed assistant output for persistence when a run fails mid-turn."""
+    """Tracks streamed assistant output for SSE and ui_annotation persistence."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, turn_id: uuid.UUID | None = None) -> None:
+        self._turn_id = turn_id
         self._rows: list[dict[str, Any]] = []
+        self._ui_annotations: list[dict[str, Any]] = []
         self._reasoning_buffer = ""
         self._text_buffer = ""
         self._emitted_calls: set[str] = set()
@@ -921,6 +1022,15 @@ class StreamTurnAccumulator:
                 "metadata": {"spec": viz_spec_payload(spec)},
             }
         )
+        if self._turn_id is not None:
+            self._ui_annotations.append(
+                {
+                    "turn_id": self._turn_id,
+                    "kind": "viz",
+                    "ref": spec.source_call_id or spec.title,
+                    "display": {"title": spec.title, "spec": viz_spec_payload(spec)},
+                }
+            )
 
     def record_artifact(self, spec: ArtifactSpec) -> None:
         self._flush_reasoning()
@@ -933,6 +1043,15 @@ class StreamTurnAccumulator:
                 "metadata": {"spec": artifact_spec_payload(spec)},
             }
         )
+        if self._turn_id is not None:
+            self._ui_annotations.append(
+                {
+                    "turn_id": self._turn_id,
+                    "kind": "artifact",
+                    "ref": spec.artifact_id,
+                    "display": {"title": spec.title, "spec": artifact_spec_payload(spec)},
+                }
+            )
 
     def _dedupe_text_vs_reasoning(self) -> None:
         """Drop assistant text that repeats streamed reasoning (model echo)."""
@@ -979,86 +1098,74 @@ class StreamTurnAccumulator:
     def has_tool_rows(self) -> bool:
         return any(row.get("message_type") in _TOOL_ROW_TYPES for row in self._rows)
 
-    async def persist_tool_rows(
+    async def persist_ui_annotations(
         self,
-        repo: ChatEventRepository,
+        repo: ChatUiAnnotationRepository,
         chat_id: uuid.UUID,
-        *,
-        memory_config: MemoryConfig | None = None,
+        turn_id: uuid.UUID,
     ) -> int:
-        """Persist tool call/result rows captured during streaming (with full arguments)."""
-        self.finalize()
-        tool_rows = [
-            {
-                "role": row["role"],
-                "message_type": row["message_type"],
-                "content": row.get("content"),
-                "metadata": row.get("metadata") or {},
-            }
-            for row in self._rows
-            if row.get("message_type") in _TOOL_ROW_TYPES
-        ]
-        if not tool_rows:
+        if not self._ui_annotations:
             return 0
-        await repo.insert_many(chat_id, tool_rows)
-        return len(tool_rows)
+        rows = [{**row, "turn_id": turn_id} for row in self._ui_annotations]
+        await repo.insert_many(chat_id, rows)
+        self._ui_annotations.clear()
+        return len(rows)
 
-    async def persist(
+    async def persist_partial_assistant(
         self,
-        repo: ChatEventRepository,
+        repo: ChatMessageRepository,
         chat_id: uuid.UUID,
         *,
-        memory_config: MemoryConfig | None = None,
-    ) -> list[dict[str, Any]]:
+        turn_id: uuid.UUID,
+        run_id: uuid.UUID | None,
+        cancelled: bool,
+    ) -> None:
+        """Best-effort partial assistant MAF message for cancel/failure paths."""
         self.finalize()
         if not self._rows:
-            return []
-        rows = list(self._rows)
-        saved = await repo.insert_many(chat_id, rows)
-        return [row_to_dict(row) for row in saved]
+            return
+        from app.platform.memory.maf_mapping import to_maf_messages
 
-    async def persist_cancelled(
-        self,
-        repo: ChatEventRepository,
-        chat_id: uuid.UUID,
-        run_id: uuid.UUID,
-        *,
-        memory_config: MemoryConfig | None = None,
-    ) -> int:
-        """Write partial turn output; incomplete assistant text/reasoning marked cancelled."""
-        self.finalize()
-        run_meta = {"run_id": str(run_id)}
-        rows_to_insert: list[dict[str, Any]] = []
-        for row in self._rows:
-            message_type = row["message_type"]
-            meta = {**(row.get("metadata") or {}), **run_meta}
-            if message_type in ("tool_call", "tool_result", "viz", "artifact"):
-                rows_to_insert.append(
-                    {
-                        "role": row["role"],
-                        "message_type": message_type,
-                        "content": row.get("content"),
-                        "metadata": meta,
-                    }
-                )
-                continue
-            if message_type in ("reasoning", "text"):
-                rows_to_insert.append(
-                    {
-                        "role": "assistant",
-                        "message_type": "cancelled",
-                        "content": row.get("content"),
-                        "metadata": {
-                            **meta,
-                            "partial": True,
-                            "original_type": message_type,
-                        },
-                    }
-                )
-        if not rows_to_insert:
-            return 0
-        await repo.insert_many(chat_id, rows_to_insert)
-        return len(rows_to_insert)
+        # Partial persist is UI-only: never write tool_call/tool rows to LLM history.
+        _PARTIAL_ROW_TYPES = frozenset({"reasoning", "text"})
+        platform_rows = [
+            row
+            for row in self._rows
+            if row.get("message_type") in _PARTIAL_ROW_TYPES
+        ]
+        if cancelled:
+            platform_rows = [
+                {
+                    **row,
+                    "message_type": "cancelled",
+                    "metadata": {
+                        **(row.get("metadata") or {}),
+                        "partial": True,
+                        "original_type": row.get("message_type"),
+                    },
+                }
+                for row in platform_rows
+            ]
+        messages = to_maf_messages(platform_rows)
+        if not messages:
+            return
+        combined = Message(
+            role="assistant",
+            contents=[content for message in messages for content in (message.contents or [])],
+            additional_properties={
+                "platform": {
+                    "partial": True,
+                    "cancelled": cancelled,
+                    "run_id": str(run_id) if run_id else None,
+                }
+            },
+        )
+        await repo.insert(
+            chat_id=chat_id,
+            turn_id=turn_id,
+            body=combined.to_dict(),
+            run_id=run_id,
+        )
 
 
 # Backward-compatible alias for tests and legacy imports.
@@ -1198,6 +1305,26 @@ class _StreamSseEmitter:
 
 
 async def list_chat_messages(db: AsyncSession, chat_id: uuid.UUID) -> list[dict[str, Any]]:
-    repo = ChatEventRepository(db)
-    rows = await repo.list_by_chat(chat_id)
-    return [event_to_dict(row) for row in rows]
+    """Legacy flat MessageOut list (expanded from MAF rows). Prefer GET /timeline."""
+    messages = await ChatMessageRepository(db).list_by_chat(chat_id)
+    annotations = await ChatUiAnnotationRepository(db).list_by_chat(chat_id)
+    return merge_timeline_to_message_outs(
+        chat_id=chat_id,
+        messages=messages,
+        annotations=annotations,
+        include_run_markers=False,
+    )
+
+
+async def list_chat_timeline(db: AsyncSession, chat_id: uuid.UUID) -> dict[str, Any]:
+    from app.platform.chat.timeline_projection import build_timeline_response
+
+    messages = await ChatMessageRepository(db).list_by_chat(chat_id)
+    annotations = await ChatUiAnnotationRepository(db).list_by_chat(chat_id)
+    runs = await ChatRunRepository(db).list_by_chat(chat_id)
+    return build_timeline_response(
+        chat_id=chat_id,
+        messages=messages,
+        annotations=annotations,
+        runs=runs,
+    )

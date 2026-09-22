@@ -17,7 +17,7 @@ from pathlib import Path
 
 from sqlalchemy import delete, func, select
 
-from app.db.models import AgentModel, Chat, ChatAttachment, ChatEvent
+from app.db.models import AgentModel, Chat, ChatAttachment, ChatMessage
 from app.db.redis_client import check_redis_connection, get_redis
 from app.db.session import get_async_session_factory, init_db_engine
 from app.agent_specific.proposal.storage import ARTIFACTS_ROOT
@@ -30,8 +30,8 @@ async def _counts(session, agent_id) -> dict[str, int]:
     chats = await session.scalar(select(func.count()).select_from(Chat).where(chat_filter)) or 0
     events = await session.scalar(
         select(func.count())
-        .select_from(ChatEvent)
-        .join(Chat, ChatEvent.chat_id == Chat.id)
+        .select_from(ChatMessage)
+        .join(Chat, ChatMessage.chat_id == Chat.id)
         .where(chat_filter)
     ) or 0
     attachments = await session.scalar(

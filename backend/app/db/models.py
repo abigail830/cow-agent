@@ -192,9 +192,15 @@ class Chat(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    transcript_seq: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+
     user: Mapped["User"] = relationship(back_populates="chats")
     agent: Mapped["AgentModel"] = relationship(back_populates="chats")
-    events: Mapped[list["ChatEvent"]] = relationship(back_populates="chat", cascade="all, delete-orphan")
+    messages: Mapped[list["ChatMessage"]] = relationship(back_populates="chat", cascade="all, delete-orphan")
+    ui_annotations: Mapped[list["ChatUiAnnotation"]] = relationship(
+        back_populates="chat", cascade="all, delete-orphan"
+    )
+    runs: Mapped[list["ChatRun"]] = relationship(back_populates="chat", cascade="all, delete-orphan")
     attachments: Mapped[list["ChatAttachment"]] = relationship(back_populates="chat", cascade="all, delete-orphan")
 
 
@@ -244,10 +250,31 @@ class UserIntegration(Base):
     user: Mapped["User"] = relationship(back_populates="integrations")
 
 
-class ChatEvent(Base):
-    __tablename__ = "chat_events"
+class ChatRun(Base):
+    __tablename__ = "chat_runs"
+    __table_args__ = (Index("idx_chat_runs_chat_id", "chat_id", "started_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    chat_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chats.id", ondelete="CASCADE"), nullable=False
+    )
+    user_message_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="running")
+    error: Mapped[str | None] = mapped_column(Text)
+    model_id: Mapped[str | None] = mapped_column(String(64))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    chat: Mapped["Chat"] = relationship(back_populates="runs")
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
     __table_args__ = (
-        Index("idx_chat_events_chat_id", "chat_id", "sequence"),
+        Index("idx_chat_messages_chat_sequence", "chat_id", "sequence"),
+        Index("idx_chat_messages_chat_turn", "chat_id", "turn_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -255,11 +282,37 @@ class ChatEvent(Base):
         UUID(as_uuid=True), ForeignKey("chats.id", ondelete="CASCADE"), nullable=False
     )
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
-    event_type: Mapped[str] = mapped_column(String(64), nullable=False, server_default="message")
-    payload: Mapped[dict] = mapped_column(JSONB, server_default="{}")
+    turn_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chat_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    maf_message_id: Mapped[str | None] = mapped_column(String(128))
+    body: Mapped[dict] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    chat: Mapped["Chat"] = relationship(back_populates="events")
+    chat: Mapped["Chat"] = relationship(back_populates="messages")
+
+
+class ChatUiAnnotation(Base):
+    __tablename__ = "chat_ui_annotations"
+    __table_args__ = (Index("idx_chat_ui_annotations_chat_sequence", "chat_id", "sequence"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    chat_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chats.id", ondelete="CASCADE"), nullable=False
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    turn_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    anchor_message_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True
+    )
+    kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    ref: Mapped[str] = mapped_column(String(255), nullable=False)
+    display: Mapped[dict] = mapped_column(JSONB, server_default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    chat: Mapped["Chat"] = relationship(back_populates="ui_annotations")
 
 
 class Tool(Base):

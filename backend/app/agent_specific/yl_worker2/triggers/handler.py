@@ -7,7 +7,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import AgentModel, Chat
-from app.db.repositories.chat_events import ChatEventRepository
+from app.platform.chat.user_message_commit import build_user_maf_message, persist_user_maf_message
 from app.platform.agent.platform_sync import agent_id_for_slug
 from app.platform.chat.run_service import ChatRunService
 from app.agent_specific.yl_worker2.triggers.schemas import YlWorker2TriggerPayload, YlWorker2TriggerResponse
@@ -50,14 +50,14 @@ async def _persist_trigger_user_message(
     chat_id: uuid.UUID,
     content: str,
 ) -> None:
-    repo = ChatEventRepository(db)
-    await repo.insert(
-        chat_id=chat_id,
-        role="user",
-        message_type="text",
-        content=content,
+    turn_id = uuid.uuid4()
+    message = build_user_maf_message(
+        chat_id,
+        content,
+        [],
         metadata={"source": "yl_worker2_trigger"},
     )
+    await persist_user_maf_message(db, chat_id=chat_id, turn_id=turn_id, message=message)
 
 
 async def handle_yl_worker2_trigger(

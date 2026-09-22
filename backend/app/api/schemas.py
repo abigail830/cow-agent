@@ -1,5 +1,5 @@
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -70,6 +70,12 @@ class ChatCreate(BaseModel):
     title: str | None = None
 
 
+class ContextUsageOut(BaseModel):
+    tokens: int
+    budget_tokens: int
+    percent: float
+
+
 class ChatOut(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
@@ -124,6 +130,47 @@ class MessageOut(BaseModel):
     parent_id: str | None
     sequence: int
     created_at: str | None
+
+
+class UiAnnotationOut(BaseModel):
+    kind: str
+    ref: str
+    display: dict[str, Any] = Field(default_factory=dict)
+    anchor_message_id: str | None = None
+
+
+class TimelineMessageItemOut(BaseModel):
+    kind: Literal["message"]
+    id: str
+    sequence: int
+    turn_id: str
+    message: dict[str, Any]
+    created_at: str | None = None
+
+
+class TimelineAnnotationItemOut(BaseModel):
+    kind: Literal["ui_annotation"]
+    id: str
+    sequence: int
+    turn_id: str
+    annotation: UiAnnotationOut
+    created_at: str | None = None
+
+
+class ChatRunOut(BaseModel):
+    id: str
+    status: str
+    error: str | None = None
+    user_message_id: str | None = None
+    model_id: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+
+
+class ChatTimelineOut(BaseModel):
+    chat_id: str
+    items: list[TimelineMessageItemOut | TimelineAnnotationItemOut]
+    runs: list[ChatRunOut] = Field(default_factory=list)
 
 
 class ProposalCompletenessOut(BaseModel):

@@ -48,29 +48,9 @@ async def test_accumulator_persist_tool_rows_keeps_arguments():
     )
 
     assert acc.has_tool_rows()
-
-    class FakeRepo:
-        def __init__(self) -> None:
-            self.rows: list[dict] = []
-
-        async def insert(self, **kwargs):
-            self.rows.append(kwargs)
-            return kwargs
-
-        async def insert_many(self, chat_id, rows):
-            saved = []
-            for row in rows:
-                payload = {"chat_id": chat_id, **row}
-                self.rows.append(payload)
-                saved.append(payload)
-            return saved
-
-    repo = FakeRepo()
-    saved = await acc.persist_tool_rows(repo, uuid4())
-    assert saved == 2
-    call_row = next(r for r in repo.rows if r["message_type"] == "tool_call")
+    call_row = next(r for r in acc._rows if r["message_type"] == "tool_call")
     assert call_row["metadata"]["arguments"] == {"sql": "SELECT 1"}
-    result_row = next(r for r in repo.rows if r["message_type"] == "tool_result")
+    result_row = next(r for r in acc._rows if r["message_type"] == "tool_result")
     assert result_row["metadata"]["arguments"] == {"sql": "SELECT 1"}
 
 

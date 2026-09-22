@@ -1,52 +1,56 @@
 import uuid
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
 
-import pytest
+from agent_framework import Content, Message
 
-from app.db.models import ChatEvent
-from app.platform.chat.event_projection import event_to_dict
-from app.platform.chat.run_service import ChatRunService
+from app.db.models import ChatMessage
+from app.platform.chat.timeline_projection import build_turn_message_outs, expand_message_to_platform_rows
 
 
-def test_event_to_dict_matches_api_shape():
+def test_expand_message_to_platform_rows():
+    message = ChatMessage(
+        id=uuid.uuid4(),
+        chat_id=uuid.uuid4(),
+        sequence=3,
+        turn_id=uuid.uuid4(),
+        run_id=None,
+        role="assistant",
+        maf_message_id=None,
+        body=Message(
+            role="assistant",
+            contents=[Content.from_text("Hi there")],
+        ).to_dict(),
+    )
+    rows = expand_message_to_platform_rows(message)
+    assert len(rows) == 1
+    assert rows[0]["message_type"] == "text"
+    assert rows[0]["content"] == "Hi there"
+    assert rows[0]["sequence"] == 300
+
+
+def test_build_turn_message_outs_includes_user_and_assistant():
     chat_id = uuid.uuid4()
-    event = ChatEvent(
+    turn_id = uuid.uuid4()
+    user = ChatMessage(
         id=uuid.uuid4(),
         chat_id=chat_id,
         sequence=1,
-        event_type="message",
-        payload={
-            "role": "user",
-            "message_type": "text",
-            "content": "hello",
-            "metadata": {"k": "v"},
-            "parent_id": None,
-        },
-        created_at=datetime.now(timezone.utc),
+        turn_id=turn_id,
+        run_id=None,
+        role="user",
+        maf_message_id=None,
+        body=Message(role="user", contents=[Content.from_text("Q")]).to_dict(),
     )
-    out = event_to_dict(event)
-    assert out["chat_id"] == str(chat_id)
-    assert out["role"] == "user"
-    assert out["message_type"] == "text"
-    assert out["metadata"] == {"k": "v"}
-
-
-@pytest.mark.asyncio
-async def test_list_turn_messages_since_uses_repository_filter():
-    chat_id = uuid.uuid4()
-    row = ChatEvent(
+    assistant = ChatMessage(
         id=uuid.uuid4(),
         chat_id=chat_id,
-        sequence=5,
-        event_type="message",
-        payload={"role": "user", "message_type": "text", "content": "x", "metadata": {}},
+        sequence=2,
+        turn_id=turn_id,
+        run_id=None,
+        role="assistant",
+        maf_message_id=None,
+        body=Message(role="assistant", contents=[Content.from_text("A")]).to_dict(),
     )
-    service = ChatRunService(AsyncMock())
-    service._events = AsyncMock()
-    service._events.list_by_chat_since = AsyncMock(return_value=[row])
-
-    result = await service._list_turn_messages_since(chat_id, 5)
-
-    service._events.list_by_chat_since.assert_awaited_once_with(chat_id, 5)
-    assert result == [event_to_dict(row)]
+    outs = build_turn_message_outs(chat_id, user, [assistant])
+    assert len(outs) == 2
+    assert outs[0]["role"] == "user"
+    assert outs[1]["role"] == "assistant"

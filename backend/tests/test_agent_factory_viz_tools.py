@@ -35,8 +35,8 @@ async def test_viz_tools_omitted_when_not_in_allowed_tools():
     with (
         patch.object(AgentFactory, "get_agent_row", AsyncMock(return_value=mock_row)),
         patch(
-            "app.platform.agent.agent_factory.create_history_provider",
-            AsyncMock(return_value=MagicMock()),
+            "app.platform.agent.agent_factory.create_postgres_history_provider",
+            return_value=MagicMock(),
         ),
         patch("app.platform.agent.agent_factory.SkillRegistry") as skill_reg_cls,
         patch("app.platform.agent.agent_factory.ToolRegistry") as tool_reg_cls,
@@ -76,8 +76,8 @@ async def test_viz_tools_included_when_allowed_and_sql_viz_hook_present():
     with (
         patch.object(AgentFactory, "get_agent_row", AsyncMock(return_value=mock_row)),
         patch(
-            "app.platform.agent.agent_factory.create_history_provider",
-            AsyncMock(return_value=MagicMock()),
+            "app.platform.agent.agent_factory.create_postgres_history_provider",
+            return_value=MagicMock(),
         ),
         patch("app.platform.agent.agent_factory.SkillRegistry") as skill_reg_cls,
         patch("app.platform.agent.agent_factory.ToolRegistry") as tool_reg_cls,

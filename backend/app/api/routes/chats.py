@@ -14,7 +14,9 @@ from app.api.schemas import (
     ChatForkSourceOut,
     ChatListOut,
     ChatOut,
+    ContextUsageOut,
     MessageCreate,
+    ChatTimelineOut,
     MessageOut,
     ProposalDraftOut,
     ProposalExportOut,
@@ -28,7 +30,7 @@ from app.db.models import AgentModel, Chat
 from app.platform.auth.current_user import get_current_user, get_current_user_id, get_owned_chat
 from app.db.session import get_db
 from app.platform.attachments.service import AttachmentService
-from app.platform.chat.run_service import ChatRunService, list_chat_messages
+from app.platform.chat.run_service import ChatRunService, list_chat_messages, list_chat_timeline
 from app.platform.chat.fork_service import fork_chat
 from app.platform.llm.stream_errors import user_facing_stream_error
 from app.agent_specific.proposal.preview_service import get_chat_proposal_draft, get_chat_proposal_preview, load_chat_proposal_draft
@@ -116,8 +118,35 @@ async def get_messages(
     chat: Chat = Depends(get_owned_chat),
     db: AsyncSession = Depends(get_db),
 ) -> list[MessageOut]:
+    """Legacy expanded MessageOut list. Prefer GET /timeline for MAF-native reload."""
     rows = await list_chat_messages(db, chat.id)
     return [MessageOut(**row) for row in rows]
+
+
+@router.get("/{chat_id}/timeline", response_model=ChatTimelineOut)
+async def get_timeline(
+    chat: Chat = Depends(get_owned_chat),
+    db: AsyncSession = Depends(get_db),
+) -> ChatTimelineOut:
+    payload = await list_chat_timeline(db, chat.id)
+    return ChatTimelineOut(**payload)
+
+
+@router.get("/{chat_id}/context-usage", response_model=ContextUsageOut)
+async def get_context_usage(
+    chat: Chat = Depends(get_owned_chat),
+    db: AsyncSession = Depends(get_db),
+) -> ContextUsageOut:
+    service = ChatRunService(db)
+    cached = await service.get_cached_context_usage(chat.id)
+    if cached is not None:
+        return ContextUsageOut(**cached)
+    live = await service.snapshot_context_usage(chat)
+    if live is not None:
+        return ContextUsageOut(**live)
+    memory_config = await service._memory_config_for_chat(chat)
+    budget = max(1, memory_config.compaction.max_context_window_tokens - memory_config.compaction.max_output_tokens)
+    return ContextUsageOut(tokens=0, budget_tokens=budget, percent=0.0)
 
 
 @router.get("/{chat_id}/proposal/preview", response_model=ProposalPreviewOut)

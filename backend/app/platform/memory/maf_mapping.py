@@ -5,13 +5,20 @@ from typing import Any
 from agent_framework import Content, Message
 
 from app.platform.memory.projectors.utils import ensure_dict, stringify_function_call_arguments
-from app.platform.attachments.materialize import build_replay_attachment_contents
+from app.platform.attachments.materialize import (
+    build_replay_attachment_contents,
+    is_attachment_materialization_text,
+    split_user_prompt_text,
+)
 from app.platform.agent.platform_instructions import RUN_CANCELLED_USER_TEXT
 from app.platform.memory.memory_config import MemoryConfig
 from app.platform.memory.slimmer import HistoryProjection
 
 PLATFORM_MESSAGE_TYPE_KEY = "platform_message_type"
 PLATFORM_METADATA_KEY = "platform_metadata"
+REASONING_CONTENT_METADATA_KEY = "reasoning_content"
+# OpenAI-compatible Chat Completions providers that use reasoning_content (not reasoning_details).
+REASONING_CONTENT_PROVIDERS = frozenset({"deepseek", "dashscope"})
 
 
 def _platform_props(row: dict[str, Any]) -> dict[str, Any]:
@@ -26,10 +33,11 @@ def _platform_props(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def row_to_dict(row: Any) -> dict[str, Any]:
-    if hasattr(row, "payload") and hasattr(row, "event_type"):
-        from app.platform.chat.event_projection import event_to_dict
+    if hasattr(row, "body") and hasattr(row, "role"):
+        from app.platform.chat.timeline_projection import expand_message_to_platform_rows
 
-        return event_to_dict(row)
+        expanded = expand_message_to_platform_rows(row)
+        return expanded[0] if expanded else {}
     return {
         "id": str(row.id),
         "chat_id": str(row.chat_id),
@@ -107,11 +115,12 @@ def to_maf_messages(
     seen_tool_calls: set[str] = set()
     seen_tool_results: set[str] = set()
     pending_assistant_meta: dict[str, Any] = {}
+    pending_reasoning_content: str | None = None
 
     def flush_assistant() -> None:
-        nonlocal assistant_contents, pending_assistant_meta
+        nonlocal assistant_contents, pending_assistant_meta, pending_reasoning_content
         if assistant_contents:
-            props = (
+            props: dict[str, Any] = (
                 {
                     PLATFORM_MESSAGE_TYPE_KEY: pending_assistant_meta.get("message_type"),
                     PLATFORM_METADATA_KEY: pending_assistant_meta.get("metadata") or {},
@@ -119,11 +128,14 @@ def to_maf_messages(
                 if pending_assistant_meta.get("message_type")
                 else {}
             )
+            if pending_reasoning_content:
+                props[REASONING_CONTENT_METADATA_KEY] = pending_reasoning_content
             messages.append(
                 Message(role="assistant", contents=list(assistant_contents), additional_properties=props)
             )
             assistant_contents = []
             pending_assistant_meta = {}
+            pending_reasoning_content = None
 
     for row in projected:
         message_type = row["message_type"]
@@ -219,6 +231,10 @@ def to_maf_messages(
             continue
 
         if message_type in ("text", "reasoning", "tool_call", "mcp_call") and role == "assistant":
+            row_reasoning = metadata.get(REASONING_CONTENT_METADATA_KEY)
+            if isinstance(row_reasoning, str) and row_reasoning.strip():
+                pending_reasoning_content = row_reasoning
+
             if message_type in ("tool_call", "mcp_call"):
                 if call_id and call_id in seen_tool_calls:
                     continue
@@ -228,7 +244,7 @@ def to_maf_messages(
             if (
                 message_type == "reasoning"
                 and not metadata.get("protected_data")
-                and model_provider != "deepseek"
+                and (model_provider or "") not in REASONING_CONTENT_PROVIDERS
             ):
                 content = Content.from_text(row.get("content") or "")
             else:
@@ -253,6 +269,9 @@ def maf_messages_to_projection_rows(messages: list[Message]) -> list[dict[str, A
         props = message.additional_properties or {}
         platform_type = props.get(PLATFORM_MESSAGE_TYPE_KEY)
         platform_metadata = dict(props.get(PLATFORM_METADATA_KEY) or {})
+        message_reasoning = props.get(REASONING_CONTENT_METADATA_KEY)
+        if isinstance(message_reasoning, str) and message_reasoning.strip():
+            platform_metadata[REASONING_CONTENT_METADATA_KEY] = message_reasoning
 
         for content in message.contents or []:
             seq += 1
@@ -364,6 +383,10 @@ def maf_message_to_rows(
     seq = start_sequence
 
     platform_type = (message.additional_properties or {}).get("platform_message_type")
+    platform_props = message.additional_properties or {}
+    platform_meta = platform_props.get("platform") if isinstance(platform_props.get("platform"), dict) else {}
+    user_attachment_meta = platform_meta.get("attachments") if message.role == "user" else None
+    user_row_emitted = False
     for content in message.contents or []:
         if getattr(content, "type", None) == "text_reasoning" or platform_type == "reasoning":
             meta = dict(getattr(content, "additional_properties", None) or {})
@@ -431,7 +454,36 @@ def maf_message_to_rows(
             seq += 1
             continue
 
+        content_type = getattr(content, "type", None)
+        if message.role == "user" and content_type in ("hosted_file", "data", "uri"):
+            continue
+
         text = content.text if hasattr(content, "text") else str(content)
+        if message.role == "user":
+            if is_attachment_materialization_text(text):
+                continue
+            text = split_user_prompt_text(text)
+            if not text and user_attachment_meta and not user_row_emitted:
+                text = ""
+            elif not text:
+                continue
+            metadata: dict[str, Any] = {}
+            if user_attachment_meta and not user_row_emitted:
+                metadata["attachments"] = user_attachment_meta
+            user_row_emitted = True
+            rows.append(
+                {
+                    "chat_id": chat_id,
+                    "role": message.role,
+                    "message_type": "text",
+                    "content": text,
+                    "metadata": metadata,
+                    "sequence": seq,
+                }
+            )
+            seq += 1
+            continue
+
         rows.append(
             {
                 "chat_id": chat_id,

@@ -4,7 +4,7 @@ from unittest.mock import patch
 from agent_framework import Content, Message
 
 from app.platform.attachments.materialize import materialize_attachments
-from app.platform.llm.deepseek_client import PlatformDeepSeekClient
+from app.platform.llm.openai_compatible_client import OpenAICompatibleReasoningClient
 from app.platform.memory.maf_mapping import to_maf_messages
 
 
@@ -104,8 +104,8 @@ def test_to_maf_messages_rebuilds_hosted_pdf_without_model_id():
     assert messages[0].contents[1].file_id == "file_abc123"
 
 
-def test_deepseek_client_maps_hosted_file():
-    client = PlatformDeepSeekClient.__new__(PlatformDeepSeekClient)
+def test_openai_compatible_client_maps_hosted_file():
+    client = OpenAICompatibleReasoningClient.__new__(OpenAICompatibleReasoningClient)
     message = Message(
         role="user",
         contents=[
@@ -123,10 +123,10 @@ def test_deepseek_client_maps_hosted_file():
         return [{"role": "user", "content": "".join(texts) or ""}]
 
     with patch(
-        "app.platform.llm.deepseek_client.OpenAIChatCompletionClient._prepare_message_for_openai",
+        "app.platform.llm.openai_compatible_client.OpenAIChatCompletionClient._prepare_message_for_openai",
         fake_super,
     ):
-        prepared = PlatformDeepSeekClient._prepare_message_for_openai(client, message)
+        prepared = OpenAICompatibleReasoningClient._prepare_message_for_openai(client, message)
 
     assert prepared[0]["content"][-1] == {"type": "file", "file_id": "file-1"}
     assert prepared[0]["content"][0] == {"type": "text", "text": "see image"}

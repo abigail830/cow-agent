@@ -2190,6 +2190,34 @@ body {
   min-width: 0;
 }
 
+.chat-context-usage {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.125rem 0.35rem;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--color-muted);
+  user-select: none;
+}
+
+.chat-context-usage-label {
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-context-usage-low {
+  color: var(--color-muted);
+}
+
+.chat-context-usage-mid {
+  color: #b45309;
+}
+
+.chat-context-usage-high {
+  color: #b91c1c;
+}
+
 .chat-attachment-mode-select {
   appearance: none;
   border: none;

@@ -27,6 +27,8 @@ class ModelEntry:
     deployment: str
     enabled: bool = True
     roles: frozenset[str] = DEFAULT_MODEL_ROLES
+    context_window_tokens: int | None = None
+    max_output_tokens: int | None = None
 
     def has_role(self, role: str) -> bool:
         return role in self.roles
@@ -143,6 +145,12 @@ def _load_catalog_from_disk() -> ModelCatalog:
         model_id = str(item.get("id") or "").strip()
         if not model_id:
             continue
+        context_window_raw = item.get("context_window_tokens")
+        max_output_raw = item.get("max_output_tokens")
+        context_window_tokens = (
+            max(1, int(context_window_raw)) if context_window_raw is not None else None
+        )
+        max_output_tokens = max(0, int(max_output_raw)) if max_output_raw is not None else None
         models[model_id] = ModelEntry(
             id=model_id,
             label=str(item.get("label") or model_id),
@@ -150,6 +158,8 @@ def _load_catalog_from_disk() -> ModelCatalog:
             deployment=_resolve_env(str(item.get("deployment") or "")),
             enabled=bool(item.get("enabled", True)),
             roles=_parse_model_roles(item.get("roles")),
+            context_window_tokens=context_window_tokens,
+            max_output_tokens=max_output_tokens,
         )
     return ModelCatalog(models=models, providers=providers)
 

@@ -15,6 +15,13 @@ if [[ ! -x "$VENV/bin/alembic" ]] || [[ ! -x "$VENV/bin/python" ]]; then
 fi
 
 echo ""
+echo "==> Clearing Redis session cache..."
+(
+  cd "$BACKEND"
+  "$VENV/bin/python" scripts/clear_redis_session_cache.py
+)
+
+echo ""
 echo "==> Running database migrations..."
 (
   cd "$BACKEND"

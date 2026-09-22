@@ -34,6 +34,8 @@ models:
     deployment: qwen3.7-plus
     enabled: true
     roles: [chat]
+    context_window_tokens: 1000000
+    max_output_tokens: 16384
 
   - id: qwen3.8-max
     label: Qwen 3.8 Max
@@ -41,6 +43,8 @@ models:
     deployment: qwen3.8-max
     enabled: true
     roles: [chat]
+    context_window_tokens: 1000000
+    max_output_tokens: 16384
 
   - id: minimax-m3
     label: MiniMax M3
@@ -48,6 +52,8 @@ models:
     deployment: MiniMax/MiniMax-M3
     enabled: true
     roles: [chat]
+    context_window_tokens: 1000000
+    max_output_tokens: 16384
 
   - id: deepseek-flash
     label: DeepSeek Flash
@@ -55,6 +61,8 @@ models:
     deployment: deepseek-flash
     enabled: true
     roles: [chat]
+    context_window_tokens: 1000000
+    max_output_tokens: 16384
 
   - id: qwen3-vl-32b-instruct
     label: Qwen3 VL 32B Instruct

@@ -66,21 +66,23 @@ Hook order is stabilized in `hooks/hook_config.py` (`sql_viz` always last).
 
 Do not add a `guardrails:` section to new profiles; configure `hooks:` only.
 
-## Memory (Redis SSOT + PG UI projection)
+## Memory (PG transcript SSOT + Redis session cache)
 
-Agent context uses MAF native history persistence; UI history is a separate append-only projection.
+Agent context and UI reload share one PG transcript (`chat_messages`); rich UI anchors are separate annotations. Redis caches `AgentSession` only (`session:{chat_id}`); DB fallback is `chats.session_state`.
 
 | Layer | Component | Role |
 |-------|-----------|------|
-| Agent SSOT | `RedisHistoryProvider` (`agent-framework-redis`) | MAF `Message` list per chat; `store_inputs/outputs=True` |
+| Transcript SSOT | `PostgresHistoryProvider` → `chat_messages.body` | MAF `Message.to_dict()` append-only; agent load applies slim projection in memory |
+| Rich UI | `chat_ui_annotations` | viz / artifact timeline anchors; blob side store unchanged |
+| Run lifecycle | `chat_runs` | running / completed / cancelled / failed (no fake message rows) |
 | In-run compaction | `Agent.compaction_strategy` → `ContextWindowCompactionStrategy` | Token-budget gate before each model call (on-demand) |
-| Run compaction | `PlatformCompactionProvider` | `before_run`: slim projectors; `after_run`: summarization / tool collapse |
-| Session identity | `SessionStore` | `AgentSession.to_dict()` + agent extensions (Redis + `chats.session_state`) |
-| UI projection | PG `chat_events` | Append-only events → `MessageOut` for sidebar / reload |
+| Run compaction | `PlatformCompactionProvider` | `before_run`: slim projectors (memory only); `after_run`: summarization append |
+| Session identity | `SessionStore` | `AgentSession.to_dict()` + agent extensions (Redis hot cache + `chats.session_state`) |
+| UI reload | `GET /messages` or `GET /timeline` | Full canonical messages + annotations merged by `sequence` |
 | Cross-session | `LongTermMemoryProvider` | Inject bullets from `memory_snapshots` |
 | Skills | `SkillsProvider` | Skill resources |
 
-**Not in Redis history**: viz / artifact / reasoning platform rows — they are written only to `chat_events` for the UI. MAF auto-store handles user/assistant/tool transcript for the model.
+**Single writer**: user messages early-commit via platform; assistant/tool rows only via MAF `HistoryProvider.after_run`. Stream accumulator writes `ui_annotations` only (SSE unchanged).
 
 ## Tools
 

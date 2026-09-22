@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import AgentModel
 from app.platform.memory.compaction import build_platform_compaction
 from app.platform.memory.long_term.context_provider import LongTermMemoryProvider
-from app.platform.memory.memory_config import parse_memory_config
-from app.platform.memory.redis_history import create_history_provider
+from app.platform.memory.memory_config import apply_model_compaction_defaults, parse_memory_config
+from app.platform.memory.postgres_history import create_postgres_history_provider
 from app.platform.agent.agent_bundle import AgentBundle
 from app.platform.mcp.mcp_pool import McpPoolHandle
 from app.platform.hooks.hook_config import normalize_hooks
@@ -79,22 +79,31 @@ class AgentFactory:
         chat_id: uuid.UUID | None = None,
         user_id: uuid.UUID | None = None,
         model_id: str | None = None,
+        turn_id: uuid.UUID | None = None,
+        run_id: uuid.UUID | None = None,
         stop_event: asyncio.Event | None = None,
         session_store: SessionStore | None = None,
         mcp_tools: list | None = None,
         mcp_pool_handle: McpPoolHandle | None = None,
     ) -> AgentBundle:
         if chat_id is None:
-            raise ValueError("chat_id is required for RedisHistoryProvider")
+            raise ValueError("chat_id is required for PostgresHistoryProvider")
 
         row = await self.get_agent_row(agent_id)
         model_entry = resolve_agent_model(row, model_id)
         provider = ModelProvider(model_entry.provider)
         model_name = model_entry.deployment
 
-        memory_config = parse_memory_config(row.config)
+        memory_config = apply_model_compaction_defaults(parse_memory_config(row.config), model_entry)
         store = session_store or SessionStore(self._db)
-        history = await create_history_provider(chat_id=chat_id, agent_id=agent_id)
+        history = create_postgres_history_provider(
+            self._db,
+            chat_id=chat_id,
+            turn_id=turn_id,
+            run_id=run_id,
+            memory_config=memory_config,
+            model_provider=provider.value,
+        )
 
         summarization_client = None
         if memory_config.compaction.enabled and memory_config.compaction.summarization.enabled:
@@ -102,6 +111,7 @@ class AgentFactory:
 
         in_run_compaction, compaction_provider = build_platform_compaction(
             memory_config,
+            model_provider=provider.value,
             summarization_client=summarization_client,
         )
 
@@ -176,8 +186,6 @@ class AgentFactory:
 
         instructions = append_platform_instructions(row.instructions)
 
-        per_service_call_persist = memory_config.compaction.enabled
-
         agent = self._registry.create_agent(
             name=row.name,
             instructions=instructions,
@@ -187,6 +195,5 @@ class AgentFactory:
             middleware=middleware,
             tools=combined_tools or None,
             compaction_strategy=in_run_compaction,
-            require_per_service_call_history_persistence=per_service_call_persist,
         )
         return AgentBundle(agent=agent, mcp_pool_handle=mcp_pool_handle)

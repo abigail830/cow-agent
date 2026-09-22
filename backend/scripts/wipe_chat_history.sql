@@ -1,14 +1,16 @@
 -- One-shot wipe of chat history and attachments (non-production).
--- Manual: psql "$DATABASE_URL" -f backend/scripts/wipe_chat_history.sql
+-- Prefer Alembic revision 032 (upgrade head) for the same effect in dev.
+-- Manual fallback: psql "$DATABASE_URL" -f backend/scripts/wipe_chat_history.sql
 --
--- Also clear Redis:
---   redis-cli KEYS 'session:*' | xargs redis-cli DEL
---   redis-cli KEYS '*chat*|*'  # scoped MAF history keys under chat prefix
+-- Also clear Redis session hot cache:
+--   cd backend && python scripts/clear_redis_session_cache.py
 
 BEGIN;
 
 DELETE FROM chat_attachments;
-DELETE FROM chat_events;
+DELETE FROM chat_ui_annotations;
+DELETE FROM chat_messages;
+DELETE FROM chat_runs;
 DELETE FROM chats;
 
 COMMIT;

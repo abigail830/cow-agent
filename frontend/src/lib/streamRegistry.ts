@@ -15,7 +15,7 @@ export type ActiveStream = {
   isYlWorker2: boolean
   fulfillmentFormsFromStream: boolean
   doneTurnMessages: Message[] | null
-  turnStartSequence: number | null
+  turnStartDisplaySequence: number | null
   messagesSyncedFromDone: boolean
 }
 
