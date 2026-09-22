@@ -8,9 +8,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-DEFAULT_WORKING_SET_TURNS = 20
-DEFAULT_COLD_RESUME_MAX_TURNS = 10
 DEFAULT_PREVIEW_CHARS = 200
+DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000
+DEFAULT_MAX_OUTPUT_TOKENS = 16_384
 
 
 @dataclass(frozen=True)
@@ -34,16 +34,30 @@ class LongTermMemoryConfig:
 
 
 @dataclass(frozen=True)
+class SummarizationCompactionConfig:
+    enabled: bool = True
+    target_count: int = 20
+    threshold: int = 4
+
+
+@dataclass(frozen=True)
+class CompactionConfig:
+    enabled: bool = True
+    max_context_window_tokens: int = DEFAULT_CONTEXT_WINDOW_TOKENS
+    max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
+    tool_eviction_threshold: float = 0.5
+    truncation_threshold: float = 0.9
+    summarization: SummarizationCompactionConfig = field(default_factory=SummarizationCompactionConfig)
+
+
+@dataclass(frozen=True)
 class MemoryConfig:
-    working_set_turns: int = DEFAULT_WORKING_SET_TURNS
-    cold_resume_max_turns: int = DEFAULT_COLD_RESUME_MAX_TURNS
     slim: MemorySlimConfig = field(default_factory=MemorySlimConfig)
     long_term: LongTermMemoryConfig = field(default_factory=LongTermMemoryConfig)
+    compaction: CompactionConfig = field(default_factory=CompactionConfig)
 
     def config_hash(self) -> str:
         payload = {
-            "working_set_turns": self.working_set_turns,
-            "cold_resume_max_turns": self.cold_resume_max_turns,
             "slim": {
                 "enabled": self.slim.enabled,
                 "default_preview_chars": self.slim.default_preview_chars,
@@ -52,6 +66,18 @@ class MemoryConfig:
             "long_term": {
                 "enabled": self.long_term.enabled,
                 "inject_max_tokens": self.long_term.inject_max_tokens,
+            },
+            "compaction": {
+                "enabled": self.compaction.enabled,
+                "max_context_window_tokens": self.compaction.max_context_window_tokens,
+                "max_output_tokens": self.compaction.max_output_tokens,
+                "tool_eviction_threshold": self.compaction.tool_eviction_threshold,
+                "truncation_threshold": self.compaction.truncation_threshold,
+                "summarization": {
+                    "enabled": self.compaction.summarization.enabled,
+                    "target_count": self.compaction.summarization.target_count,
+                    "threshold": self.compaction.summarization.threshold,
+                },
             },
         }
         raw = json.dumps(payload, sort_keys=True, ensure_ascii=False)
@@ -79,17 +105,29 @@ def parse_memory_config(agent_config: dict[str, Any] | None) -> MemoryConfig:
         tool_request_chars=tool_chars,
     )
 
-    working_set_turns = int(memory.get("working_set_turns") or DEFAULT_WORKING_SET_TURNS)
-    cold_resume_max_turns = int(memory.get("cold_resume_max_turns") or DEFAULT_COLD_RESUME_MAX_TURNS)
     long_term_raw = memory.get("long_term") or {}
     long_term = LongTermMemoryConfig(
         enabled=bool(long_term_raw.get("enabled", True)),
         inject_max_tokens=max(200, int(long_term_raw.get("inject_max_tokens") or 1500)),
     )
 
-    return MemoryConfig(
-        working_set_turns=max(1, working_set_turns),
-        cold_resume_max_turns=max(1, cold_resume_max_turns),
-        slim=slim,
-        long_term=long_term,
+    compaction_raw = memory.get("compaction") or {}
+    summarization_raw = compaction_raw.get("summarization") or {}
+    summarization = SummarizationCompactionConfig(
+        enabled=bool(summarization_raw.get("enabled", True)),
+        target_count=max(1, int(summarization_raw.get("target_count") or 20)),
+        threshold=max(0, int(summarization_raw.get("threshold") or 4)),
     )
+    compaction = CompactionConfig(
+        enabled=bool(compaction_raw.get("enabled", True)),
+        max_context_window_tokens=max(
+            1,
+            int(compaction_raw.get("max_context_window_tokens") or DEFAULT_CONTEXT_WINDOW_TOKENS),
+        ),
+        max_output_tokens=max(0, int(compaction_raw.get("max_output_tokens") or DEFAULT_MAX_OUTPUT_TOKENS)),
+        tool_eviction_threshold=float(compaction_raw.get("tool_eviction_threshold") or 0.5),
+        truncation_threshold=float(compaction_raw.get("truncation_threshold") or 0.9),
+        summarization=summarization,
+    )
+
+    return MemoryConfig(slim=slim, long_term=long_term, compaction=compaction)

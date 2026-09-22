@@ -194,7 +194,7 @@ class Chat(Base):
 
     user: Mapped["User"] = relationship(back_populates="chats")
     agent: Mapped["AgentModel"] = relationship(back_populates="chats")
-    messages: Mapped[list["Message"]] = relationship(back_populates="chat", cascade="all, delete-orphan")
+    events: Mapped[list["ChatEvent"]] = relationship(back_populates="chat", cascade="all, delete-orphan")
     attachments: Mapped[list["ChatAttachment"]] = relationship(back_populates="chat", cascade="all, delete-orphan")
 
 
@@ -206,9 +206,7 @@ class ChatAttachment(Base):
     chat_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("chats.id", ondelete="CASCADE"), nullable=False
     )
-    message_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True
-    )
+    message_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     provider_file_id: Mapped[str] = mapped_column(String(255), nullable=False)
     filename: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -246,26 +244,22 @@ class UserIntegration(Base):
     user: Mapped["User"] = relationship(back_populates="integrations")
 
 
-class Message(Base):
-    __tablename__ = "messages"
+class ChatEvent(Base):
+    __tablename__ = "chat_events"
     __table_args__ = (
-        Index("idx_messages_chat_id", "chat_id", "sequence"),
-        Index("idx_messages_type", "message_type"),
+        Index("idx_chat_events_chat_id", "chat_id", "sequence"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     chat_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("chats.id", ondelete="CASCADE"), nullable=False
     )
-    role: Mapped[str] = mapped_column(String(20), nullable=False)
-    content: Mapped[str | None] = mapped_column(Text)
-    message_type: Mapped[str] = mapped_column(String(30), nullable=False)
-    message_metadata: Mapped[dict] = mapped_column("metadata", JSONB, server_default="{}")
-    parent_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("messages.id"))
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, server_default="message")
+    payload: Mapped[dict] = mapped_column(JSONB, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    chat: Mapped["Chat"] = relationship(back_populates="messages")
+    chat: Mapped["Chat"] = relationship(back_populates="events")
 
 
 class Tool(Base):

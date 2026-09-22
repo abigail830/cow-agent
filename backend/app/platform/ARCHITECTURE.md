@@ -66,18 +66,21 @@ Hook order is stabilized in `hooks/hook_config.py` (`sql_viz` always last).
 
 Do not add a `guardrails:` section to new profiles; configure `hooks:` only.
 
-## Memory (hybrid persistence)
+## Memory (Redis SSOT + PG UI projection)
 
-We use MAF providers but **not** the default full auto-save path:
+Agent context uses MAF native history persistence; UI history is a separate append-only projection.
 
-| Component | MAF type | Role |
-|-----------|----------|------|
-| `PostgresHistoryProvider` | `HistoryProvider` | **Load** working-set history (`load_messages=True`, `store_inputs/outputs=False`) |
-| `LongTermMemoryProvider` | `ContextProvider` | Inject user/agent memory bullets |
-| `PlatformCompactionProvider` | `CompactionProvider` | Slim tool rows before model sees history |
-| `SkillsProvider` | context provider | Skill resources |
+| Layer | Component | Role |
+|-------|-----------|------|
+| Agent SSOT | `RedisHistoryProvider` (`agent-framework-redis`) | MAF `Message` list per chat; `store_inputs/outputs=True` |
+| In-run compaction | `Agent.compaction_strategy` → `ContextWindowCompactionStrategy` | Token-budget gate before each model call (on-demand) |
+| Run compaction | `PlatformCompactionProvider` | `before_run`: slim projectors; `after_run`: summarization / tool collapse |
+| Session identity | `SessionStore` | `AgentSession.to_dict()` + agent extensions (Redis + `chats.session_state`) |
+| UI projection | PG `chat_events` | Append-only events → `MessageOut` for sidebar / reload |
+| Cross-session | `LongTermMemoryProvider` | Inject bullets from `memory_snapshots` |
+| Skills | `SkillsProvider` | Skill resources |
 
-**Writes** (assistant text, tool rows, artifacts, slim metadata) are handled by `platform/chat/run_service.py` after each run. This is intentional: slim projectors, artifact SSE, and provider-specific row filtering require explicit application control at the chat run layer.
+**Not in Redis history**: viz / artifact / reasoning platform rows — they are written only to `chat_events` for the UI. MAF auto-store handles user/assistant/tool transcript for the model.
 
 ## Tools
 

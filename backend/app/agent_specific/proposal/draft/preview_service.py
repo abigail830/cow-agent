@@ -8,7 +8,8 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import AgentModel, Chat
-from app.db.repositories.messages import MessageRepository
+from app.db.repositories.chat_events import ChatEventRepository
+from app.platform.chat.event_projection import event_to_dict
 from app.platform.session.session_store import SessionStore
 from app.agent_specific.proposal.draft.draft import build_draft_preview
 from app.agent_specific.proposal.draft.preview import proposal_state_fingerprint
@@ -41,11 +42,12 @@ async def _recover_proposal_draft_from_messages(
     db: AsyncSession,
     chat_id: uuid.UUID,
 ) -> dict | None:
-    messages = await MessageRepository(db).list_by_chat(chat_id)
-    for message in reversed(messages):
-        if message.message_type != "tool_result":
+    events = await ChatEventRepository(db).list_by_chat(chat_id)
+    for event in reversed(events):
+        row = event_to_dict(event)
+        if row.get("message_type") != "tool_result":
             continue
-        meta = message.message_metadata or {}
+        meta = row.get("metadata") or {}
         if meta.get("tool_name") not in _DRAFT_RESULT_TOOLS:
             continue
         result = _coerce_tool_result(meta.get("result"))

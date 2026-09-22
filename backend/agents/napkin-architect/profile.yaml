@@ -13,5 +13,6 @@ allowed_tools:
   - render_plantuml
 
 memory:
-  working_set_turns: 20
-  cold_resume_max_turns: 12
+  compaction:
+    summarization:
+      target_count: 20

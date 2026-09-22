@@ -35,24 +35,30 @@ async def test_fork_chat_copies_messages_and_rewrites_parents(monkeypatch) -> No
         agent_id=agent_id,
         title="LRQ overview",
     )
-    source_messages = [
+    source_events = [
         SimpleNamespace(
             id=parent_id,
-            role="user",
-            content="hi",
-            message_type="text",
-            message_metadata={},
-            parent_id=None,
             sequence=1,
+            event_type="message",
+            payload={
+                "role": "user",
+                "content": "hi",
+                "message_type": "text",
+                "metadata": {},
+                "parent_id": None,
+            },
         ),
         SimpleNamespace(
             id=child_id,
-            role="assistant",
-            content="hello",
-            message_type="text",
-            message_metadata={"streaming": False},
-            parent_id=parent_id,
             sequence=2,
+            event_type="message",
+            payload={
+                "role": "assistant",
+                "content": "hello",
+                "message_type": "text",
+                "metadata": {"streaming": False},
+                "parent_id": str(parent_id),
+            },
         ),
     ]
 
@@ -82,7 +88,7 @@ async def test_fork_chat_copies_messages_and_rewrites_parents(monkeypatch) -> No
 
         async def list_by_chat(self, chat_id):
             assert chat_id == source_id
-            return source_messages
+            return source_events
 
         async def insert_many(self, chat_id, rows, *, flush=True):
             assert len(rows) == 2
@@ -93,7 +99,7 @@ async def test_fork_chat_copies_messages_and_rewrites_parents(monkeypatch) -> No
             assert rows[1]["content"] == "hello"
             return []
 
-    monkeypatch.setattr("app.platform.chat.fork_service.MessageRepository", _Repo)
+    monkeypatch.setattr("app.platform.chat.fork_service.ChatEventRepository", _Repo)
     monkeypatch.setattr(
         "app.platform.chat.fork_service.Chat",
         lambda **kwargs: SimpleNamespace(id=None, **kwargs),

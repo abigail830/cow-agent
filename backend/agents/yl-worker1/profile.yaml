@@ -31,8 +31,9 @@ hooks:
   #   min_rows: 3
 
 memory:
-  working_set_turns: 15
-  cold_resume_max_turns: 10
+  compaction:
+    summarization:
+      target_count: 15
   slim:
     enabled: true
     default_preview_chars: 200

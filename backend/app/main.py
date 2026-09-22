@@ -36,10 +36,20 @@ async def lifespan(app: FastAPI):
         if not IS_VERCEL:
             raise
     try:
-        await check_redis_connection()
-        logger.info("Redis connection OK")
+        redis_ok = await check_redis_connection()
+        if redis_ok:
+            logger.info("Redis connection OK")
+        else:
+            logger.warning(
+                "Redis connection failed — agent history will use in-memory fallback when "
+                "REDIS_HISTORY_FALLBACK=in_memory or REDIS_HISTORY_REQUIRED=false; "
+                "otherwise chat runs will fail until Redis is reachable."
+            )
     except Exception:
-        logger.warning("Redis connection failed — session cache will use DB only")
+        logger.warning(
+            "Redis connection failed — session cache will use DB only; "
+            "agent history requires Redis unless REDIS_HISTORY_FALLBACK=in_memory"
+        )
     try:
         factory = get_async_session_factory()
         disk_profiles = discover_agent_profiles()

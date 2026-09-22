@@ -47,8 +47,9 @@ hooks:
     max_observation_bytes: 80000
 
 memory:
-  working_set_turns: 12
-  cold_resume_max_turns: 8
+  compaction:
+    summarization:
+      target_count: 12
   slim:
     enabled: true
     default_preview_chars: 300

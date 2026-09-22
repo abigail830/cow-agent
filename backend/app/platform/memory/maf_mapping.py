@@ -26,6 +26,10 @@ def _platform_props(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def row_to_dict(row: Any) -> dict[str, Any]:
+    if hasattr(row, "payload") and hasattr(row, "event_type"):
+        from app.platform.chat.event_projection import event_to_dict
+
+        return event_to_dict(row)
     return {
         "id": str(row.id),
         "chat_id": str(row.chat_id),

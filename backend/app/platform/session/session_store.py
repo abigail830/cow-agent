@@ -10,24 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Chat
 from app.db.redis_client import get_redis, is_redis_available
-from app.db.repositories.messages import MessageRepository
-from app.platform.memory.maf_mapping import row_to_dict
-from app.platform.memory.memory_config import MemoryConfig
-from app.platform.memory.turn_window import take_last_turns
 
 logger = logging.getLogger(__name__)
 
 SESSION_TTL_SECONDS = 60 * 60 * 24
-WORKING_SET_VERSION = 2
-# Redis is source of truth for hot session / working-set. Any other top-level
-# key present in DB overlays Redis (Redis may lag or hold stale empties).
-_CORE_PAYLOAD_KEYS = frozenset({"session", "working_set", "type"})
+# Redis is source of truth for hot session identity. DB overlays non-core extension keys.
+_CORE_PAYLOAD_KEYS = frozenset({"session", "type"})
 
 
 class SessionStore:
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
-        self._messages = MessageRepository(db)
 
     def _redis_key(self, chat_id: uuid.UUID) -> str:
         return f"session:{chat_id}"
@@ -68,154 +61,19 @@ class SessionStore:
         await self.save_session(chat_id, session)
         return session
 
-    async def get_working_set_rows(
-        self,
-        chat_id: uuid.UUID,
-        memory_config: MemoryConfig,
-        *,
-        exclude_from_sequence: int | None = None,
-    ) -> list[dict[str, Any]]:
-        """Return working-set rows for model injection (prior turns only, full fidelity)."""
-        payload = await self._load_payload(chat_id)
-        working_set = _extract_working_set(payload)
-
-        if _working_set_valid(working_set, memory_config):
-            rows = list(working_set.get("rows") or [])
-        else:
-            rows = await self._rebuild_working_set(chat_id, memory_config, cold=True)
-            payload = await self._load_payload(chat_id) or {}
-            working_set = _extract_working_set(payload)
-            rows = list((working_set or {}).get("rows") or rows)
-
-        if exclude_from_sequence is not None:
-            rows = [r for r in rows if int(r.get("sequence") or 0) < exclude_from_sequence]
-        return rows
-
-    async def append_completed_turn(
-        self,
-        chat_id: uuid.UUID,
-        memory_config: MemoryConfig,
-        *,
-        turn_start_sequence: int,
-    ) -> None:
-        """Append a completed turn from DB into the Redis working set."""
-        turn_rows = [
-            row_to_dict(row)
-            for row in await self._messages.list_by_chat_since(chat_id, turn_start_sequence)
-        ]
-        await self._merge_turn_rows(chat_id, memory_config, turn_rows)
-
-    async def finalize_turn(
+    async def finalize_run(
         self,
         chat_id: uuid.UUID,
         session: AgentSession,
-        memory_config: MemoryConfig,
-        turn_rows: list[dict[str, Any]],
         *,
         payload_extensions: dict[str, Any] | None = None,
     ) -> None:
-        """Merge persisted turn rows into working set and save MAF session in one payload write."""
+        """Persist MAF session identity and agent extension keys after a run."""
         payload = await self._load_payload(chat_id) or {}
         if payload_extensions:
             payload.update(payload_extensions)
-        if turn_rows:
-            payload = await self._merge_turn_rows_into_payload(
-                chat_id,
-                memory_config,
-                turn_rows,
-                payload=payload,
-            )
         payload["session"] = session.to_dict()
         await self._save_payload(chat_id, payload)
-
-    async def _merge_turn_rows(
-        self,
-        chat_id: uuid.UUID,
-        memory_config: MemoryConfig,
-        turn_rows: list[dict[str, Any]],
-    ) -> None:
-        if not turn_rows:
-            return
-        payload = await self._load_payload(chat_id) or {}
-        payload = await self._merge_turn_rows_into_payload(
-            chat_id,
-            memory_config,
-            turn_rows,
-            payload=payload,
-        )
-        await self._save_payload(chat_id, payload)
-
-    async def _merge_turn_rows_into_payload(
-        self,
-        chat_id: uuid.UUID,
-        memory_config: MemoryConfig,
-        turn_rows: list[dict[str, Any]],
-        *,
-        payload: dict[str, Any],
-    ) -> dict[str, Any]:
-        working_set = _extract_working_set(payload)
-        existing_rows: list[dict[str, Any]] = []
-
-        if _working_set_valid(working_set, memory_config):
-            existing_rows = list(working_set.get("rows") or [])
-        else:
-            existing_rows = await self._rebuild_working_set(chat_id, memory_config, cold=True)
-            payload = await self._load_payload(chat_id) or payload
-            working_set = _extract_working_set(payload)
-            existing_rows = list((working_set or {}).get("rows") or existing_rows)
-
-        existing_sequences = {int(r.get("sequence") or 0) for r in existing_rows}
-        for row in turn_rows:
-            seq = int(row.get("sequence") or 0)
-            if seq in existing_sequences:
-                continue
-            existing_rows.append(row)
-            existing_sequences.add(seq)
-
-        existing_rows.sort(key=lambda r: int(r.get("sequence") or 0))
-        trimmed = take_last_turns(existing_rows, memory_config.working_set_turns)
-        last_sequence = max((int(r.get("sequence") or 0) for r in trimmed), default=0)
-
-        payload["working_set"] = {
-            "version": WORKING_SET_VERSION,
-            "config_hash": memory_config.config_hash(),
-            "last_sequence": last_sequence,
-            "rows": trimmed,
-        }
-        return payload
-
-    async def _rebuild_working_set(
-        self,
-        chat_id: uuid.UUID,
-        memory_config: MemoryConfig,
-        *,
-        cold: bool,
-    ) -> list[dict[str, Any]]:
-        all_rows = await self._load_db_rows(chat_id)
-        max_turns = memory_config.cold_resume_max_turns if cold else memory_config.working_set_turns
-        windowed = take_last_turns(all_rows, max_turns)
-        last_sequence = max((int(r.get("sequence") or 0) for r in windowed), default=0)
-
-        payload = await self._load_payload(chat_id) or {}
-        if "session" not in payload:
-            session = await self.get_session(chat_id)
-            if session is not None:
-                payload["session"] = session.to_dict()
-            else:
-                payload["session"] = AgentSession(session_id=str(chat_id)).to_dict()
-
-        payload["working_set"] = {
-            "version": WORKING_SET_VERSION,
-            "config_hash": memory_config.config_hash(),
-            "last_sequence": last_sequence,
-            "rows": windowed,
-        }
-        await self._save_payload(chat_id, payload)
-        return windowed
-
-    async def _load_db_rows(self, chat_id: uuid.UUID) -> list[dict[str, Any]]:
-        rows = await self._messages.list_by_chat(chat_id)
-        return [row_to_dict(r) for r in rows]
 
     async def _load_payload_from_db(self, chat_id: uuid.UUID) -> dict[str, Any] | None:
         result = await self._db.execute(select(Chat).where(Chat.id == chat_id))
@@ -278,22 +136,3 @@ def _extract_session_dict(payload: dict[str, Any]) -> dict[str, Any] | None:
     if isinstance(session, dict):
         return session
     return None
-
-
-def _extract_working_set(payload: dict[str, Any] | None) -> dict[str, Any] | None:
-    if not payload:
-        return None
-    working_set = payload.get("working_set")
-    if isinstance(working_set, dict):
-        return working_set
-    return None
-
-
-def _working_set_valid(working_set: dict[str, Any] | None, memory_config: MemoryConfig) -> bool:
-    if not working_set:
-        return False
-    if working_set.get("version") != WORKING_SET_VERSION:
-        return False
-    if working_set.get("config_hash") != memory_config.config_hash():
-        return False
-    return isinstance(working_set.get("rows"), list)

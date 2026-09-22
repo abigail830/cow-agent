@@ -1,4 +1,4 @@
-"""Duplicate a chat session (messages only) for fork UX."""
+"""Duplicate a chat session (UI events only) for fork UX."""
 
 from __future__ import annotations
 
@@ -7,15 +7,14 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Chat, Message
-from app.db.repositories.messages import MessageRepository
+from app.db.models import Chat
+from app.db.repositories.chat_events import ChatEventRepository
 
 _TITLE_MAX = 60
 
 
 def build_fork_title(source_title: str | None) -> str:
     base = (source_title or "New Chat").strip() or "New Chat"
-    # Avoid stacking fork- prefixes endlessly.
     if base.lower().startswith("fork-"):
         base = base[5:].lstrip() or "New Chat"
     title = f"fork-{base}"
@@ -36,9 +35,9 @@ async def fork_chat(
     source: Chat,
     user_id: uuid.UUID,
 ) -> tuple[Chat, Chat]:
-    """Create a new chat owned by user_id with a copy of source messages.
+    """Create a new chat with a copy of source UI events.
 
-    Returns (new_chat, source_chat). Does not copy session_state, attachments, or artifacts.
+    Does not copy Redis MAF history, session_state, or attachments.
     """
     if source.user_id != user_id:
         raise PermissionError("Cannot fork another user's chat")
@@ -53,30 +52,37 @@ async def fork_chat(
     db.add(new_chat)
     await db.flush()
 
-    source_messages: list[Message] = await MessageRepository(db).list_by_chat(source.id)
+    source_events = await ChatEventRepository(db).list_by_chat(source.id)
     id_map: dict[uuid.UUID, uuid.UUID] = {}
     rows: list[dict[str, Any]] = []
 
-    for msg in source_messages:
+    for event in source_events:
         new_id = uuid.uuid4()
-        id_map[msg.id] = new_id
+        id_map[event.id] = new_id
+        payload = event.payload if isinstance(event.payload, dict) else {}
+        parent_raw = payload.get("parent_id")
         parent_id = None
-        if msg.parent_id is not None:
-            parent_id = id_map.get(msg.parent_id)
+        if parent_raw:
+            try:
+                parent_uuid = uuid.UUID(str(parent_raw))
+                parent_id = id_map.get(parent_uuid)
+            except ValueError:
+                parent_id = None
         rows.append(
             {
                 "message_id": new_id,
-                "role": msg.role,
-                "content": msg.content,
-                "message_type": msg.message_type,
-                "metadata": _copy_metadata(msg.message_metadata),
+                "role": payload.get("role") or "user",
+                "content": payload.get("content"),
+                "message_type": payload.get("message_type") or "text",
+                "metadata": _copy_metadata(payload.get("metadata")),
                 "parent_id": parent_id,
-                "sequence": int(msg.sequence),
+                "sequence": int(event.sequence),
+                "event_type": event.event_type,
             }
         )
 
     if rows:
-        await MessageRepository(db).insert_many(new_chat.id, rows, flush=True)
+        await ChatEventRepository(db).insert_many(new_chat.id, rows, flush=True)
 
     await db.commit()
     await db.refresh(new_chat)

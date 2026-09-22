@@ -62,20 +62,36 @@ def test_recover_proposal_draft_from_latest_draft_tool_result():
 
     old_draft = {"facts": {"client": {"company_name": "Old Ltd"}}}
     latest_draft = {"facts": {"client": {"company_name": "Latest Ltd"}}}
-    messages = [
+    events = [
         SimpleNamespace(
-            message_type="tool_result",
-            message_metadata={
-                "tool_name": "initialize_proposal_draft",
-                "result": {"status": "ok", "draft": old_draft},
+            id=uuid.uuid4(),
+            chat_id=uuid.uuid4(),
+            sequence=1,
+            event_type="message",
+            payload={
+                "role": "tool",
+                "message_type": "tool_result",
+                "metadata": {
+                    "tool_name": "initialize_proposal_draft",
+                    "result": {"status": "ok", "draft": old_draft},
+                },
             },
+            created_at=None,
         ),
         SimpleNamespace(
-            message_type="tool_result",
-            message_metadata={
-                "tool_name": "patch_proposal_draft",
-                "result": json.dumps({"status": "ok", "draft": latest_draft}),
+            id=uuid.uuid4(),
+            chat_id=uuid.uuid4(),
+            sequence=2,
+            event_type="message",
+            payload={
+                "role": "tool",
+                "message_type": "tool_result",
+                "metadata": {
+                    "tool_name": "patch_proposal_draft",
+                    "result": json.dumps({"status": "ok", "draft": latest_draft}),
+                },
             },
+            created_at=None,
         ),
     ]
 
@@ -84,10 +100,10 @@ def test_recover_proposal_draft_from_latest_draft_tool_result():
             pass
 
         async def list_by_chat(self, _chat_id):
-            return messages
+            return events
 
     async def _run():
-        with patch("app.agent_specific.proposal.draft.preview_service.MessageRepository", FakeRepo):
+        with patch("app.agent_specific.proposal.draft.preview_service.ChatEventRepository", FakeRepo):
             return await _recover_proposal_draft_from_messages(None, uuid.uuid4())
 
     recovered = asyncio.run(_run())

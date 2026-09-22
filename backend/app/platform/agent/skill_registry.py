@@ -19,7 +19,7 @@ class _AutoApproveSkillsProvider(SkillsProvider):
     agent_framework>=1.10 registers load_skill / read_skill_resource /
     run_skill_script with approval_mode="always_require".  The intended
     companion is ToolApprovalMiddleware, but that middleware's multi-loop
-    design is incompatible with PostgresHistoryProvider (it clears
+    design is incompatible with RedisHistoryProvider session restore (it clears
     context.messages and re-runs the agent, causing the previously
     accumulated tool_use to vanish from context so Anthropic 400s on the
     orphaned tool_result).  Bypassing the approval requirement at tool

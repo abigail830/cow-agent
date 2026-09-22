@@ -98,6 +98,8 @@ class Settings(BaseSettings):
 
     database_url: str = Field(validation_alias="DATABASE_URL")
     redis_url: str = Field(validation_alias="REDIS_URL")
+    redis_history_required: bool = Field(default=False, validation_alias="REDIS_HISTORY_REQUIRED")
+    redis_history_fallback: str = Field(default="none", validation_alias="REDIS_HISTORY_FALLBACK")
     yl_database_url: str | None = Field(default=None, validation_alias="YL_DATABASE_URL")
 
     fulfillment_api_base_url: str | None = Field(

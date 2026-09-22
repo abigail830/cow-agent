@@ -17,7 +17,7 @@ from pathlib import Path
 
 from sqlalchemy import delete, func, select
 
-from app.db.models import AgentModel, Chat, ChatAttachment, Message
+from app.db.models import AgentModel, Chat, ChatAttachment, ChatEvent
 from app.db.redis_client import check_redis_connection, get_redis
 from app.db.session import get_async_session_factory, init_db_engine
 from app.agent_specific.proposal.storage import ARTIFACTS_ROOT
@@ -28,10 +28,10 @@ PROPOSAL_AGENT_SLUG = "proposal-composer"
 async def _counts(session, agent_id) -> dict[str, int]:
     chat_filter = Chat.agent_id == agent_id
     chats = await session.scalar(select(func.count()).select_from(Chat).where(chat_filter)) or 0
-    messages = await session.scalar(
+    events = await session.scalar(
         select(func.count())
-        .select_from(Message)
-        .join(Chat, Message.chat_id == Chat.id)
+        .select_from(ChatEvent)
+        .join(Chat, ChatEvent.chat_id == Chat.id)
         .where(chat_filter)
     ) or 0
     attachments = await session.scalar(
@@ -40,7 +40,7 @@ async def _counts(session, agent_id) -> dict[str, int]:
         .join(Chat, ChatAttachment.chat_id == Chat.id)
         .where(chat_filter)
     ) or 0
-    return {"chats": chats, "messages": messages, "attachments": attachments}
+    return {"chats": chats, "events": events, "attachments": attachments}
 
 
 async def _list_chat_ids(session, agent_id) -> list:
@@ -94,7 +94,7 @@ async def main(
 
         print(f"Agent: {PROPOSAL_AGENT_SLUG} ({agent_id})")
         print(f"Chats: {counts['chats']}")
-        print(f"Messages: {counts['messages']}")
+        print(f"Chat events: {counts['events']}")
         print(f"Attachments: {counts['attachments']}")
 
         if counts["chats"]:

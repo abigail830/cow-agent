@@ -1,22 +1,30 @@
-"""MAF CompactionProvider integration for platform slim projectors."""
+"""MAF CompactionProvider integration for platform slim + token-budget strategies."""
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-from agent_framework import CompactionProvider, Message
+from agent_framework import (
+    CompactionProvider,
+    ContextWindowCompactionStrategy,
+    Message,
+    SummarizationStrategy,
+    ToolResultCompactionStrategy,
+)
 
 from app.platform.memory.maf_mapping import maf_messages_to_projection_rows, to_maf_messages
 from app.platform.memory.memory_config import MemoryConfig
+from app.platform.memory.redis_history import HISTORY_SOURCE_ID
 from app.platform.memory.slimmer import HistoryProjection
 
-HISTORY_SOURCE_ID = "postgres-history"
+logger = logging.getLogger(__name__)
 
 
 class PlatformSlimCompactionStrategy:
     """Apply HistoryProjection slim rules to prior-turn MAF messages.
 
-    Used only via PlatformCompactionProvider.before_run on the postgres-history
+    Used only via PlatformCompactionProvider.before_run on the redis-history
     bucket. Do NOT attach as Agent.compaction_strategy: MAF apply_compaction runs
     on the full in-flight list (history + current turn), which would strip live
     skill/SQL payloads the model still needs within the same run.
@@ -73,17 +81,55 @@ class PlatformCompactionProvider(CompactionProvider):
             context.context_messages[self.history_source_id] = working
 
 
-def build_platform_compaction(memory_config: MemoryConfig) -> tuple[PlatformSlimCompactionStrategy | None, PlatformCompactionProvider | None]:
-    """Return (strategy, provider) when slim is enabled; otherwise (None, None)."""
-    if not memory_config.slim.enabled:
-        return None, None
-
-    strategy = PlatformSlimCompactionStrategy(memory_config)
-    provider = PlatformCompactionProvider(
-        before_strategy=strategy,
-        history_source_id=HISTORY_SOURCE_ID,
+def build_in_run_compaction_strategy(memory_config: MemoryConfig) -> ContextWindowCompactionStrategy | None:
+    """Token-budget compaction before each model call (Eve-style on-demand gate)."""
+    compaction = memory_config.compaction
+    if not compaction.enabled:
+        return None
+    return ContextWindowCompactionStrategy(
+        max_context_window_tokens=compaction.max_context_window_tokens,
+        max_output_tokens=compaction.max_output_tokens,
+        tool_eviction_threshold=compaction.tool_eviction_threshold,
+        truncation_threshold=compaction.truncation_threshold,
     )
-    return strategy, provider
+
+
+def build_platform_compaction(
+    memory_config: MemoryConfig,
+    *,
+    summarization_client: Any | None = None,
+) -> tuple[ContextWindowCompactionStrategy | None, PlatformCompactionProvider | None]:
+    """Return (in_run_strategy, compaction_provider).
+
+    in_run_strategy is passed to Agent.compaction_strategy (per model call).
+    compaction_provider handles before_run slim and after_run persistent compaction.
+    """
+    before_strategy: PlatformSlimCompactionStrategy | None = None
+    if memory_config.slim.enabled:
+        before_strategy = PlatformSlimCompactionStrategy(memory_config)
+
+    after_strategy: SummarizationStrategy | ToolResultCompactionStrategy | None = None
+    compaction = memory_config.compaction
+    if compaction.enabled:
+        if compaction.summarization.enabled and summarization_client is not None:
+            after_strategy = SummarizationStrategy(
+                client=summarization_client,
+                target_count=compaction.summarization.target_count,
+                threshold=compaction.summarization.threshold,
+            )
+        else:
+            after_strategy = ToolResultCompactionStrategy(keep_last_tool_call_groups=2)
+
+    provider: PlatformCompactionProvider | None = None
+    if before_strategy is not None or after_strategy is not None:
+        provider = PlatformCompactionProvider(
+            before_strategy=before_strategy,
+            after_strategy=after_strategy,
+            history_source_id=HISTORY_SOURCE_ID,
+        )
+
+    in_run = build_in_run_compaction_strategy(memory_config)
+    return in_run, provider
 
 
 def _rows_unchanged(before: list[dict[str, Any]], after: list[dict[str, Any]]) -> bool:

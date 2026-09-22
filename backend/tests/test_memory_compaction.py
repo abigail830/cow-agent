@@ -116,10 +116,19 @@ async def test_platform_slim_compaction_noop_when_disabled():
 
 
 def test_build_platform_compaction_disabled_returns_none():
-    memory_config = parse_memory_config({"memory": {"slim": {"enabled": False}}})
-    strategy, provider = build_platform_compaction(memory_config)
-    assert strategy is None
+    memory_config = parse_memory_config(
+        {"memory": {"slim": {"enabled": False}, "compaction": {"enabled": False}}}
+    )
+    in_run, provider = build_platform_compaction(memory_config)
+    assert in_run is None
     assert provider is None
+
+
+def test_build_platform_compaction_returns_in_run_when_enabled():
+    memory_config = parse_memory_config({"memory": {"slim": {"enabled": False}}})
+    in_run, provider = build_platform_compaction(memory_config)
+    assert in_run is not None
+    assert provider is not None
 
 
 def test_maf_round_trip_preserves_skill_metadata():

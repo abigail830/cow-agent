@@ -8,7 +8,7 @@ from app.db.models import AgentModel
 from app.platform.memory.compaction import build_platform_compaction
 from app.platform.memory.long_term.context_provider import LongTermMemoryProvider
 from app.platform.memory.memory_config import parse_memory_config
-from app.platform.memory.postgres_history import PostgresHistoryProvider
+from app.platform.memory.redis_history import create_history_provider
 from app.platform.agent.agent_bundle import AgentBundle
 from app.platform.mcp.mcp_pool import McpPoolHandle
 from app.platform.hooks.hook_config import normalize_hooks
@@ -31,6 +31,7 @@ from app.platform.agent.plugin_registry import tool_names_for_slug, viz_tool_nam
 from app.platform.agent.builtin_registry import BUILTIN_TOOLS
 from app.platform.agent.platform_time import PLATFORM_TIME_TOOL_NAME
 from app.platform.agent.tool_groups import resolve_builtin_tools
+from app.platform.llm.utility_models import UtilityModelRegistry, UtilityPurpose
 
 
 class AgentFactory:
@@ -40,6 +41,7 @@ class AgentFactory:
         self._tools = ToolRegistry(db)
         self._mcp = McpRegistry(db)
         self._skills = SkillRegistry(db)
+        self._utility = UtilityModelRegistry()
 
     async def get_agent_row(self, agent_id: uuid.UUID) -> AgentModel:
         result = await self._db.execute(select(AgentModel).where(AgentModel.id == agent_id))
@@ -78,11 +80,13 @@ class AgentFactory:
         user_id: uuid.UUID | None = None,
         model_id: str | None = None,
         stop_event: asyncio.Event | None = None,
-        turn_start_sequence: int | None = None,
         session_store: SessionStore | None = None,
         mcp_tools: list | None = None,
         mcp_pool_handle: McpPoolHandle | None = None,
     ) -> AgentBundle:
+        if chat_id is None:
+            raise ValueError("chat_id is required for RedisHistoryProvider")
+
         row = await self.get_agent_row(agent_id)
         model_entry = resolve_agent_model(row, model_id)
         provider = ModelProvider(model_entry.provider)
@@ -90,15 +94,17 @@ class AgentFactory:
 
         memory_config = parse_memory_config(row.config)
         store = session_store or SessionStore(self._db)
-        history = PostgresHistoryProvider(
-            self._db,
-            session_store=store,
-            memory_config=memory_config,
-            pending_turn_start_sequence=turn_start_sequence,
-            model_provider=provider.value,
-            model_id=model_entry.id,
+        history = await create_history_provider(chat_id=chat_id, agent_id=agent_id)
+
+        summarization_client = None
+        if memory_config.compaction.enabled and memory_config.compaction.summarization.enabled:
+            summarization_client = self._utility.get_client(UtilityPurpose.HISTORY_COMPACTION)
+
+        in_run_compaction, compaction_provider = build_platform_compaction(
+            memory_config,
+            summarization_client=summarization_client,
         )
-        _, compaction_provider = build_platform_compaction(memory_config)
+
         context_providers: list = [history]
         if memory_config.long_term.enabled and user_id is not None:
             context_providers.append(
@@ -170,6 +176,8 @@ class AgentFactory:
 
         instructions = append_platform_instructions(row.instructions)
 
+        per_service_call_persist = memory_config.compaction.enabled
+
         agent = self._registry.create_agent(
             name=row.name,
             instructions=instructions,
@@ -178,6 +186,7 @@ class AgentFactory:
             context_providers=context_providers,
             middleware=middleware,
             tools=combined_tools or None,
-            require_per_service_call_history_persistence=False,
+            compaction_strategy=in_run_compaction,
+            require_per_service_call_history_persistence=per_service_call_persist,
         )
         return AgentBundle(agent=agent, mcp_pool_handle=mcp_pool_handle)

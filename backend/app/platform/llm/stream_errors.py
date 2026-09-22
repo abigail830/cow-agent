@@ -25,6 +25,17 @@ def user_facing_stream_error(exc: Exception | str) -> str:
             "Claude authentication failed (401). Check CLAUDE_AZURE_API_KEY and "
             "CLAUDE_AZURE_FOUNDRY_ENDPOINT in backend/.env match your Azure resource region."
         )
+    if "redis" in lower and ("connect" in lower or "connection" in lower or "nodename" in lower):
+        return (
+            "Conversation history storage (Redis) is unreachable. "
+            "For local dev: run Redis locally (redis-server) and set REDIS_URL=redis://localhost:6379/0, "
+            "or set REDIS_HISTORY_FALLBACK=in_memory in backend/.env."
+        )
+    if "agent conversation history requires redis" in lower:
+        return (
+            "Conversation history storage (Redis) is required but unavailable. "
+            "Check REDIS_URL or use REDIS_HISTORY_FALLBACK=in_memory for local dev."
+        )
     if "mcp server" in lower and "failed to initialize" in lower:
         if "cancel scope" in lower or "cancelled" in lower:
             return (

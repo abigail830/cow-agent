@@ -99,7 +99,7 @@ def test_trigger_auto_run_false_query_param(trigger_client):
 async def test_persist_trigger_user_message_inserts_user_row():
     db = MagicMock()
     with patch(
-        "app.agent_specific.yl_worker2.triggers.handler.MessageRepository"
+        "app.agent_specific.yl_worker2.triggers.handler.ChatEventRepository"
     ) as repo_cls:
         repo = repo_cls.return_value
         repo.insert = AsyncMock()

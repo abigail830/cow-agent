@@ -34,7 +34,10 @@ async def test_viz_tools_omitted_when_not_in_allowed_tools():
 
     with (
         patch.object(AgentFactory, "get_agent_row", AsyncMock(return_value=mock_row)),
-        patch("app.platform.agent.agent_factory.PostgresHistoryProvider"),
+        patch(
+            "app.platform.agent.agent_factory.create_history_provider",
+            AsyncMock(return_value=MagicMock()),
+        ),
         patch("app.platform.agent.agent_factory.SkillRegistry") as skill_reg_cls,
         patch("app.platform.agent.agent_factory.ToolRegistry") as tool_reg_cls,
         patch("app.platform.agent.agent_factory.McpRegistry") as mcp_reg_cls,
@@ -48,7 +51,7 @@ async def test_viz_tools_omitted_when_not_in_allowed_tools():
             created.update(kwargs) or MagicMock()
         )
 
-        await AgentFactory(MagicMock()).build(agent_id)
+        await AgentFactory(MagicMock()).build(agent_id, chat_id=UUID("11111111-1111-1111-1111-111111111111"))
 
     names = _tool_names(created.get("tools"))
     assert "suggest_visualization" not in names
@@ -72,7 +75,10 @@ async def test_viz_tools_included_when_allowed_and_sql_viz_hook_present():
 
     with (
         patch.object(AgentFactory, "get_agent_row", AsyncMock(return_value=mock_row)),
-        patch("app.platform.agent.agent_factory.PostgresHistoryProvider"),
+        patch(
+            "app.platform.agent.agent_factory.create_history_provider",
+            AsyncMock(return_value=MagicMock()),
+        ),
         patch("app.platform.agent.agent_factory.SkillRegistry") as skill_reg_cls,
         patch("app.platform.agent.agent_factory.ToolRegistry") as tool_reg_cls,
         patch("app.platform.agent.agent_factory.McpRegistry") as mcp_reg_cls,
@@ -86,7 +92,7 @@ async def test_viz_tools_included_when_allowed_and_sql_viz_hook_present():
             created.update(kwargs) or MagicMock()
         )
 
-        await AgentFactory(MagicMock()).build(agent_id)
+        await AgentFactory(MagicMock()).build(agent_id, chat_id=UUID("11111111-1111-1111-1111-111111111111"))
 
     names = _tool_names(created.get("tools"))
     assert "suggest_visualization" in names
