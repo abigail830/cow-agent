@@ -115,6 +115,10 @@ export const api = {
     request<ChatForkResult>(`/chats/${encodeURIComponent(chatId)}/fork`, {
       method: 'POST',
     }),
+  deleteChat: (chatId: string) =>
+    request<void>(`/chats/${encodeURIComponent(chatId)}`, {
+      method: 'DELETE',
+    }),
   listMessages: (chatId: string) => request<Message[]>(`/chats/${chatId}/messages`),
   listTimeline: (chatId: string) => request<ChatTimeline>(`/chats/${chatId}/timeline`),
   getContextUsage: (chatId: string) =>

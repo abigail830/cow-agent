@@ -46,7 +46,7 @@ import {
   getAgentSession,
   type AgentChatSession,
 } from '../lib/agentChatSession'
-import { getStoredChatId, setStoredChatId } from '../lib/chatStorage'
+import { clearStoredChatId, getStoredChatId, setStoredChatId } from '../lib/chatStorage'
 import { getStoredModelId, setStoredModelId } from '../lib/modelStorage'
 import { StreamRegistry } from '../lib/streamRegistry'
 import {
@@ -82,6 +82,7 @@ import {
   applyStreamToolCall,
   applyStreamToolResult,
   applyStreamViz,
+  applyDoneTurnMessages,
   finalizeStreamLocalMessages,
   isActiveStreamPlaceholder,
   finalizeStreamReasoning,
@@ -229,6 +230,7 @@ export function ChatPage() {
   const proposalPanelTabRef = useRef(new Map<string, ProposalPanelTab>())
   const [memoryRefreshKey, setMemoryRefreshKey] = useState(0)
   const [forkingChat, setForkingChat] = useState(false)
+  const [deletingChatId, setDeletingChatId] = useState<string | null>(null)
   const [forkBannerByChatId, setForkBannerByChatId] = useState<Record<string, ForkBannerState>>({})
   const messagesScrollRef = useRef<HTMLDivElement>(null)
   const pinToBottomRef = useRef(true)
@@ -1294,7 +1296,11 @@ export function ChatPage() {
     const previousStream = streamRegistryRef.current.get(activeChatId)
     streamRegistryRef.current.abort(activeChatId)
 
-    if (previousStream?.streamIdleSeen && !previousStream.reloadedAfterStream) {
+    if (
+      previousStream?.streamIdleSeen &&
+      !previousStream.reloadedAfterStream &&
+      !previousStream.messagesSyncedFromDone
+    ) {
       try {
         await reloadMessagesAfterStream(agentId, activeChatId)
         previousStream.reloadedAfterStream = true
@@ -1303,8 +1309,7 @@ export function ChatPage() {
       }
     }
 
-    // Drop only active SSE placeholders from an aborted/incomplete stream. Committed
-    // local-* rows from a finished turn must stay until timeline reload replaces them.
+    // Drop only active SSE placeholders from an aborted/incomplete stream.
     patchSession(agentId, (prev) => ({
       messages: prev.messages.filter((msg) => !isActiveStreamPlaceholder(msg)),
     }))
@@ -1450,18 +1455,17 @@ export function ChatPage() {
 
     const finishTurnAfterStream = async () => {
       const handle = streamRegistryRef.current.get(activeChatId)
-      if (!handle || handle.generation !== generation || handle.reloadedAfterStream) return
-      handle.reloadedAfterStream = true
+      if (!handle || handle.generation !== generation) return
       try {
-        patchStreamSession({
-          loading: false,
-          activeRunId: null,
-          turnSyncPhase: 'saving-messages',
-        })
-        patchStreamSession((prev) => ({
-          messages: finalizeStreamLocalMessages(prev.messages),
-        }))
-        await reloadMessagesAfterStream(agentId, activeChatId)
+        if (!handle.reloadedAfterStream) {
+          handle.reloadedAfterStream = true
+          if (!handle.messagesSyncedFromDone) {
+            patchStreamSession((prev) => ({
+              messages: finalizeStreamLocalMessages(prev.messages),
+            }))
+            await reloadMessagesAfterStream(agentId, activeChatId)
+          }
+        }
 
         if (composer && !handle.previewFreshFromStream) {
           void fetchProposalPreview(agentId, activeChatId)
@@ -1620,6 +1624,14 @@ export function ChatPage() {
             }
             if (doneMessages != null && turnStartDisplaySequence != null) {
               handle.messagesSyncedFromDone = true
+              handle.reloadedAfterStream = true
+              patchStreamSession((prev) => ({
+                messages: applyDoneTurnMessages(
+                  prev.messages,
+                  doneMessages,
+                  turnStartDisplaySequence,
+                ),
+              }))
             }
             if (doneContextUsage != null) {
               patchStreamSession(() => ({
@@ -1761,6 +1773,63 @@ export function ChatPage() {
     refreshChatHistory,
     patchSession,
   ])
+
+  const handleDeleteChat = useCallback(
+    async (id: string) => {
+      if (!selectedId || deletingChatId) return
+      const current = getAgentSession(sessionsRef.current, selectedId)
+      const wasActive = current.chatId === id
+      if (wasActive) {
+        streamRegistryRef.current.abort(id)
+      }
+
+      setDeletingChatId(id)
+      try {
+        await api.deleteChat(id)
+      } catch (e) {
+        patchSession(selectedId, {
+          error: e instanceof Error ? e.message : 'Failed to delete conversation',
+        })
+        throw e
+      } finally {
+        setDeletingChatId(null)
+      }
+
+      clearForkBanner(id)
+      setForkBannerByChatId((prev) => {
+        if (!prev[id]) return prev
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
+
+      const remaining = current.chatHistory.filter((row) => row.id !== id)
+      patchSession(selectedId, { chatHistory: remaining })
+
+      if (!wasActive) return
+
+      fulfillment.resetFetchKey()
+      proposalFetchKeyRef.current = null
+      if (remaining.length > 0) {
+        const nextId = pickMostRecentChatId(remaining)
+        if (nextId) {
+          await openChatById(selectedId, nextId)
+          return
+        }
+      }
+      clearStoredChatId(selectedId)
+      enterDraftMode(selectedId)
+      patchSession(selectedId, fulfillment.newChatPatch())
+    },
+    [
+      selectedId,
+      deletingChatId,
+      enterDraftMode,
+      fulfillment,
+      openChatById,
+      patchSession,
+    ],
+  )
 
   useEffect(() => {
     return () => {
@@ -2216,8 +2285,10 @@ export function ChatPage() {
               chats={chatHistory}
               activeChatId={chatId}
               loading={chatHistoryLoading}
+              deletingChatId={deletingChatId}
               onClose={() => setHistoryOpen(false)}
               onSelect={(id) => void openHistoryChat(id)}
+              onDelete={handleDeleteChat}
             />
             <IntegrationsDrawer open={integrationsOpen} onClose={() => setIntegrationsOpen(false)} />
           </div>

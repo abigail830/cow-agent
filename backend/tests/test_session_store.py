@@ -72,3 +72,15 @@ async def test_load_payload_does_not_invent_extension_keys():
 
     assert "proposal_draft" not in payload
     assert "fulfillment_forms" not in payload
+
+
+@pytest.mark.asyncio
+async def test_delete_session_removes_redis_key(monkeypatch):
+    chat_id = uuid.uuid4()
+    store = SessionStore(AsyncMock())
+    redis = AsyncMock()
+    monkeypatch.setattr("app.platform.session.session_store.get_redis", lambda: redis)
+
+    await store.delete_session(chat_id)
+
+    redis.delete.assert_awaited_once_with(f"session:{chat_id}")

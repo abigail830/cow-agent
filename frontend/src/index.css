@@ -867,13 +867,20 @@ body {
   list-style: none;
 }
 
+.chat-history-panel-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 .chat-history-panel-item {
   display: block;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   border: none;
   background: transparent;
-  padding: 0.625rem 1rem;
+  padding: 0.625rem 2.25rem 0.625rem 1rem;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -886,9 +893,106 @@ body {
   transition: background 0.12s;
 }
 
-.chat-history-panel-item:hover,
-.chat-history-panel-item-active {
+.chat-history-panel-row:hover .chat-history-panel-item,
+.chat-history-panel-row:focus-within .chat-history-panel-item,
+.chat-history-panel-item-active,
+.chat-history-panel-row-active .chat-history-panel-item {
   background: rgba(255, 255, 255, 0.55);
+}
+
+.chat-history-panel-delete {
+  position: absolute;
+  right: 0.4rem;
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 0.12s, color 0.12s, background 0.12s;
+}
+
+.chat-history-panel-row:hover .chat-history-panel-delete,
+.chat-history-panel-row:focus-within .chat-history-panel-delete {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .chat-history-panel-delete {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.chat-history-panel-delete:hover:not(:disabled) {
+  color: #b91c1c;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.chat-history-panel-delete:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.chat-history-delete-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(24, 24, 27, 0.35);
+}
+
+.chat-history-delete-dialog {
+  width: min(22rem, 100%);
+  padding: 1.25rem 1.25rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-raised);
+  box-shadow: 0 18px 40px rgba(24, 24, 27, 0.16);
+}
+
+.chat-history-delete-dialog h3 {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.chat-history-delete-dialog p {
+  margin: 0 0 1.125rem;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+.chat-history-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.btn-danger {
+  background: #dc2626;
+  color: #fff;
+  border-color: #b91c1c;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
 }
 
 .chat-header-memory-icon {

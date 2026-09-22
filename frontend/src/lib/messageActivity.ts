@@ -502,12 +502,16 @@ export function mergeMessagesFromApi(persisted: Message[], local: Message[]): Me
   return Array.from(merged.values()).sort((a, b) => a.sequence - b.sequence)
 }
 
-/** Active SSE placeholders only — committed local-* rows stay until timeline reload. */
+/** Active SSE placeholders only — not persisted turn rows. */
 function isEphemeralLocalMessage(message: Message): boolean {
   if (message.id === LOCAL_STREAM_TEXT_ID || message.id === LOCAL_STREAM_REASONING_ID) {
     return true
   }
   return message.metadata?.streaming === true
+}
+
+function isLocalStreamRow(message: Message): boolean {
+  return message.id.startsWith('local-')
 }
 
 function dropConfirmedTmpUsers(messages: Message[]): Message[] {
@@ -529,9 +533,9 @@ export function applyDoneTurnMessages(
   const merged = new Map<string, Message>()
 
   for (const message of local) {
-    if (message.sequence < turnStartDisplaySequence && !isEphemeralLocalMessage(message)) {
-      merged.set(message.id, message)
-    }
+    if (message.sequence >= turnStartDisplaySequence) continue
+    if (isEphemeralLocalMessage(message) || isLocalStreamRow(message)) continue
+    merged.set(message.id, message)
   }
   for (const message of doneMessages) {
     merged.set(message.id, message)
@@ -554,7 +558,12 @@ export function applyDoneTurnMessages(
   }
 
   return dropConfirmedTmpUsers(
-    Array.from(merged.values()).sort((a, b) => a.sequence - b.sequence),
+    Array.from(merged.values())
+      .filter((message) => {
+        if (message.sequence < turnStartDisplaySequence) return true
+        return !isEphemeralLocalMessage(message) && !isLocalStreamRow(message)
+      })
+      .sort((a, b) => a.sequence - b.sequence),
   )
 }
 

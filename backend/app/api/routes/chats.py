@@ -32,6 +32,7 @@ from app.db.session import get_db
 from app.platform.attachments.service import AttachmentService
 from app.platform.chat.run_service import ChatRunService, list_chat_messages, list_chat_timeline
 from app.platform.chat.fork_service import fork_chat
+from app.platform.chat.delete_service import delete_chat
 from app.platform.llm.stream_errors import user_facing_stream_error
 from app.agent_specific.proposal.preview_service import get_chat_proposal_draft, get_chat_proposal_preview, load_chat_proposal_draft
 from app.agent_specific.yl_worker2.fulfillment.service import (
@@ -95,6 +96,15 @@ async def create_chat(
     await db.commit()
     await db.refresh(chat)
     return ChatOut(id=chat.id, user_id=chat.user_id, agent_id=chat.agent_id, title=chat.title)
+
+
+@router.delete("/{chat_id}", status_code=204)
+async def delete_chat_route(
+    chat: Chat = Depends(get_owned_chat),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    await delete_chat(db, chat)
+    return Response(status_code=204)
 
 
 @router.post("/{chat_id}/fork", response_model=ChatForkOut, status_code=201)

@@ -86,6 +86,21 @@ class RunManager:
             return False
         return await self._run_finalize_once(run)
 
+    async def cancel_for_chat(self, chat_id: uuid.UUID) -> ActiveRun | None:
+        run_id = self._chat_to_run.get(chat_id)
+        if run_id is None:
+            return None
+        return await self.cancel(run_id)
+
+    async def discard_chat(self, chat_id: uuid.UUID) -> ActiveRun | None:
+        """Cancel any in-flight run and drop the chat from the in-process registry."""
+        run = await self.cancel_for_chat(chat_id)
+        async with self._lock:
+            run_id = self._chat_to_run.pop(chat_id, None)
+            if run_id is not None:
+                self._runs.pop(run_id, None)
+        return run
+
     async def complete(self, run_id: uuid.UUID) -> None:
         async with self._lock:
             run = self._runs.pop(run_id, None)

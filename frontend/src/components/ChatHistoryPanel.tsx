@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import type { ChatSummary } from '../types'
 
 type Props = {
@@ -6,8 +7,10 @@ type Props = {
   chats: ChatSummary[]
   activeChatId: string | null
   loading: boolean
+  deletingChatId?: string | null
   onClose: () => void
   onSelect: (chatId: string) => void
+  onDelete: (chatId: string) => Promise<void>
 }
 
 type ChatGroup = {
@@ -41,30 +44,69 @@ function groupChats(chats: ChatSummary[]): ChatGroup[] {
   return groups
 }
 
+function chatLabel(chat: ChatSummary): string {
+  return chat.title?.trim() || 'New Chat'
+}
+
 export function ChatHistoryPanel({
   open,
   chats,
   activeChatId,
   loading,
+  deletingChatId = null,
   onClose,
   onSelect,
+  onDelete,
 }: Props) {
+  const [pendingDelete, setPendingDelete] = useState<ChatSummary | null>(null)
+  const [confirming, setConfirming] = useState(false)
+
+  useEffect(() => {
+    if (!open) setPendingDelete(null)
+  }, [open])
+
+  useEffect(() => {
+    if (!pendingDelete) return
+    if (!chats.some((chat) => chat.id === pendingDelete.id)) {
+      setPendingDelete(null)
+    }
+  }, [chats, pendingDelete])
+
   useEffect(() => {
     if (!open) return
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key !== 'Escape') return
+      if (pendingDelete) {
+        if (!confirming) setPendingDelete(null)
+        return
+      }
+      onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [open, onClose])
+  }, [open, onClose, pendingDelete, confirming])
 
   const groups = groupChats(chats)
 
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete || confirming) return
+    setConfirming(true)
+    try {
+      await onDelete(pendingDelete.id)
+      setPendingDelete(null)
+    } catch {
+      /* parent surfaces the error */
+    } finally {
+      setConfirming(false)
+    }
+  }
+
   return (
-    <aside
-      className={`chat-history-panel ${open ? 'chat-history-panel-open' : ''}`}
-      aria-hidden={!open}
-    >
+    <>
+      <aside
+        className={`chat-history-panel ${open ? 'chat-history-panel-open' : ''}`}
+        aria-hidden={!open}
+      >
       <div className="chat-history-panel-inner">
         <div className="chat-history-panel-header">
           <button
@@ -102,14 +144,33 @@ export function ChatHistoryPanel({
                 <ul className="chat-history-panel-list">
                   {group.chats.map((chat) => {
                     const active = chat.id === activeChatId
+                    const deleting = chat.id === deletingChatId
+                    const title = chatLabel(chat)
                     return (
-                      <li key={chat.id}>
+                      <li
+                        key={chat.id}
+                        className={`chat-history-panel-row ${active ? 'chat-history-panel-row-active' : ''}`}
+                      >
                         <button
                           type="button"
                           className={`chat-history-panel-item ${active ? 'chat-history-panel-item-active' : ''}`}
                           onClick={() => onSelect(chat.id)}
+                          disabled={deleting}
                         >
-                          {chat.title || 'New Chat'}
+                          {title}
+                        </button>
+                        <button
+                          type="button"
+                          className="chat-history-panel-delete"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setPendingDelete(chat)
+                          }}
+                          disabled={deleting}
+                          aria-label={`Delete ${title}`}
+                          title="Delete"
+                        >
+                          <Trash2 size={14} strokeWidth={2} aria-hidden />
                         </button>
                       </li>
                     )
@@ -120,5 +181,49 @@ export function ChatHistoryPanel({
         </div>
       </div>
     </aside>
+
+      {pendingDelete ? (
+        <div
+          className="chat-history-delete-overlay"
+          role="presentation"
+          onClick={() => {
+            if (!confirming) setPendingDelete(null)
+          }}
+        >
+          <div
+            className="chat-history-delete-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="chat-history-delete-title"
+            aria-describedby="chat-history-delete-desc"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 id="chat-history-delete-title">Delete conversation?</h3>
+            <p id="chat-history-delete-desc">
+              This permanently deletes “{chatLabel(pendingDelete)}” and all of its
+              messages, files, and artifacts. This cannot be undone.
+            </p>
+            <div className="chat-history-delete-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setPendingDelete(null)}
+                disabled={confirming}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => void handleConfirmDelete()}
+                disabled={confirming}
+              >
+                {confirming ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   )
 }

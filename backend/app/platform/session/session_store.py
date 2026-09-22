@@ -116,6 +116,13 @@ class SessionStore:
             logger.debug("Redis session read failed for %s; falling back to DB", chat_id)
         return None
 
+    async def delete_session(self, chat_id: uuid.UUID) -> None:
+        """Drop the Redis hot cache for this chat. DB session_state is removed with the chat row."""
+        try:
+            await get_redis().delete(self._redis_key(chat_id))
+        except Exception:
+            logger.debug("Redis session delete failed for %s", chat_id)
+
     async def _set_redis(self, chat_id: uuid.UUID, payload: dict) -> None:
         if not is_redis_available():
             return
