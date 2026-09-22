@@ -18,8 +18,120 @@ def display_sequence(base_sequence: int, index: int = 0) -> int:
     return int(base_sequence) * _SEQUENCE_SCALE + index
 
 
+def platform_dict_from_message(message: ChatMessage) -> dict[str, Any]:
+    body = message.body if isinstance(message.body, dict) else {}
+    props = body.get("additional_properties") or {}
+    platform = props.get("platform") if isinstance(props, dict) else None
+    return platform if isinstance(platform, dict) else {}
+
+
+def turn_ui_timeline_anchors(messages: list[ChatMessage]) -> dict[uuid.UUID, uuid.UUID]:
+    """Map turn_id → anchor message id when a turn stores interleaved ui_timeline."""
+    anchors: dict[uuid.UUID, uuid.UUID] = {}
+    for message in messages:
+        if message.role != "assistant":
+            continue
+        if platform_dict_from_message(message).get("ui_timeline"):
+            anchors.setdefault(message.turn_id, message.id)
+    return anchors
+
+
+def _expand_ui_timeline_rows(message: ChatMessage, timeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    created_at = message.created_at.isoformat() if message.created_at else None
+    rows: list[dict[str, Any]] = []
+    for index, item in enumerate(timeline):
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "")
+        metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+        base = {
+            "id": f"{message.id}:{index}",
+            "chat_id": str(message.chat_id),
+            "parent_id": str(message.id),
+            "sequence": display_sequence(message.sequence, index),
+            "turn_id": str(message.turn_id),
+            "created_at": created_at,
+        }
+        if kind == "reasoning":
+            rows.append(
+                {
+                    **base,
+                    "role": "assistant",
+                    "message_type": "reasoning",
+                    "content": str(item.get("content") or ""),
+                    "metadata": metadata,
+                }
+            )
+            continue
+        if kind == "text":
+            rows.append(
+                {
+                    **base,
+                    "role": "assistant",
+                    "message_type": "text",
+                    "content": str(item.get("content") or ""),
+                    "metadata": metadata,
+                }
+            )
+            continue
+        if kind in {"tool_call", "mcp_call"}:
+            rows.append(
+                {
+                    **base,
+                    "role": "assistant",
+                    "message_type": "tool_call",
+                    "content": None,
+                    "metadata": metadata,
+                }
+            )
+            continue
+        if kind == "tool_result":
+            rows.append(
+                {
+                    **base,
+                    "role": "tool",
+                    "message_type": "tool_result",
+                    "content": item.get("content"),
+                    "metadata": metadata,
+                }
+            )
+            continue
+        if kind == "artifact":
+            spec = metadata.get("spec") if isinstance(metadata.get("spec"), dict) else {}
+            title = spec.get("title") or item.get("content") or spec.get("artifact_id") or "artifact"
+            rows.append(
+                {
+                    **base,
+                    "role": "assistant",
+                    "message_type": "artifact",
+                    "content": title,
+                    "metadata": metadata,
+                }
+            )
+            continue
+        if kind == "viz":
+            spec = metadata.get("spec") if isinstance(metadata.get("spec"), dict) else {}
+            title = spec.get("title") or item.get("content") or "viz"
+            rows.append(
+                {
+                    **base,
+                    "role": "assistant",
+                    "message_type": "viz",
+                    "content": title,
+                    "metadata": metadata,
+                }
+            )
+    return rows
+
+
 def expand_message_to_platform_rows(message: ChatMessage) -> list[dict[str, Any]]:
     """Expand one MAF Message row into legacy platform MessageOut rows for UI."""
+    ui_timeline = platform_dict_from_message(message).get("ui_timeline")
+    if isinstance(ui_timeline, list) and ui_timeline:
+        expanded = _expand_ui_timeline_rows(message, ui_timeline)
+        if expanded:
+            return expanded
+
     maf = message_from_body(message.body)
     rows = maf_message_to_rows(
         str(message.chat_id),
@@ -140,10 +252,15 @@ def merge_timeline_to_message_outs(
     include_run_markers: bool = False,
 ) -> list[dict[str, Any]]:
     """Merge messages and ui_annotations by sequence into flat MessageOut list."""
+    ui_timeline_turns = turn_ui_timeline_anchors(messages)
     items: list[tuple[int, str, Any]] = []
     for message in messages:
+        if message.turn_id in ui_timeline_turns and message.id != ui_timeline_turns[message.turn_id]:
+            continue
         items.append((int(message.sequence), "message", message))
     for annotation in annotations:
+        if annotation.turn_id in ui_timeline_turns:
+            continue
         items.append((int(annotation.sequence), "annotation", annotation))
 
     items.sort(key=lambda item: item[0])
@@ -215,10 +332,15 @@ def build_timeline_response(
     runs: list[ChatRun] | None = None,
 ) -> dict[str, Any]:
     items: list[dict[str, Any]] = []
+    ui_timeline_turns = turn_ui_timeline_anchors(messages)
     merged: list[tuple[int, str, Any]] = []
     for message in messages:
+        if message.turn_id in ui_timeline_turns and message.id != ui_timeline_turns[message.turn_id]:
+            continue
         merged.append((int(message.sequence), "message", message))
     for annotation in annotations:
+        if annotation.turn_id in ui_timeline_turns:
+            continue
         merged.append((int(annotation.sequence), "annotation", annotation))
     merged.sort(key=lambda item: item[0])
 

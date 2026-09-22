@@ -16,6 +16,7 @@ from app.platform.memory.history_constants import HISTORY_SOURCE_ID
 from app.platform.memory.maf_mapping import REASONING_CONTENT_PROVIDERS
 from app.platform.llm.reasoning_content_mixin import coalesce_reasoning_tool_messages
 from app.platform.memory.memory_config import MemoryConfig
+from app.platform.attachments.materialize import apply_attachment_reference_policy
 from app.platform.memory.message_validate import (
     assert_no_tool_calls_in_partial_assistant,
     message_from_body,
@@ -33,6 +34,7 @@ def create_postgres_history_provider(
     run_id: uuid.UUID | None = None,
     memory_config: MemoryConfig | None = None,
     model_provider: str | None = None,
+    model_id: str | None = None,
 ) -> "PostgresHistoryProvider":
     return PostgresHistoryProvider(
         db,
@@ -41,6 +43,7 @@ def create_postgres_history_provider(
         run_id=run_id,
         memory_config=memory_config,
         model_provider=model_provider,
+        model_id=model_id,
     )
 
 
@@ -58,6 +61,7 @@ class PostgresHistoryProvider(HistoryProvider):
         run_id: uuid.UUID | None = None,
         memory_config: MemoryConfig | None = None,
         model_provider: str | None = None,
+        model_id: str | None = None,
         source_id: str | None = None,
         load_messages: bool = True,
         store_inputs: bool = False,
@@ -75,6 +79,7 @@ class PostgresHistoryProvider(HistoryProvider):
         self._run_id = run_id
         self._memory_config = memory_config
         self._model_provider = model_provider
+        self._model_id = model_id
         self._messages = ChatMessageRepository(db)
 
     async def get_messages(
@@ -91,6 +96,12 @@ class PostgresHistoryProvider(HistoryProvider):
         rows = await self._messages.list_by_chat(self._chat_id, tail=tail)
         messages = [message_from_body(row.body) for row in rows]
         messages = sanitize_messages_for_llm_history(messages)
+        messages = apply_attachment_reference_policy(
+            messages,
+            chat_id=self._chat_id,
+            model_id=self._model_id,
+            provider=self._model_provider,
+        )
         if (self._model_provider or "") in REASONING_CONTENT_PROVIDERS:
             messages = coalesce_reasoning_tool_messages(messages)
         # Slim projection runs in PlatformCompactionProvider.before_run only.

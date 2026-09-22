@@ -6,8 +6,11 @@ from agent_framework import Content, Message
 
 from app.platform.memory.projectors.utils import ensure_dict, stringify_function_call_arguments
 from app.platform.attachments.materialize import (
+    _inline_modes_for_message,
     build_replay_attachment_contents,
-    is_attachment_materialization_text,
+    full_inline_attachment_ids_in_message,
+    is_attachment_body_text,
+    reference_only_attachment_ids_in_message,
     split_user_prompt_text,
 )
 from app.platform.agent.platform_instructions import RUN_CANCELLED_USER_TEXT
@@ -116,6 +119,7 @@ def to_maf_messages(
     seen_tool_results: set[str] = set()
     pending_assistant_meta: dict[str, Any] = {}
     pending_reasoning_content: str | None = None
+    already_full_inlined: set[str] = set()
 
     def flush_assistant() -> None:
         nonlocal assistant_contents, pending_assistant_meta, pending_reasoning_content
@@ -155,6 +159,7 @@ def to_maf_messages(
                         row,
                         model_id=model_id,
                         provider=model_provider,
+                        already_full_inlined=already_full_inlined,
                     )
                 )
             if not user_contents:
@@ -259,7 +264,11 @@ def to_maf_messages(
     return messages
 
 
-def maf_messages_to_projection_rows(messages: list[Message]) -> list[dict[str, Any]]:
+def maf_messages_to_projection_rows(
+    messages: list[Message],
+    *,
+    chat_id: uuid.UUID | str | None = None,
+) -> list[dict[str, Any]]:
     """Expand MAF messages into platform row dicts for HistoryProjection."""
     rows: list[dict[str, Any]] = []
     seq = 0
@@ -269,21 +278,45 @@ def maf_messages_to_projection_rows(messages: list[Message]) -> list[dict[str, A
         props = message.additional_properties or {}
         platform_type = props.get(PLATFORM_MESSAGE_TYPE_KEY)
         platform_metadata = dict(props.get(PLATFORM_METADATA_KEY) or {})
+        platform_props = props.get("platform") if isinstance(props.get("platform"), dict) else {}
+        user_attachment_meta = platform_props.get("attachments")
         message_reasoning = props.get(REASONING_CONTENT_METADATA_KEY)
         if isinstance(message_reasoning, str) and message_reasoning.strip():
             platform_metadata[REASONING_CONTENT_METADATA_KEY] = message_reasoning
 
+        user_row_emitted = False
         for content in message.contents or []:
             seq += 1
             content_type = getattr(content, "type", None)
 
             if message.role == "user":
+                if content_type in ("hosted_file", "data", "uri"):
+                    continue
+                text = getattr(content, "text", None) or ""
+                if is_attachment_body_text(text):
+                    continue
+                text = split_user_prompt_text(text)
+                if not text and user_attachment_meta and not user_row_emitted:
+                    text = ""
+                elif not text:
+                    continue
+                metadata: dict[str, Any] = dict(platform_metadata)
+                if user_attachment_meta and not user_row_emitted:
+                    metadata["attachments"] = user_attachment_meta
+                    inline_modes = dict(_inline_modes_for_message(message))
+                    for att_id in reference_only_attachment_ids_in_message(message):
+                        inline_modes.setdefault(att_id, "reference")
+                    for att_id in full_inline_attachment_ids_in_message(message):
+                        inline_modes.setdefault(att_id, "full")
+                    if inline_modes:
+                        metadata["attachment_inline_modes"] = inline_modes
+                user_row_emitted = True
                 rows.append(
                     {
                         "role": "user",
                         "message_type": platform_type or "text",
-                        "content": getattr(content, "text", None) or "",
-                        "metadata": platform_metadata,
+                        "content": text,
+                        "metadata": metadata,
                         "sequence": seq,
                     }
                 )
@@ -360,6 +393,11 @@ def maf_messages_to_projection_rows(messages: list[Message]) -> list[dict[str, A
                             "sequence": seq,
                         }
                     )
+
+    if chat_id is not None:
+        chat_id_str = str(chat_id)
+        for row in rows:
+            row.setdefault("chat_id", chat_id_str)
 
     return rows
 
@@ -460,7 +498,7 @@ def maf_message_to_rows(
 
         text = content.text if hasattr(content, "text") else str(content)
         if message.role == "user":
-            if is_attachment_materialization_text(text):
+            if is_attachment_body_text(text):
                 continue
             text = split_user_prompt_text(text)
             if not text and user_attachment_meta and not user_row_emitted:

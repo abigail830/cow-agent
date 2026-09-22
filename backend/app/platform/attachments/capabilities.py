@@ -35,14 +35,14 @@ _BY_MODEL_ID: dict[str, AttachmentCapabilities] = {
     "qwen3.7-plus": AttachmentCapabilities(image_via="inline", pdf_via="file_data"),
     "qwen3.8-max": AttachmentCapabilities(image_via="inline", pdf_via="file_data"),
     "minimax-m3": AttachmentCapabilities(image_via="inline", pdf_via="raster"),
-    "deepseek-flash": AttachmentCapabilities(image_via="file_id", pdf_via="raster"),
+    "deepseek-flash": AttachmentCapabilities(image_via="inline", pdf_via="raster"),
 }
 
 _BY_PROVIDER: dict[str, AttachmentCapabilities] = {
     ModelProvider.AZURE_OPENAI.value: AttachmentCapabilities(image_via="inline", pdf_via="file_id"),
     ModelProvider.AZURE_ANTHROPIC.value: AttachmentCapabilities(image_via="file_id", pdf_via="file_id"),
     ModelProvider.DASHSCOPE.value: AttachmentCapabilities(image_via="inline", pdf_via="file_data"),
-    ModelProvider.DEEPSEEK.value: AttachmentCapabilities(image_via="file_id", pdf_via="raster"),
+    ModelProvider.DEEPSEEK.value: AttachmentCapabilities(image_via="inline", pdf_via="raster"),
     ModelProvider.SILICONFLOW.value: AttachmentCapabilities(image_via="inline", pdf_via="raster"),
 }
 

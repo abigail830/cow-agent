@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any
 
 from agent_framework import (
@@ -13,6 +14,10 @@ from agent_framework import (
     ToolResultCompactionStrategy,
 )
 
+from app.platform.attachments.materialize import (
+    apply_attachment_reference_policy,
+    stub_superseded_attachment_full_inlines,
+)
 from app.platform.memory.maf_mapping import maf_messages_to_projection_rows, to_maf_messages
 from app.platform.memory.memory_config import MemoryConfig
 from app.platform.memory.history_constants import HISTORY_SOURCE_ID
@@ -34,10 +39,14 @@ class PlatformSlimCompactionStrategy:
         self,
         memory_config: MemoryConfig,
         *,
+        chat_id: uuid.UUID | None = None,
+        model_id: str | None = None,
         model_provider: str | None = None,
         projection: HistoryProjection | None = None,
     ) -> None:
         self._memory_config = memory_config
+        self._chat_id = chat_id
+        self._model_id = model_id
         self._model_provider = model_provider
         self._projection = projection or HistoryProjection()
 
@@ -45,12 +54,25 @@ class PlatformSlimCompactionStrategy:
         if not self._memory_config.slim.enabled or not messages:
             return False
 
-        rows = maf_messages_to_projection_rows(messages)
+        attachment_changed = stub_superseded_attachment_full_inlines(messages)
+
+        rows = maf_messages_to_projection_rows(messages, chat_id=self._chat_id)
         projected = self._projection.project_rows(rows, self._memory_config)
         if _rows_unchanged(rows, projected):
-            return False
+            return attachment_changed
 
-        slimmed = to_maf_messages(projected, model_provider=self._model_provider)
+        slimmed = to_maf_messages(
+            projected,
+            model_provider=self._model_provider,
+            model_id=self._model_id,
+        )
+        if self._chat_id is not None:
+            slimmed = apply_attachment_reference_policy(
+                slimmed,
+                chat_id=self._chat_id,
+                model_id=self._model_id,
+                provider=self._model_provider,
+            )
         messages.clear()
         messages.extend(slimmed)
         return True
@@ -104,6 +126,8 @@ def build_in_run_compaction_strategy(memory_config: MemoryConfig) -> ContextWind
 def build_platform_compaction(
     memory_config: MemoryConfig,
     *,
+    chat_id: uuid.UUID | None = None,
+    model_id: str | None = None,
     model_provider: str | None = None,
     summarization_client: Any | None = None,
 ) -> tuple[ContextWindowCompactionStrategy | None, PlatformCompactionProvider | None]:
@@ -116,6 +140,8 @@ def build_platform_compaction(
     if memory_config.slim.enabled:
         before_strategy = PlatformSlimCompactionStrategy(
             memory_config,
+            chat_id=chat_id,
+            model_id=model_id,
             model_provider=model_provider,
         )
 

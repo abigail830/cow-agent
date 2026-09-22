@@ -22,6 +22,7 @@ def build_user_maf_message(
     model_id: str | None = None,
     model_provider: str | None = None,
     metadata: dict[str, Any] | None = None,
+    already_full_inlined: set[str] | None = None,
 ) -> Message:
     run_input = build_user_message_with_attachments(
         content,
@@ -29,6 +30,7 @@ def build_user_maf_message(
         chat_id=chat_id,
         model_id=model_id,
         provider=model_provider,
+        already_full_inlined=already_full_inlined,
     )
     if isinstance(run_input, Message):
         message = run_input

@@ -17,14 +17,14 @@ def test_capabilities_by_model_id():
     assert attachment_capabilities(model_id="claude-sonnet-4-6").image_via == "file_id"
     assert attachment_capabilities(model_id="qwen3.8-max").pdf_via == "file_data"
     assert attachment_capabilities(model_id="minimax-m3").pdf_via == "raster"
-    assert attachment_capabilities(model_id="deepseek-flash").image_via == "file_id"
+    assert attachment_capabilities(model_id="deepseek-flash").image_via == "inline"
     assert attachment_capabilities(model_id="deepseek-flash").pdf_via == "raster"
 
 
 def test_capabilities_prefix_fallback():
     assert attachment_capabilities(model_id="qwen3.7-plus").accepts_pdf is True
     assert attachment_capabilities(model_id="MiniMax/MiniMax-M3").pdf_via == "raster"
-    assert attachment_capabilities(model_id="deepseek-chat").image_file_id is True
+    assert attachment_capabilities(model_id="deepseek-chat").image_file_id is False
 
 
 def test_classify_and_office_reject():

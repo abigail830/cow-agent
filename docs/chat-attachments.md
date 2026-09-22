@@ -26,7 +26,7 @@
   → agent run
 
 历史重放
-  → metadata.attachments → build_replay_attachment_contents（Always-FULL）
+  → metadata.attachments → build_replay_attachment_contents（first-full + reference）
 ```
 
 ---
@@ -52,6 +52,7 @@
 | `extract/tables.py` | xlsx / xls / csv → Markdown 表 |
 | `extract/truncate.py` | 头尾截断 |
 | `convert/pdf_pages.py` | PyMuPDF 页数 / JPEG 栅格化 |
+| `image_io.py` | 魔数识别、校验、LLM 用规范化（含超大图自动缩小） |
 | `providers/adapters.py` | OpenAI / Anthropic Files 适配 |
 | `providers/deepseek_files.py` | DeepSeek Files 上传 |
 
@@ -98,6 +99,8 @@
 ### 允许的类型
 
 - 图片：png / jpeg / gif / webp
+  - 上传与 materialize 时经 `image_io.prepare_image_for_storage` / `normalize_image_for_llm` 重编码
+  - **超大画布**（常见于 Figma @2x 导出）：最长边 &gt; 8192px 会自动缩小至 8192 以内再发给模型；DeepSeek 等 OpenAI 兼容 API 超限时往往误报 `unsupported image` 而非尺寸错误
 - PDF
 - 文本：txt / md / csv / json
 - 表格：xls / xlsx
@@ -230,9 +233,22 @@ mergeAttachmentIdsForSend(stagedIds, parseAttachmentMentionIds(text, attachments
 
 ---
 
-## LLM 注入（Always-FULL）
+## LLM 注入（first-full + reference + re-inline on @）
 
 核心：`materialize.py`。发送与历史重放走同一套路径（重放用 `build_replay_attachment_contents`）。
+
+### 引用策略
+
+| 场景 | 行为 |
+|------|------|
+| 会话内**首次** `@` 某 attachment | full materialize（文本 / 图片 / PDF 等） |
+| 同会话**再次** `@`，且 context 里仍有该文件的 full inline | 只发 **reference stub**（含 `attachment_id=`） |
+| slim / compaction 把 full inline stub 化，或 history tail 截断掉 full 版本 | context 中视为**无 full 副本**；**不会**自动 re-inline |
+| stub 化之后用户**再次** `@` 同一文件 | 重新 full materialize |
+
+判定「context 里是否还有 full 副本」看 message **contents**（`hosted_file` / `data` / 带 ` ``` ` 的文本块），**不是**只看 `metadata.attachments` 是否出现过。
+
+Slim 往返时在 row metadata 写入 `attachment_inline_modes`（`full` / `reference`），避免 passive replay 把 stub 误重建为 full。
 
 ### 按 kind
 

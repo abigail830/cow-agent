@@ -9,11 +9,36 @@ from agent_framework import ChatResponse, ChatResponseUpdate, Content, Message
 from agent_framework.openai import OpenAIChatCompletionClient
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
+from app.platform.llm.openai_image_payload import sanitize_openai_image_payloads
 from app.platform.llm.reasoning_content_mixin import (
     ReasoningContentMixin,
     coalesce_reasoning_tool_messages,
     reasoning_content_from,
 )
+
+
+def _merge_multimodal_user_openai_messages(items: list[dict[str, Any]]) -> dict[str, Any]:
+    """Merge MAF's per-content user dicts into one OpenAI multimodal message."""
+    if len(items) == 1:
+        return items[0]
+    role = str(items[0].get("role") or "user")
+    parts: list[Any] = []
+    reasoning_details: Any | None = None
+    for item in items:
+        if reasoning_details is None and item.get("reasoning_details") is not None:
+            reasoning_details = item["reasoning_details"]
+        body = item.get("content")
+        if isinstance(body, str):
+            if body:
+                parts.append({"type": "text", "text": body})
+        elif isinstance(body, list):
+            parts.extend(body)
+        elif body is not None:
+            parts.append(body)
+    merged: dict[str, Any] = {"role": role, "content": parts if parts else ""}
+    if reasoning_details is not None:
+        merged["reasoning_details"] = reasoning_details
+    return merged
 
 
 class OpenAICompatibleReasoningClient(ReasoningContentMixin, OpenAIChatCompletionClient):
@@ -86,6 +111,9 @@ class OpenAICompatibleReasoningClient(ReasoningContentMixin, OpenAIChatCompletio
         else:
             prepared = super()._prepare_message_for_openai(filtered)
 
+        if message.role == "user" and len(prepared) > 1:
+            prepared = [_merge_multimodal_user_openai_messages(prepared)]
+
         self._inject_reasoning_to_openai_message(prepared, reasoning)
 
         if hosted_files:
@@ -117,6 +145,7 @@ class OpenAICompatibleReasoningClient(ReasoningContentMixin, OpenAIChatCompletio
         prepared: list[dict[str, Any]] = []
         for message in coalesced:
             prepared.extend(self._prepare_message_for_openai(message))
+        prepared = sanitize_openai_image_payloads(prepared)
         return self._propagate_reasoning_in_messages(prepared)
 
 

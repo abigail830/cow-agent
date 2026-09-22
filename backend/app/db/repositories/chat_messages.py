@@ -118,5 +118,17 @@ class ChatMessageRepository:
             await self._session.flush()
         return saved
 
+    async def update_body(self, message_id: uuid.UUID, body: dict[str, Any]) -> ChatMessage:
+        row = await self.get(message_id)
+        if row is None:
+            raise ValueError(f"ChatMessage {message_id} not found")
+        validated = validate_message_body(body)
+        assert_no_tool_calls_in_partial_assistant(validated)
+        row.body = validated
+        row.role = str(validated.get("role") or "").strip()
+        row.maf_message_id = maf_message_id_from_body(validated)
+        await self._session.flush()
+        return row
+
     async def flush(self) -> None:
         await self._session.flush()

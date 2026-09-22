@@ -33,7 +33,11 @@ from app.platform.mcp.mcp_connect import disconnect_bundle, iter_mcp_connect_kee
 from app.platform.mcp.mcp_pool import McpPoolKey, get_mcp_connection_pool
 from app.platform.session.session_store import SessionStore
 from app.platform.session.user_message_input import link_attachments_metadata
-from app.platform.attachments.materialize import build_user_message_with_attachments
+from app.platform.attachments.materialize import (
+    build_user_message_with_attachments,
+    prior_full_attachment_ids_in_context,
+)
+from app.platform.memory.message_validate import message_from_body
 from app.platform.chat.user_message_commit import build_user_maf_message, persist_user_maf_message
 from app.platform.attachments.service import AttachmentService
 from app.platform.llm.chat_model import resolve_chat_model
@@ -109,6 +113,23 @@ class ChatRunService:
         del chat
         return link_attachments_metadata({}, attachments)
 
+    async def _prior_already_full_attachment_ids(
+        self,
+        chat_id: uuid.UUID,
+        *,
+        model_id: str | None = None,
+        model_provider: str | None = None,
+    ) -> set[str]:
+        prior_rows = await self._messages.list_by_chat(chat_id)
+        if not prior_rows:
+            return set()
+        return prior_full_attachment_ids_in_context(
+            [message_from_body(row.body) for row in prior_rows],
+            chat_id=chat_id,
+            model_id=model_id,
+            provider=model_provider,
+        )
+
     async def _build_run_input(
         self,
         chat: Chat,
@@ -117,6 +138,7 @@ class ChatRunService:
         *,
         model_id: str | None = None,
         model_provider: str | None = None,
+        already_full_inlined: set[str] | None = None,
     ):
         if not attachments:
             return content.strip() or content
@@ -126,6 +148,7 @@ class ChatRunService:
             chat_id=chat.id,
             model_id=model_id,
             provider=model_provider,
+            already_full_inlined=already_full_inlined,
         )
 
     async def _resolve_run_model(self, chat: Chat) -> tuple[str, str]:
@@ -222,6 +245,7 @@ class ChatRunService:
         attachment_ids: list[uuid.UUID] | None = None,
         metadata: dict[str, Any] | None = None,
         commit: bool = True,
+        already_full_inlined: set[str] | None = None,
     ) -> ChatMessage:
         """Persist the user MAF message immediately so it survives agent failures."""
         resolved = (
@@ -233,6 +257,12 @@ class ChatRunService:
             metadata = await self._prepare_user_turn_metadata(chat, resolved)
         model_id, model_provider = await self._resolve_run_model(chat)
         turn = turn_id or uuid.uuid4()
+        if already_full_inlined is None:
+            already_full_inlined = await self._prior_already_full_attachment_ids(
+                chat.id,
+                model_id=model_id,
+                model_provider=model_provider,
+            )
         message = build_user_maf_message(
             chat.id,
             content,
@@ -240,6 +270,7 @@ class ChatRunService:
             model_id=model_id,
             model_provider=model_provider,
             metadata=metadata,
+            already_full_inlined=already_full_inlined,
         )
         row = await persist_user_maf_message(
             self._db,
@@ -279,7 +310,6 @@ class ChatRunService:
         """Persist partial assistant output and mark the run cancelled."""
         try:
             if turn_id is not None:
-                await accumulator.persist_ui_annotations(self._annotations, chat_id, turn_id)
                 if accumulator.has_content():
                     await accumulator.persist_partial_assistant(
                         self._messages,
@@ -288,6 +318,9 @@ class ChatRunService:
                         run_id=run_id,
                         cancelled=True,
                     )
+                turn_messages = await self._messages.list_by_turn(chat_id, turn_id)
+                await accumulator.persist_ui_timeline(self._messages, turn_messages)
+                await accumulator.persist_ui_annotations(self._annotations, chat_id, turn_id)
             await self._runs.cancel(run_id)
             await self._db.commit()
         except Exception:
@@ -346,10 +379,11 @@ class ChatRunService:
         turn_id: uuid.UUID | None = None,
         run_id: uuid.UUID | None = None,
     ) -> list[dict[str, Any]]:
-        if accumulator is not None:
+        if accumulator is not None and turn_id is not None:
             accumulator.enrich_tool_arguments_from_response(response)
-            if turn_id is not None:
-                await accumulator.persist_ui_annotations(self._annotations, chat_id, turn_id)
+            turn_messages = await self._messages.list_by_turn(chat_id, turn_id)
+            await accumulator.persist_ui_timeline(self._messages, turn_messages)
+            await accumulator.persist_ui_annotations(self._annotations, chat_id, turn_id)
         if run_id is not None:
             await self._runs.complete(run_id)
         payload_extensions: dict[str, Any] = {}
@@ -394,7 +428,6 @@ class ChatRunService:
         """Best-effort persist of partial assistant output plus run failure status."""
         try:
             if accumulator is not None and turn_id is not None:
-                await accumulator.persist_ui_annotations(self._annotations, chat_id, turn_id)
                 if accumulator.has_content():
                     await accumulator.persist_partial_assistant(
                         self._messages,
@@ -403,6 +436,9 @@ class ChatRunService:
                         run_id=run_id,
                         cancelled=False,
                     )
+                turn_messages = await self._messages.list_by_turn(chat_id, turn_id)
+                await accumulator.persist_ui_timeline(self._messages, turn_messages)
+                await accumulator.persist_ui_annotations(self._annotations, chat_id, turn_id)
             if run_ctx is not None:
                 extensions = await run_plugin_finalize_failure(run_ctx, accumulator=accumulator)
                 for key, value in extensions.items():
@@ -457,6 +493,11 @@ class ChatRunService:
             raise ValueError("Message content or attachments required")
         turn_id = uuid.uuid4()
         run_id = uuid.uuid4()
+        already_full = await self._prior_already_full_attachment_ids(
+            chat.id,
+            model_id=model_id,
+            model_provider=model_provider,
+        )
         user_message = await self._commit_user_turn(
             chat,
             content,
@@ -465,6 +506,7 @@ class ChatRunService:
             attachments=attachments,
             attachment_ids=attachment_ids,
             commit=False,
+            already_full_inlined=already_full,
         )
         await self._runs.create(
             chat_id=chat_id,
@@ -473,13 +515,6 @@ class ChatRunService:
             model_id=model_id,
         )
         await self._db.commit()
-        run_input = await self._build_run_input(
-            chat,
-            content,
-            attachments,
-            model_id=model_id,
-            model_provider=model_provider,
-        )
         memory_result = await try_handle_memory_command(
             self._db,
             user_id=chat.user_id,
@@ -509,7 +544,7 @@ class ChatRunService:
         )
         try:
             async with bundle as agent:
-                result = await agent.run(run_input, session=session)
+                result = await agent.run(None, session=session)
             await self._persist_pending_artifacts(chat_id, turn_id=turn_id)
             await self._finalize_success(
                 chat_id,
@@ -552,6 +587,11 @@ class ChatRunService:
         if not content.strip() and not attachments:
             raise ValueError("Message content or attachments required")
         turn_id = uuid.uuid4()
+        already_full = await self._prior_already_full_attachment_ids(
+            chat.id,
+            model_id=model_id,
+            model_provider=model_provider,
+        )
         user_message = await self._commit_user_turn(
             chat,
             content,
@@ -559,13 +599,7 @@ class ChatRunService:
             attachments=attachments,
             attachment_ids=attachment_ids,
             commit=False,
-        )
-        run_input = await self._build_run_input(
-            chat,
-            content,
-            attachments,
-            model_id=model_id,
-            model_provider=model_provider,
+            already_full_inlined=already_full,
         )
         memory_result = await try_handle_memory_command(
             self._db,
@@ -661,7 +695,7 @@ class ChatRunService:
                 yield keepalive
             agent = bundle.agent
             try:
-                stream = agent.run(run_input, session=session, stream=True)
+                stream = agent.run(None, session=session, stream=True)
                 async for update in stream:
                     if run.stop_event.is_set():
                         break
@@ -1097,6 +1131,63 @@ class StreamTurnAccumulator:
 
     def has_tool_rows(self) -> bool:
         return any(row.get("message_type") in _TOOL_ROW_TYPES for row in self._rows)
+
+    def build_ui_timeline(self) -> list[dict[str, Any]]:
+        """Ordered UI rows (text ↔ artifact interleave) captured during streaming."""
+        items: list[dict[str, Any]] = []
+        for row in self._rows:
+            message_type = row.get("message_type")
+            metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+            if message_type == "text":
+                items.append({"kind": "text", "content": row.get("content") or "", "metadata": metadata})
+            elif message_type == "reasoning":
+                items.append({"kind": "reasoning", "content": row.get("content") or "", "metadata": metadata})
+            elif message_type in ("tool_call", "mcp_call"):
+                items.append({"kind": "tool_call", "metadata": metadata})
+            elif message_type == "tool_result":
+                items.append(
+                    {
+                        "kind": "tool_result",
+                        "content": row.get("content"),
+                        "metadata": metadata,
+                    }
+                )
+            elif message_type == "artifact":
+                items.append({"kind": "artifact", "metadata": metadata})
+            elif message_type == "viz":
+                items.append(
+                    {
+                        "kind": "viz",
+                        "content": row.get("content"),
+                        "metadata": metadata,
+                    }
+                )
+        return items
+
+    async def persist_ui_timeline(
+        self,
+        repo: ChatMessageRepository,
+        turn_messages: list[Any],
+    ) -> bool:
+        """Persist interleaved stream order on the anchor assistant message."""
+        self.finalize()
+        timeline = self.build_ui_timeline()
+        if not timeline:
+            return False
+        if not any(item.get("kind") in {"artifact", "viz"} for item in timeline):
+            return False
+        anchor = next((message for message in turn_messages if message.role == "assistant"), None)
+        if anchor is None:
+            return False
+
+        body = dict(anchor.body) if isinstance(anchor.body, dict) else {}
+        props = dict(body.get("additional_properties") or {})
+        platform = dict(props.get("platform") or {}) if isinstance(props.get("platform"), dict) else {}
+        platform["ui_timeline"] = timeline
+        props["platform"] = platform
+        body["additional_properties"] = props
+        await repo.update_body(anchor.id, body)
+        return True
 
     async def persist_ui_annotations(
         self,

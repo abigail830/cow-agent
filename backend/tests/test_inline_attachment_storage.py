@@ -1,8 +1,27 @@
+import struct
 import uuid
+import zlib
 
 from agent_framework import Content
 
 from app.platform.attachments.materialize import materialize_attachments
+
+
+def _minimal_png() -> bytes:
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(data))
+            + tag
+            + data
+            + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+        )
+
+    raw = b"\x89PNG\r\n\x1a\n"
+    ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+    raw += chunk(b"IHDR", ihdr)
+    raw += chunk(b"IDAT", zlib.compress(b"\x00\xff\x00\x00"))
+    raw += chunk(b"IEND", b"")
+    return raw
 from app.platform.attachments.providers.adapters import should_use_azure_inline_image
 from app.platform.attachments.storage import (
     format_inline_provider_file_id,
@@ -48,7 +67,7 @@ def test_materialize_inline_image(tmp_path, monkeypatch):
 
     chat_id = uuid.uuid4()
     attachment_id = uuid.uuid4()
-    save_inline_attachment(chat_id, attachment_id, b"\x89PNG\r\n\x1a\n")
+    save_inline_attachment(chat_id, attachment_id, _minimal_png())
 
     parts = materialize_attachments(
         [_InlineAttachment(chat_id, attachment_id)],
@@ -59,7 +78,7 @@ def test_materialize_inline_image(tmp_path, monkeypatch):
     content = parts[0]
     assert isinstance(content, Content)
     assert content.type == "data"
-    assert content.media_type == "image/png"
+    assert content.media_type in {"image/png", "image/jpeg"}
 
 
 def test_materialize_metadata_inline_image(tmp_path, monkeypatch):
@@ -70,7 +89,7 @@ def test_materialize_metadata_inline_image(tmp_path, monkeypatch):
 
     chat_id = uuid.uuid4()
     attachment_id = uuid.uuid4()
-    save_inline_attachment(chat_id, attachment_id, b"\x89PNG\r\n\x1a\n")
+    save_inline_attachment(chat_id, attachment_id, _minimal_png())
 
     item = {
         "id": str(attachment_id),

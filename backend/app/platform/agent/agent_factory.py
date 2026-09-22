@@ -103,6 +103,7 @@ class AgentFactory:
             run_id=run_id,
             memory_config=memory_config,
             model_provider=provider.value,
+            model_id=model_entry.id,
         )
 
         summarization_client = None
@@ -111,6 +112,8 @@ class AgentFactory:
 
         in_run_compaction, compaction_provider = build_platform_compaction(
             memory_config,
+            chat_id=chat_id,
+            model_id=model_entry.id,
             model_provider=provider.value,
             summarization_client=summarization_client,
         )

@@ -1,7 +1,12 @@
-"""Always-FULL attachment injection for send and history replay."""
+"""Attachment injection for send and history replay.
+
+First appearance of an attachment_id in a session is materialized in full; later
+mentions emit a compact reference stub until history tail drops the full copy.
+"""
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Any
 
@@ -13,7 +18,14 @@ from app.platform.attachments.convert.pdf_pages import rasterize_pdf_pages
 from app.platform.attachments.extract.tables import extract_sheet_bytes
 from app.platform.attachments.extract.text import extract_text_bytes
 from app.platform.attachments.extract.truncate import truncate_chars
-from app.platform.attachments.kinds import AttachmentKind, classify_attachment
+from app.platform.attachments.image_io import (
+    normalize_image_for_llm,
+    resolve_image_mime,
+    validate_image_bytes,
+)
+from app.platform.attachments.kinds import AttachmentKind, classify_attachment, normalize_mime
+
+_IMAGE_MIMES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
 from app.platform.attachments.pages import load_attachment_bytes
 from app.platform.attachments.storage import is_inline_provider_file_id
 
@@ -60,6 +72,191 @@ def is_attachment_materialization_text(text: str) -> bool:
     return stripped.startswith("### ") and "```" in stripped
 
 
+def format_attachment_reference_text(
+    *,
+    filename: str,
+    mime_type: str,
+    size_bytes: int,
+    attachment_id: str,
+) -> str:
+    return (
+        f"### {filename} ({mime_type}, {_format_size(size_bytes)})\n"
+        f"_Previously shared in this conversation (attachment_id={attachment_id}). "
+        f"Refer to the earlier inline copy in this chat history._"
+    )
+
+
+def is_attachment_reference_text(text: str) -> bool:
+    stripped = (text or "").strip()
+    return (
+        stripped.startswith("### ")
+        and "Previously shared in this conversation" in stripped
+        and "attachment_id=" in stripped
+    )
+
+
+def is_attachment_body_text(text: str) -> bool:
+    return is_attachment_materialization_text(text) or is_attachment_reference_text(text)
+
+
+def _attachment_key(item: Any) -> str:
+    att_id = str(_item_attr(item, "id") or "").strip()
+    if att_id:
+        return att_id
+    return str(_item_attr(item, "filename") or "").strip()
+
+
+_ATTACHMENT_ID_IN_REFERENCE_RE = re.compile(r"attachment_id=([^)\s]+)")
+
+
+def _attachment_ids_in_reference_text(text: str) -> set[str]:
+    return {match.strip() for match in _ATTACHMENT_ID_IN_REFERENCE_RE.findall(text or "")}
+
+
+def _binary_attachment_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    binary: list[dict[str, Any]] = []
+    for item in items:
+        filename = str(_item_attr(item, "filename") or "attachment")
+        mime_type = str(_item_attr(item, "mime_type") or "application/octet-stream")
+        kind = classify_attachment(filename=filename, mime_type=mime_type)
+        if kind in (AttachmentKind.IMAGE, AttachmentKind.PDF):
+            binary.append(item)
+    return binary
+
+
+def full_inline_attachment_ids_in_message(message: Message) -> set[str]:
+    """Attachment ids materialized in full inside this message's contents."""
+    if message.role != "user":
+        return set()
+    platform = (message.additional_properties or {}).get("platform") or {}
+    items = _attachment_items(platform)
+    if not items:
+        return set()
+
+    inline_modes = _inline_modes_for_message(message)
+    found: set[str] = set()
+    binary_items = _binary_attachment_items(items)
+    binary_idx = 0
+
+    for content in message.contents or []:
+        content_type = getattr(content, "type", None)
+        if content_type in ("hosted_file", "data", "uri"):
+            if binary_idx < len(binary_items):
+                key = _attachment_key(binary_items[binary_idx])
+                if key and inline_modes.get(key) != "reference":
+                    found.add(key)
+                binary_idx += 1
+            continue
+        if content_type != "text":
+            continue
+        text = getattr(content, "text", "") or ""
+        if is_attachment_reference_text(text):
+            continue
+        if not is_attachment_materialization_text(text):
+            continue
+        for item in items:
+            filename = str(_item_attr(item, "filename") or "")
+            if filename and text.startswith(f"### {filename}"):
+                key = _attachment_key(item)
+                if key and inline_modes.get(key) != "reference":
+                    found.add(key)
+                break
+
+    return found
+
+
+def prior_full_attachment_ids_in_context(
+    messages: list[Message],
+    *,
+    chat_id: uuid.UUID,
+    model_id: str | None = None,
+    provider: str | None = None,
+) -> set[str]:
+    """Ids that still have a full inline copy after reference policy (matches LLM history)."""
+    if not messages:
+        return set()
+    replayed = apply_attachment_reference_policy(
+        messages,
+        chat_id=chat_id,
+        model_id=model_id,
+        provider=provider,
+    )
+    return fully_inlined_attachment_ids_in_context(replayed)
+
+
+def reference_only_attachment_ids_in_message(message: Message) -> set[str]:
+    """Attachment ids represented only as reference stubs in this message."""
+    if message.role != "user":
+        return set()
+    platform = (message.additional_properties or {}).get("platform") or {}
+    items = _attachment_items(platform)
+    if not items:
+        return set()
+
+    referenced: set[str] = set()
+    for content in message.contents or []:
+        if getattr(content, "type", None) != "text":
+            continue
+        text = getattr(content, "text", "") or ""
+        if not is_attachment_reference_text(text):
+            continue
+        referenced.update(_attachment_ids_in_reference_text(text))
+
+    item_keys = {_attachment_key(item) for item in items if _attachment_key(item)}
+    return referenced & item_keys
+
+
+def _forced_inline_modes(metadata: dict[str, Any]) -> dict[str, str]:
+    raw = metadata.get("attachment_inline_modes")
+    if not isinstance(raw, dict):
+        return {}
+    modes: dict[str, str] = {}
+    for key, value in raw.items():
+        att_id = str(key or "").strip()
+        mode = str(value or "").strip().lower()
+        if att_id and mode in {"full", "reference"}:
+            modes[att_id] = mode
+    return modes
+
+
+def fully_inlined_attachment_ids_in_context(messages: list[Message]) -> set[str]:
+    """Attachment ids that still have at least one full inline copy in context."""
+    full: set[str] = set()
+    for message in messages:
+        full.update(full_inline_attachment_ids_in_message(message))
+    return full
+
+
+def already_full_attachment_ids(messages: list[Message]) -> set[str]:
+    """Alias for callers that gate new @ sends on visible full inline copies."""
+    return fully_inlined_attachment_ids_in_context(messages)
+
+
+def _extract_user_prompt_from_message(message: Message) -> str:
+    for content in message.contents or []:
+        if getattr(content, "type", None) != "text":
+            continue
+        text = getattr(content, "text", "") or ""
+        if is_attachment_body_text(text):
+            continue
+        return split_user_prompt_text(text)
+    return ""
+
+
+def materialize_attachment_reference(item: Any) -> list[Content]:
+    attachment_id = str(_item_attr(item, "id") or _attachment_key(item))
+    return [
+        Content.from_text(
+            format_attachment_reference_text(
+                filename=str(_item_attr(item, "filename") or "attachment"),
+                mime_type=str(_item_attr(item, "mime_type") or "application/octet-stream"),
+                size_bytes=int(_item_attr(item, "size_bytes") or 0),
+                attachment_id=attachment_id,
+            )
+        )
+    ]
+
+
 def _text_block(
     *,
     filename: str,
@@ -82,6 +279,17 @@ def _apply_text_caps(text: str, *, settings: Settings) -> tuple[str, bool]:
     if len(text) <= limit:
         return text, False
     return truncate_chars(text, limit)
+
+
+def _should_rematerialize_from_disk(item: Any, caps: AttachmentCapabilities) -> bool:
+    """Re-read bytes from storage instead of preserving stale message body parts."""
+    filename = str(_item_attr(item, "filename") or "attachment")
+    mime_type = str(_item_attr(item, "mime_type") or "application/octet-stream")
+    kind = classify_attachment(filename=filename, mime_type=mime_type)
+    # DeepSeek / Qwen / GPT vision use inline image_url; never replay old hosted_file stubs.
+    if kind == AttachmentKind.IMAGE and not caps.image_file_id:
+        return True
+    return False
 
 
 def _has_usable_file_id(item: Any, *, provider: str | None) -> bool:
@@ -128,7 +336,9 @@ def materialize_attachment(
         if caps.image_file_id and _has_usable_file_id(item, provider=current_provider):
             return [_hosted_file(item)]
         data = load_attachment_bytes(item, chat_id=chat_id)
-        return [_data_content(data=data, mime_type=mime_type, filename=filename)]
+        validate_image_bytes(data, filename=filename)
+        data, effective_mime = normalize_image_for_llm(data)
+        return [_data_content(data=data, mime_type=effective_mime, filename=filename)]
 
     if kind == AttachmentKind.PDF:
         if caps.pdf_file_id and _has_usable_file_id(item, provider=current_provider):
@@ -190,6 +400,8 @@ def materialize_attachments(
     model_id: str | None = None,
     provider: str | None = None,
     settings: Settings | None = None,
+    already_full_inlined: set[str] | None = None,
+    forced_inline_modes: dict[str, str] | None = None,
 ) -> list[Content]:
     if not items:
         return []
@@ -201,17 +413,26 @@ def materialize_attachments(
                 provider = stored
                 break
     caps = attachment_capabilities(model_id=model_id, provider=provider)
+    seen = already_full_inlined if already_full_inlined is not None else set()
+    inline_modes = forced_inline_modes or {}
     text_blocks: list[str] = []
     binary: list[Content] = []
     remaining_chars = settings.attachment_extract_max_chars_per_message
     for item in items:
-        parts = materialize_attachment(
-            item,
-            chat_id=chat_id,
-            caps=caps,
-            current_provider=provider,
-            settings=settings,
-        )
+        key = _attachment_key(item)
+        forced_mode = inline_modes.get(key or "")
+        if forced_mode == "reference" or (key and key in seen):
+            parts = materialize_attachment_reference(item)
+        else:
+            parts = materialize_attachment(
+                item,
+                chat_id=chat_id,
+                caps=caps,
+                current_provider=provider,
+                settings=settings,
+            )
+            if key:
+                seen.add(key)
         for part in parts:
             if getattr(part, "type", None) == "text":
                 chunk = getattr(part, "text", None) or ""
@@ -240,6 +461,7 @@ def build_user_message_with_attachments(
     chat_id: uuid.UUID,
     model_id: str | None = None,
     provider: str | None = None,
+    already_full_inlined: set[str] | None = None,
 ) -> str | Message:
     text = content.strip()
     parts = materialize_attachments(
@@ -247,6 +469,7 @@ def build_user_message_with_attachments(
         chat_id=chat_id,
         model_id=model_id,
         provider=provider,
+        already_full_inlined=already_full_inlined,
     )
     if not text and not parts:
         return text
@@ -267,6 +490,7 @@ def build_replay_attachment_contents(
     *,
     model_id: str | None = None,
     provider: str | None = None,
+    already_full_inlined: set[str] | None = None,
 ) -> list[Content]:
     metadata = row.get("metadata") or {}
     items = _attachment_items(metadata)
@@ -278,4 +502,218 @@ def build_replay_attachment_contents(
         chat_id=uuid.UUID(str(chat_id_raw)),
         model_id=model_id,
         provider=provider,
+        already_full_inlined=already_full_inlined,
+        forced_inline_modes=_forced_inline_modes(metadata),
     )
+
+
+def _inline_modes_for_message(message: Message) -> dict[str, str]:
+    platform = (message.additional_properties or {}).get("platform") or {}
+    return _forced_inline_modes(platform)
+
+
+def _set_inline_modes_on_message(message: Message, modes: dict[str, str]) -> None:
+    if not modes:
+        return
+    props = dict(message.additional_properties or {})
+    platform = dict(props.get("platform") or {})
+    platform["attachment_inline_modes"] = modes
+    props["platform"] = platform
+    message.additional_properties = props
+
+
+def _existing_full_parts_for_item(message: Message, item: dict[str, Any]) -> list[Content]:
+    key = _attachment_key(item)
+    filename = str(_item_attr(item, "filename") or "attachment")
+    mime_type = str(_item_attr(item, "mime_type") or "application/octet-stream")
+    kind = classify_attachment(filename=filename, mime_type=mime_type)
+    parts: list[Content] = []
+
+    for content in message.contents or []:
+        content_type = getattr(content, "type", None)
+        if kind in (AttachmentKind.IMAGE, AttachmentKind.PDF) and content_type in (
+            "hosted_file",
+            "data",
+            "uri",
+        ):
+            if content_type == "hosted_file":
+                file_id = str(getattr(content, "file_id", "") or "")
+                stored_file_id = str(_item_attr(item, "provider_file_id") or "")
+                if not stored_file_id or file_id == stored_file_id:
+                    parts.append(content)
+                    break
+            else:
+                parts.append(content)
+                break
+        if content_type != "text":
+            continue
+        text = getattr(content, "text", "") or ""
+        if is_attachment_materialization_text(text) and text.startswith(f"### {filename}"):
+            parts.append(content)
+            break
+
+    return parts
+
+
+def _merge_attachment_parts(parts: list[Content]) -> list[Content]:
+    text_blocks: list[str] = []
+    binary: list[Content] = []
+    for part in parts:
+        if getattr(part, "type", None) == "text":
+            chunk = getattr(part, "text", None) or ""
+            if chunk:
+                text_blocks.append(chunk)
+        else:
+            binary.append(part)
+    merged: list[Content] = []
+    if text_blocks:
+        merged.append(Content.from_text("\n\n".join(text_blocks)))
+    merged.extend(binary)
+    return merged
+
+
+def _materialize_attachment_parts_for_message(
+    message: Message,
+    items: list[dict[str, Any]],
+    *,
+    chat_id: uuid.UUID,
+    model_id: str | None = None,
+    provider: str | None = None,
+    already_full_inlined: set[str],
+) -> list[Content]:
+    ref_only = reference_only_attachment_ids_in_message(message)
+    inline_modes = dict(_inline_modes_for_message(message))
+    for att_id in ref_only:
+        inline_modes.setdefault(att_id, "reference")
+
+    caps = attachment_capabilities(model_id=model_id, provider=provider)
+    parts: list[Content] = []
+    existing_full = full_inline_attachment_ids_in_message(message)
+    for item in items:
+        key = _attachment_key(item)
+        if not key:
+            continue
+        forced_mode = inline_modes.get(key)
+        if forced_mode == "reference" or key in already_full_inlined or key in ref_only:
+            parts.extend(materialize_attachment_reference(item))
+            continue
+        if key in existing_full and not _should_rematerialize_from_disk(item, caps):
+            preserved = _existing_full_parts_for_item(message, item)
+            if preserved:
+                parts.extend(preserved)
+                already_full_inlined.add(key)
+                continue
+        parts.extend(
+            materialize_attachment(
+                item,
+                chat_id=chat_id,
+                caps=caps,
+                current_provider=provider,
+            )
+        )
+        already_full_inlined.add(key)
+
+    return _merge_attachment_parts(parts)
+
+
+def stub_superseded_attachment_full_inlines(messages: list[Message]) -> bool:
+    """Convert older duplicate full inlines to reference stubs (no disk re-read)."""
+    last_full_index: dict[str, int] = {}
+    for idx, message in enumerate(messages):
+        for att_id in full_inline_attachment_ids_in_message(message):
+            last_full_index[att_id] = idx
+
+    changed = False
+    for idx, message in enumerate(messages):
+        if message.role != "user":
+            continue
+        full_ids = full_inline_attachment_ids_in_message(message)
+        superseded = {att_id for att_id in full_ids if last_full_index.get(att_id) != idx}
+        if not superseded:
+            continue
+
+        platform = (message.additional_properties or {}).get("platform") or {}
+        items = _attachment_items(platform)
+        if not items:
+            continue
+
+        inline_modes = dict(_inline_modes_for_message(message))
+        for att_id in superseded:
+            inline_modes[att_id] = "reference"
+
+        prompt = _extract_user_prompt_from_message(message)
+        attachment_parts: list[Content] = []
+        for item in items:
+            key = _attachment_key(item)
+            if key and key in superseded:
+                attachment_parts.extend(materialize_attachment_reference(item))
+            elif key and key in full_ids:
+                for content in message.contents or []:
+                    content_type = getattr(content, "type", None)
+                    if content_type in ("hosted_file", "data", "uri"):
+                        attachment_parts.append(content)
+                    elif content_type == "text":
+                        text = getattr(content, "text", "") or ""
+                        if is_attachment_materialization_text(text):
+                            filename = str(_item_attr(item, "filename") or "")
+                            if filename and text.startswith(f"### {filename}"):
+                                attachment_parts.append(content)
+            else:
+                attachment_parts.extend(materialize_attachment_reference(item))
+
+        contents: list[Content] = []
+        if prompt:
+            contents.append(Content.from_text(prompt))
+        contents.extend(_merge_attachment_parts(attachment_parts))
+        message.contents = contents
+        _set_inline_modes_on_message(message, inline_modes)
+        changed = True
+
+    return changed
+
+
+def apply_attachment_reference_policy(
+    messages: list[Message],
+    *,
+    chat_id: uuid.UUID,
+    model_id: str | None = None,
+    provider: str | None = None,
+) -> list[Message]:
+    """Rewrite user attachment contents: first inline, later references only.
+
+    Stubbed / reference-only turns stay stubbed on passive replay. Re-inline
+    happens only when the caller sends a new @ mention and context has no full
+    copy left (see fully_inlined_attachment_ids_in_context).
+    """
+    already_full: set[str] = set()
+    result: list[Message] = []
+    for message in messages:
+        if message.role != "user":
+            result.append(message)
+            continue
+        platform = (message.additional_properties or {}).get("platform") or {}
+        items = _attachment_items(platform)
+        if not items:
+            result.append(message)
+            continue
+        prompt = _extract_user_prompt_from_message(message)
+        parts = _materialize_attachment_parts_for_message(
+            message,
+            items,
+            chat_id=chat_id,
+            model_id=model_id,
+            provider=provider,
+            already_full_inlined=already_full,
+        )
+        contents: list[Content] = []
+        if prompt:
+            contents.append(Content.from_text(prompt))
+        contents.extend(parts)
+        result.append(
+            Message(
+                role="user",
+                contents=contents,
+                additional_properties=message.additional_properties,
+            )
+        )
+    return result

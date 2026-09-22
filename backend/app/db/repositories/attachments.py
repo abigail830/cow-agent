@@ -59,6 +59,27 @@ class AttachmentRepository:
         await self._session.flush()
         return row
 
+    async def update_provider_file(
+        self,
+        attachment_id: uuid.UUID,
+        *,
+        provider: str,
+        provider_file_id: str,
+        mime_type: str | None = None,
+        size_bytes: int | None = None,
+    ) -> ChatAttachment | None:
+        row = await self.get(attachment_id)
+        if row is None:
+            return None
+        row.provider = provider
+        row.provider_file_id = provider_file_id
+        if mime_type is not None:
+            row.mime_type = mime_type
+        if size_bytes is not None:
+            row.size_bytes = size_bytes
+        await self._session.flush()
+        return row
+
     async def insert(
         self,
         *,

@@ -208,8 +208,8 @@ export function MessageBubble({ message }: Props) {
   return (
     <div className={`msg-wrap ${isUser ? 'msg-wrap-user' : 'msg-wrap-assistant'}`}>
       <div
-        className={`rounded-sm px-3 py-2 text-[12px] leading-relaxed ${
-          isUser ? 'msg-user max-w-[78%]' : 'chat-assistant-block msg-assistant'
+        className={`px-3 py-2 text-[12px] leading-relaxed ${
+          isUser ? 'msg-user max-w-[78%]' : 'chat-assistant-block msg-assistant rounded-sm'
         }`}
       >
         {isUser ? (

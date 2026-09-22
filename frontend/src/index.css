@@ -21,8 +21,8 @@
   --color-chrome: oklch(0.975 0.006 75);
   /* Same paper tone for soft fills (code / tool panels) */
   --cover-paper: oklch(0.975 0.006 75);
-  /* User message bubble (warm cream, not brand orange) */
-  --color-user-bubble: #efeae3;
+  /* User message bubble — light brand tint */
+  --color-user-bubble: var(--color-brand-50);
   --color-border: #e4e4e7;
   --color-border-strong: #d4d4d8;
   --color-ink: #18181b;
@@ -1876,8 +1876,9 @@ body {
 }
 
 .markdown-body a {
-  color: var(--color-brand-600);
+  color: inherit;
   text-decoration: underline;
+  text-underline-offset: 0.12em;
 }
 
 .markdown-body table {
@@ -3268,9 +3269,9 @@ body {
   align-items: center;
   max-width: min(100%, 18rem);
   border-radius: 4px;
-  background-color: color-mix(in srgb, var(--color-user-bubble) 60%, #fff);
+  background-color: #fff;
   color: var(--color-ink);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-user-bubble) 55%, #cfc8bf);
+  box-shadow: 0 0 0 1px var(--color-brand-200);
   font-size: 11px;
   line-height: 1.4;
   padding: 0.1em 0.35em;
@@ -3380,7 +3381,8 @@ body {
 
 .msg-user {
   background: var(--color-user-bubble);
-  border: 1px solid color-mix(in srgb, var(--color-user-bubble) 70%, #d6d0c8);
+  border: none;
+  border-radius: 12px;
   color: var(--color-ink);
 }
 
