@@ -55,6 +55,7 @@ def build_job_payload(
             mime_type=row.mime_type,
             size_bytes=row.size_bytes,
             content_hash=row.content_hash,
+            run_token=run_token,
         )
 
     webhook_url = None

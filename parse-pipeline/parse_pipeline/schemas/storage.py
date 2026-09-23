@@ -10,12 +10,14 @@ class ReadSpec(BaseModel):
     size_bytes: int | None = None
     filename: str | None = None
     content_type: str | None = None
+    headers: dict[str, str] | None = None
 
 
 class WriteTarget(BaseModel):
     url: str
     method: str = "PUT"
     content_type: str | None = None
+    headers: dict[str, str] | None = None
 
 
 class StorageSpec(BaseModel):

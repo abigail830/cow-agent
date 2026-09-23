@@ -20,8 +20,9 @@ async def fetch_bytes(read_spec: ReadSpec) -> bytes:
     if parsed.scheme == "file":
         path = _file_path_from_url(read_spec.url)
         return path.read_bytes()
+    headers = dict(read_spec.headers or {})
     async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.request(read_spec.method, read_spec.url)
+        response = await client.request(read_spec.method, read_spec.url, headers=headers)
         response.raise_for_status()
         return response.content
 
@@ -33,7 +34,7 @@ async def put_bytes(target: WriteTarget, data: bytes) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
         return
-    headers: dict[str, str] = {}
+    headers: dict[str, str] = dict(target.headers or {})
     if target.content_type:
         headers["Content-Type"] = target.content_type
     async with httpx.AsyncClient(timeout=120.0) as client:
