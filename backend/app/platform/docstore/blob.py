@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from app.agent_specific.proposal.blob_client import blob_get, blob_put, blob_storage_enabled
+from app.agent_specific.proposal.blob_client import blob_exists, blob_get, blob_put, blob_storage_enabled
 from app.platform.docstore.paths import (
     blob_figure_object_name,
     blob_parsed_object_name,
@@ -47,11 +47,10 @@ def load_parsed_artifact(chat_id: uuid.UUID, attachment_id: uuid.UUID, artifact_
 
 
 def parsed_artifact_exists(chat_id: uuid.UUID, attachment_id: uuid.UUID, artifact_key: str) -> bool:
-    try:
-        load_parsed_artifact(chat_id, attachment_id, artifact_key)
-        return True
-    except FileNotFoundError:
-        return False
+    if blob_storage_enabled():
+        return blob_exists(blob_parsed_object_name(chat_id, attachment_id, artifact_key))
+    path = parsed_artifact_path(chat_id, attachment_id, artifact_key)
+    return path.is_file()
 
 
 def ensure_parsed_dir(chat_id: uuid.UUID, attachment_id: uuid.UUID) -> None:

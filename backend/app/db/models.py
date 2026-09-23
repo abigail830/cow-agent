@@ -226,6 +226,7 @@ class ChatAttachment(Base):
     parse_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     parse_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     parse_stage_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    parsed_artifact_manifest: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     chat: Mapped["Chat"] = relationship(back_populates="attachments")

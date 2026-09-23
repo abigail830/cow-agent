@@ -143,6 +143,9 @@ class ParsedArtifactsOut(BaseModel):
 
 
 class DocumentOut(AttachmentOut):
+    agent_id: uuid.UUID
+    agent_name: str
+    agent_slug: str | None = None
     chat_title: str | None = None
     has_parsed_content: bool = False
     parsed_artifacts: ParsedArtifactsOut = Field(default_factory=ParsedArtifactsOut)

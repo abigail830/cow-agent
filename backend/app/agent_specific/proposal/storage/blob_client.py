@@ -124,11 +124,28 @@ def blob_put(pathname: str, body: bytes | str, *, content_type: str) -> dict[str
     raise RuntimeError("Vercel Blob upload failed.")
 
 
-def blob_get(pathname: str) -> bytes | None:
+def _blob_object_url(pathname: str) -> str:
     access = _resolve_access()
     store_id = _resolve_store_id()
     object_path = pathname.lstrip("/")
-    url = f"https://{store_id}.{access}.blob.vercel-storage.com/{object_path}"
+    return f"https://{store_id}.{access}.blob.vercel-storage.com/{object_path}"
+
+
+def blob_exists(pathname: str) -> bool:
+    url = _blob_object_url(pathname)
+    with httpx.Client(timeout=10.0) as client:
+        response = client.head(url, headers=_auth_headers())
+    if response.status_code == 404:
+        return False
+    if response.status_code >= 400:
+        detail = (response.text or "").strip() or response.reason_phrase
+        logger.warning("Vercel Blob head failed (%s): %s", response.status_code, detail)
+        return False
+    return True
+
+
+def blob_get(pathname: str) -> bytes | None:
+    url = _blob_object_url(pathname)
     with httpx.Client(timeout=60.0) as client:
         response = client.get(url, headers=_auth_headers())
     if response.status_code == 404:

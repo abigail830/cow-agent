@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.platform.attachments.storage import load_inline_attachment
 from app.platform.docstore.blob import load_parsed_figure, save_parsed_artifact, save_parsed_figure
+from app.platform.docstore.repository import DocstoreRepository
 from app.platform.parse_pipeline.job_builder import hash_run_token
 from app.platform.parse_pipeline.repository import ParseJobRepository
 from app.platform.parse_pipeline.status_report import report_parse_run_status
@@ -145,13 +146,22 @@ async def put_artifact(
     if row is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     data = await request.body()
+    content_type = _ARTIFACT_CONTENT_TYPES[artifact_key]
     save_parsed_artifact(
         row.chat_id,
         attachment_id,
         artifact_key,
         data,
-        content_type=_ARTIFACT_CONTENT_TYPES[artifact_key],
+        content_type=content_type,
     )
+    await DocstoreRepository(db).record_parsed_artifact(
+        attachment_id,
+        chat_id=row.chat_id,
+        artifact_key=artifact_key,
+        size_bytes=len(data),
+        content_type=content_type,
+    )
+    await db.commit()
     return {"status": "ok", "artifact": artifact_key}
 
 

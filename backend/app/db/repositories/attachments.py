@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Chat, ChatAttachment
+from app.db.models import AgentModel, Chat, ChatAttachment
 
 
 class AttachmentRepository:
@@ -21,19 +21,15 @@ class AttachmentRepository:
         )
         return list(result.scalars().all())
 
-    def _user_documents_filters(
+    def _apply_user_document_filters(
         self,
-        user_id: uuid.UUID,
+        stmt,
         *,
         q: str | None = None,
         parse_status: str | None = None,
         mime_type: str | None = None,
+        agent_id: uuid.UUID | None = None,
     ):
-        stmt = (
-            select(ChatAttachment, Chat)
-            .join(Chat, ChatAttachment.chat_id == Chat.id)
-            .where(Chat.user_id == user_id)
-        )
         if q:
             pattern = f"%{q.strip()}%"
             stmt = stmt.where(ChatAttachment.filename.ilike(pattern))
@@ -41,6 +37,8 @@ class AttachmentRepository:
             stmt = stmt.where(ChatAttachment.parse_status == parse_status.strip())
         if mime_type:
             stmt = stmt.where(ChatAttachment.mime_type.ilike(f"{mime_type.strip()}%"))
+        if agent_id is not None:
+            stmt = stmt.where(Chat.agent_id == agent_id)
         return stmt
 
     async def list_for_user(
@@ -50,20 +48,40 @@ class AttachmentRepository:
         q: str | None = None,
         parse_status: str | None = None,
         mime_type: str | None = None,
+        agent_id: uuid.UUID | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> tuple[list[tuple[ChatAttachment, Chat]], int]:
-        base = self._user_documents_filters(
-            user_id,
+    ) -> tuple[list[tuple[ChatAttachment, Chat, AgentModel]], int]:
+        count_stmt = (
+            select(func.count(ChatAttachment.id))
+            .select_from(ChatAttachment)
+            .join(Chat, ChatAttachment.chat_id == Chat.id)
+            .where(Chat.user_id == user_id)
+        )
+        count_stmt = self._apply_user_document_filters(
+            count_stmt,
             q=q,
             parse_status=parse_status,
             mime_type=mime_type,
+            agent_id=agent_id,
         )
-        count_stmt = select(func.count()).select_from(base.subquery())
         count_result = await self._session.execute(count_stmt)
         total = int(count_result.scalar_one())
 
-        list_stmt = base.order_by(ChatAttachment.created_at.desc()).limit(limit).offset(offset)
+        list_stmt = (
+            select(ChatAttachment, Chat, AgentModel)
+            .join(Chat, ChatAttachment.chat_id == Chat.id)
+            .join(AgentModel, Chat.agent_id == AgentModel.id)
+            .where(Chat.user_id == user_id)
+        )
+        list_stmt = self._apply_user_document_filters(
+            list_stmt,
+            q=q,
+            parse_status=parse_status,
+            mime_type=mime_type,
+            agent_id=agent_id,
+        )
+        list_stmt = list_stmt.order_by(ChatAttachment.created_at.desc()).limit(limit).offset(offset)
         result = await self._session.execute(list_stmt)
         return list(result.all()), total
 

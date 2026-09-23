@@ -64,8 +64,9 @@ async def _run_inline_safe(job_payload: dict) -> None:
 async def _finalize_inline_job(job_payload: dict) -> None:
     import uuid
 
+    from app.db.models import ChatAttachment
     from app.db.session import get_async_session_factory
-    from app.platform.docstore.blob import parsed_artifact_exists
+    from app.platform.docstore.manifest import parsed_artifact_in_manifest
     from app.platform.docstore.repository import DocstoreRepository
     from app.platform.parse_pipeline.events import publish_attachment_parse_updated
     from app.platform.parse_pipeline.repository import ParseJobRepository
@@ -80,7 +81,11 @@ async def _finalize_inline_job(job_payload: dict) -> None:
         jobs = ParseJobRepository(session)
         await jobs.update_run_status(job_id, "succeeded")
         docstore = DocstoreRepository(session)
-        if parsed_artifact_exists(chat_id, attachment_id, "meta_json"):
+        attachment = await session.get(ChatAttachment, attachment_id)
+        if attachment is not None and parsed_artifact_in_manifest(
+            attachment.parsed_artifact_manifest,
+            "meta_json",
+        ):
             row = await docstore.apply_parse_webhook(
                 attachment_id,
                 status="ready",

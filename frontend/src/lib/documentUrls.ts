@@ -2,8 +2,13 @@ import { resolveApiPath } from './apiBase'
 
 export type ParsedArtifactKey = 'content_md' | 'meta_json' | 'pageindex_json'
 
-export function attachmentOriginalUrl(chatId: string, attachmentId: string): string {
-  return resolveApiPath(`/chats/${chatId}/attachments/${attachmentId}/original`)
+export function attachmentOriginalUrl(
+  chatId: string,
+  attachmentId: string,
+  options?: { inline?: boolean },
+): string {
+  const base = resolveApiPath(`/chats/${chatId}/attachments/${attachmentId}/original`)
+  return options?.inline ? `${base}?disposition=inline` : base
 }
 
 export function attachmentParsedUrl(

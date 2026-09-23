@@ -9,7 +9,6 @@ import httpx
 from app.config import get_settings
 from app.db.models import ChatAttachment
 from app.db.session import get_async_session_factory
-from app.platform.docstore.blob import parsed_artifact_exists
 from app.platform.docstore.models import ParseStatus
 from app.platform.parse_pipeline.repository import ParseJobRepository
 from app.platform.parse_pipeline.status_report import report_parse_run_status
@@ -107,6 +106,7 @@ async def _watch_gha_run(*, job_id: str) -> None:
 
 async def _reconcile_gha_success(*, job_id: str, matched: dict) -> None:
     """GHA succeeded — verify platform received artifacts / ready status via webhook."""
+    from app.platform.docstore.manifest import parsed_artifact_in_manifest
 
     for attempt in range(_RECONCILE_ATTEMPTS):
         factory = get_async_session_factory()
@@ -124,7 +124,10 @@ async def _reconcile_gha_success(*, job_id: str, matched: dict) -> None:
                 await session.commit()
                 return
 
-            if parsed_artifact_exists(run_row.chat_id, run_row.attachment_id, "meta_json"):
+            if attachment is not None and parsed_artifact_in_manifest(
+                attachment.parsed_artifact_manifest,
+                "meta_json",
+            ):
                 await report_parse_run_status(
                     session,
                     run_row=run_row,

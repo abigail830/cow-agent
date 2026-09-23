@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import ChatAttachment
+from app.platform.docstore.manifest import merge_parsed_artifact_record
 from app.platform.docstore.models import ParseStatus
 
 
@@ -29,6 +30,7 @@ class DocstoreRepository:
         row.parse_error_code = None
         row.parse_error_message = None
         row.parse_stage_snapshot = None
+        row.parsed_artifact_manifest = None
         await self._session.flush()
         return row
 
@@ -48,6 +50,30 @@ class DocstoreRepository:
         row.parse_error_code = None
         row.parse_error_message = None
         row.parse_stage_snapshot = None
+        row.parsed_artifact_manifest = None
+        await self._session.flush()
+        return row
+
+    async def record_parsed_artifact(
+        self,
+        attachment_id: uuid.UUID,
+        *,
+        chat_id: uuid.UUID,
+        artifact_key: str,
+        size_bytes: int,
+        content_type: str,
+    ) -> ChatAttachment | None:
+        row = await self._session.get(ChatAttachment, attachment_id)
+        if row is None or row.chat_id != chat_id:
+            return None
+        row.parsed_artifact_manifest = merge_parsed_artifact_record(
+            row.parsed_artifact_manifest,
+            chat_id=chat_id,
+            attachment_id=attachment_id,
+            artifact_key=artifact_key,
+            size_bytes=size_bytes,
+            content_type=content_type,
+        )
         await self._session.flush()
         return row
 

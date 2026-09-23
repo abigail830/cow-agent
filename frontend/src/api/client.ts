@@ -163,6 +163,7 @@ export const api = {
     q?: string
     parse_status?: string
     mime_type?: string
+    agent_id?: string
     limit?: number
     offset?: number
   }) => {
@@ -170,6 +171,7 @@ export const api = {
     if (params?.q?.trim()) search.set('q', params.q.trim())
     if (params?.parse_status) search.set('parse_status', params.parse_status)
     if (params?.mime_type) search.set('mime_type', params.mime_type)
+    if (params?.agent_id) search.set('agent_id', params.agent_id)
     if (params?.limit != null) search.set('limit', String(params.limit))
     if (params?.offset != null) search.set('offset', String(params.offset))
     const query = search.toString()

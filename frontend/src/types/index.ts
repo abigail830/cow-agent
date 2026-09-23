@@ -116,6 +116,9 @@ export interface ParsedArtifactsAvailability {
 }
 
 export interface DocumentItem extends ChatAttachment {
+  agent_id: string
+  agent_name: string
+  agent_slug: string | null
   chat_title: string | null
   has_parsed_content: boolean
   parsed_artifacts: ParsedArtifactsAvailability

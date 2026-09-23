@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -19,7 +21,13 @@ import {
   parsePageIndex,
   type PageIndexData,
 } from '../lib/pageIndexPreview'
-import type { AttachmentParseStatus, DocumentItem } from '../types'
+import type { ArtifactSpec } from '../types/artifact'
+import type { Agent, AttachmentParseStatus, DocumentItem } from '../types'
+
+const UDocArtifactViewer = lazy(async () => {
+  const mod = await import('./UDocArtifactViewer')
+  return { default: mod.UDocArtifactViewer }
+})
 
 type Props = {
   onClose: () => void
@@ -57,12 +65,23 @@ function formatFileSize(sizeBytes: number): string {
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function agentLabel(doc: DocumentItem): string {
+  return doc.agent_name?.trim() || 'Unknown agent'
+}
+
 function sessionLabel(doc: DocumentItem): string {
   return doc.chat_title?.trim() || 'Untitled session'
 }
 
 function parseStatusClass(status: AttachmentParseStatus | undefined): string {
-  return `documents-row-status documents-row-status-${status ?? 'ready'}`
+  return `documents-status-badge documents-status-badge-${status ?? 'ready'}`
+}
+
+function documentStatusBadges(doc: DocumentItem): string[] {
+  const badges = [parseStatusDisplayLabel(doc)]
+  if (doc.has_parsed_content) badges.push('parsed')
+  if (doc.parsed_artifacts?.pageindex_json) badges.push('page index')
+  return badges
 }
 
 function canPreviewOriginal(mimeType: string): boolean {
@@ -76,6 +95,45 @@ function prettyJson(raw: string): string {
   } catch {
     return raw
   }
+}
+
+function attachmentPreviewSpec(doc: DocumentItem): ArtifactSpec {
+  return {
+    kind: 'content_document',
+    title: doc.filename,
+    format: 'pdf',
+    content: '',
+    filename: doc.filename,
+    artifact_id: doc.id,
+    download_url: `/chats/${doc.chat_id}/attachments/${doc.id}/original`,
+  }
+}
+
+function AttachmentOriginalPreview({ doc }: { doc: DocumentItem }) {
+  const mime = doc.mime_type.toLowerCase()
+  const inlineUrl = attachmentOriginalUrl(doc.chat_id, doc.id, { inline: true })
+
+  if (mime.startsWith('image/')) {
+    return <img className="documents-preview-image" src={inlineUrl} alt={doc.filename} />
+  }
+
+  if (mime === 'application/pdf') {
+    return (
+      <div className="documents-preview-udoc">
+        <Suspense
+          fallback={
+            <div className="documents-preview-loading">
+              <LoadingSpinner />
+            </div>
+          }
+        >
+          <UDocArtifactViewer spec={attachmentPreviewSpec(doc)} />
+        </Suspense>
+      </div>
+    )
+  }
+
+  return <iframe className="documents-preview-frame" src={inlineUrl} title={doc.filename} />
 }
 
 function readStoredPreviewWidth(): number | null {
@@ -146,7 +204,7 @@ function DocumentPreviewPane({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const originalUrl = attachmentOriginalUrl(doc.chat_id, doc.id)
+  const downloadUrl = attachmentOriginalUrl(doc.chat_id, doc.id)
 
   useEffect(() => {
     setTab(artifacts.content_md ? 'parsed' : 'original')
@@ -205,7 +263,8 @@ function DocumentPreviewPane({
         <div className="documents-preview-heading">
           <h3 className="documents-preview-title">{doc.filename}</h3>
           <p className="documents-preview-meta">
-            {sessionLabel(doc)} · {formatFileSize(doc.size_bytes)} · {parseStatusDisplayLabel(doc)}
+            {agentLabel(doc)} · {sessionLabel(doc)} · {formatFileSize(doc.size_bytes)} ·{' '}
+            {parseStatusDisplayLabel(doc)}
           </p>
         </div>
         <button type="button" className="documents-preview-close" onClick={onClose} aria-label="Close preview">
@@ -262,7 +321,7 @@ function DocumentPreviewPane({
               Open session
             </button>
           ) : null}
-          <a className="documents-preview-link-btn" href={originalUrl} target="_blank" rel="noreferrer">
+          <a className="documents-preview-link-btn" href={downloadUrl} target="_blank" rel="noreferrer">
             Download
             <ExternalLink size={12} aria-hidden="true" />
           </a>
@@ -278,16 +337,12 @@ function DocumentPreviewPane({
           <p className="documents-preview-error">{error}</p>
         ) : tab === 'original' ? (
           showOriginalPreview ? (
-            doc.mime_type.toLowerCase().startsWith('image/') ? (
-              <img className="documents-preview-image" src={originalUrl} alt={doc.filename} />
-            ) : (
-              <iframe className="documents-preview-frame" src={originalUrl} title={doc.filename} />
-            )
+            <AttachmentOriginalPreview doc={doc} />
           ) : (
             <div className="documents-preview-placeholder">
               <FileText size={28} aria-hidden="true" />
               <p>Inline preview is not available for this file type.</p>
-              <a className="documents-preview-download" href={originalUrl} target="_blank" rel="noreferrer">
+              <a className="documents-preview-download" href={downloadUrl} target="_blank" rel="noreferrer">
                 Download original
               </a>
             </div>
@@ -387,6 +442,8 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [parseStatus, setParseStatus] = useState('')
   const [mimeType, setMimeType] = useState('')
+  const [agentId, setAgentId] = useState('')
+  const [agents, setAgents] = useState<Agent[]>([])
   const [selected, setSelected] = useState<DocumentItem | null>(null)
   const [previewWidth, setPreviewWidth] = useState<number | null>(() => readStoredPreviewWidth())
 
@@ -403,11 +460,23 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
       q: debouncedQuery || undefined,
       parse_status: parseStatus || undefined,
       mime_type: mimeType || undefined,
+      agent_id: agentId || undefined,
       limit: 100,
       offset: 0,
     }),
-    [debouncedQuery, mimeType, parseStatus],
+    [agentId, debouncedQuery, mimeType, parseStatus],
   )
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const rows = await api.listAgents()
+        setAgents(rows)
+      } catch {
+        setAgents([])
+      }
+    })()
+  }, [])
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -528,32 +597,43 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
                 onChange={(event) => setSearchInput(event.target.value)}
               />
             </label>
-            <div className="documents-filter-row">
-              <select
-                className="documents-filter-select"
-                value={parseStatus}
-                aria-label="Filter by parse status"
-                onChange={(event) => setParseStatus(event.target.value)}
-              >
-                {PARSE_STATUS_OPTIONS.map((option) => (
-                  <option key={option.value || 'all-status'} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="documents-filter-select"
-                value={mimeType}
-                aria-label="Filter by file type"
-                onChange={(event) => setMimeType(event.target.value)}
-              >
-                {MIME_FILTER_OPTIONS.map((option) => (
-                  <option key={option.value || 'all-types'} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <select
+              className="documents-filter-select"
+              value={agentId}
+              aria-label="Filter by agent"
+              onChange={(event) => setAgentId(event.target.value)}
+            >
+              <option value="">All agents</option>
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name}
+                </option>
+              ))}
+            </select>
+            <select
+              className="documents-filter-select"
+              value={parseStatus}
+              aria-label="Filter by parse status"
+              onChange={(event) => setParseStatus(event.target.value)}
+            >
+              {PARSE_STATUS_OPTIONS.map((option) => (
+                <option key={option.value || 'all-status'} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <select
+              className="documents-filter-select"
+              value={mimeType}
+              aria-label="Filter by file type"
+              onChange={(event) => setMimeType(event.target.value)}
+            >
+              {MIME_FILTER_OPTIONS.map((option) => (
+                <option key={option.value || 'all-types'} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           {error ? <div className="documents-drawer-error">{error}</div> : null}
@@ -572,33 +652,74 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
                     ? `${total} document${total === 1 ? '' : 's'}`
                     : `${documents.length} of ${total}`}
                 </p>
-                <ul className="documents-drawer-list">
-                  {documents.map((doc) => (
-                    <li key={doc.id}>
-                      <button
-                        type="button"
-                        className={`documents-row${selected?.id === doc.id ? ' documents-row-selected' : ''}`}
-                        onClick={() => handleSelect(doc)}
-                      >
-                        <span className="documents-row-icon" aria-hidden="true">
-                          <FileText size={16} />
-                        </span>
-                        <span className="documents-row-copy">
-                          <span className="documents-row-name">{doc.filename}</span>
-                          <span className="documents-row-meta">
-                            {sessionLabel(doc)} · {formatFileSize(doc.size_bytes)}
-                            {doc.created_at ? ` · ${formatAttachmentTimestamp(doc.created_at)}` : ''}
+                <div className="documents-table">
+                  <div className="documents-table-head" aria-hidden="true">
+                    <span className="documents-col documents-col-agent">Agent</span>
+                    <span className="documents-col documents-col-session">Session</span>
+                    <span className="documents-col documents-col-file">File</span>
+                    <span className="documents-col documents-col-size">Size</span>
+                    <span className="documents-col documents-col-date">Date</span>
+                    <span className="documents-col documents-col-status">Status</span>
+                  </div>
+                  <ul className="documents-table-list">
+                    {documents.map((doc) => (
+                      <li key={doc.id}>
+                        <button
+                          type="button"
+                          className={`documents-table-row${selected?.id === doc.id ? ' documents-table-row-selected' : ''}`}
+                          onClick={() => handleSelect(doc)}
+                        >
+                          <span className="documents-col documents-col-agent">
+                            <span className="documents-col-agent-name" title={agentLabel(doc)}>
+                              {agentLabel(doc)}
+                            </span>
+                            {doc.agent_slug ? (
+                              <span className="documents-col-agent-slug" title={doc.agent_slug}>
+                                {doc.agent_slug}
+                              </span>
+                            ) : null}
                           </span>
-                          <span className={parseStatusClass(doc.parse_status)}>
-                            {parseStatusDisplayLabel(doc)}
-                            {doc.has_parsed_content ? ' · parsed' : ''}
-                            {doc.parsed_artifacts?.pageindex_json ? ' · page index' : ''}
+                          <span className="documents-col documents-col-session">
+                            <span className="documents-col-session-name" title={sessionLabel(doc)}>
+                              {sessionLabel(doc)}
+                            </span>
+                            <span className="documents-col-session-id" title={doc.chat_id}>
+                              {doc.chat_id}
+                            </span>
                           </span>
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                          <span className="documents-col documents-col-file">
+                            <span className="documents-col-file-icon" aria-hidden="true">
+                              <FileText size={14} />
+                            </span>
+                            <span className="documents-col-file-name" title={doc.filename}>
+                              {doc.filename}
+                            </span>
+                          </span>
+                          <span className="documents-col documents-col-size">
+                            {formatFileSize(doc.size_bytes)}
+                          </span>
+                          <span className="documents-col documents-col-date">
+                            {doc.created_at ? formatAttachmentTimestamp(doc.created_at) : '—'}
+                          </span>
+                          <span className="documents-col documents-col-status">
+                            {documentStatusBadges(doc).map((badge) => (
+                              <span
+                                key={badge}
+                                className={
+                                  badge === parseStatusDisplayLabel(doc)
+                                    ? parseStatusClass(doc.parse_status)
+                                    : 'documents-status-badge documents-status-badge-extra'
+                                }
+                              >
+                                {badge}
+                              </span>
+                            ))}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </>
             )}
           </div>

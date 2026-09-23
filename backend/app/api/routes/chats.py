@@ -2,7 +2,7 @@ import json
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,7 +49,7 @@ from app.agent_specific.proposal.export_service import ProposalExportError, gene
 from app.shared.artifacts.resolver import load_artifact_payload, load_preview_payload
 from app.shared.artifacts.storage import get_chat_artifact_format
 from app.shared.artifacts.preview_html import SLIDE_PREVIEW_CSP, prepare_html_ppt_preview_html, prepare_slide_preview_html
-from app.shared.artifacts.urls import content_disposition_attachment
+from app.shared.artifacts.urls import content_disposition_attachment, content_disposition_inline
 from app.db.repositories.attachments import AttachmentRepository
 
 router = APIRouter(prefix="/chats", tags=["chats"])
@@ -401,6 +401,7 @@ async def delete_attachment(
 @router.get("/{chat_id}/attachments/{attachment_id}/original")
 async def download_attachment_original(
     attachment_id: uuid.UUID,
+    disposition: str = Query(default="attachment", pattern="^(inline|attachment)$"),
     chat: Chat = Depends(get_owned_chat),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
@@ -412,11 +413,16 @@ async def download_attachment_original(
         data = load_inline_attachment(chat.id, attachment_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Attachment file not found") from exc
+    content_disposition = (
+        content_disposition_inline(row.filename)
+        if disposition == "inline"
+        else content_disposition_attachment(row.filename)
+    )
     return Response(
         content=data,
         media_type=row.mime_type or "application/octet-stream",
         headers={
-            "Content-Disposition": content_disposition_attachment(row.filename),
+            "Content-Disposition": content_disposition,
             "Content-Length": str(len(data)),
             "Cache-Control": "private, no-store",
         },

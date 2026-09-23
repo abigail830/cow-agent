@@ -2,7 +2,7 @@
 
 from starlette.responses import Response
 
-from app.shared.artifacts.urls import content_disposition_attachment
+from app.shared.artifacts.urls import content_disposition_attachment, content_disposition_inline
 
 
 def test_ascii_filename_disposition() -> None:
@@ -18,4 +18,11 @@ def test_cjk_filename_disposition_is_latin1_safe() -> None:
     assert "UTF-8''" in value
     assert "%E5%8A%9F%E8%83%BD" in value
     # Starlette encodes header values as latin-1; this must not raise.
+    Response(content=b"x", headers={"Content-Disposition": value})
+
+
+def test_inline_disposition() -> None:
+    value = content_disposition_inline("report.pdf")
+    assert value.startswith("inline;")
+    assert 'filename="report.pdf"' in value
     Response(content=b"x", headers={"Content-Disposition": value})

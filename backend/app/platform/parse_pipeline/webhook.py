@@ -9,7 +9,8 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.platform.docstore.blob import parsed_artifact_exists
+from app.db.models import ChatAttachment
+from app.platform.docstore.manifest import parsed_artifact_in_manifest
 from app.platform.docstore.models import ParseStatus
 from app.platform.docstore.repository import DocstoreRepository
 from app.platform.parse_pipeline.events import publish_attachment_parse_updated
@@ -100,7 +101,9 @@ async def apply_webhook_event(
 
     parse_status = _map_parse_status(payload)
     if parse_status == ParseStatus.READY.value:
-        if not parsed_artifact_exists(run_row.chat_id, run_row.attachment_id, "meta_json"):
+        attachment = await session.get(ChatAttachment, run_row.attachment_id)
+        manifest = getattr(attachment, "parsed_artifact_manifest", None) if attachment is not None else None
+        if not parsed_artifact_in_manifest(manifest, "meta_json"):
             parse_status = ParseStatus.RUNNING.value
 
     error = payload.get("error") or {}
