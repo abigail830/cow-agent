@@ -9,8 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import (
     AttachmentOut,
-    ParseProgressOut,
-    ParseStageOut,
     ChatCreate,
     ChatForkOut,
     ChatForkSourceOut,
@@ -31,7 +29,11 @@ from app.api.schemas import (
 from app.db.models import AgentModel, Chat
 from app.platform.auth.current_user import get_current_user, get_current_user_id, get_owned_chat
 from app.db.session import get_db
+from app.platform.attachments.api_out import attachment_out
 from app.platform.attachments.service import AttachmentService
+from app.platform.attachments.storage import load_inline_attachment
+from app.platform.docstore.blob import load_parsed_artifact
+from app.platform.docstore.content_types import VALID_PARSED_ARTIFACT_KEYS, parsed_artifact_media_type
 from app.platform.chat.run_service import ChatRunService, list_chat_messages, list_chat_timeline
 from app.platform.chat.fork_service import fork_chat
 from app.platform.chat.delete_service import delete_chat
@@ -48,45 +50,9 @@ from app.shared.artifacts.resolver import load_artifact_payload, load_preview_pa
 from app.shared.artifacts.storage import get_chat_artifact_format
 from app.shared.artifacts.preview_html import SLIDE_PREVIEW_CSP, prepare_html_ppt_preview_html, prepare_slide_preview_html
 from app.shared.artifacts.urls import content_disposition_attachment
-from app.platform.parse_pipeline.serialization import resolve_parse_status_from_payload
+from app.db.repositories.attachments import AttachmentRepository
 
 router = APIRouter(prefix="/chats", tags=["chats"])
-
-
-def _attachment_out(chat_id: uuid.UUID, row: dict[str, Any]) -> AttachmentOut:
-    progress_raw = row.get("parse_progress")
-    progress = None
-    if isinstance(progress_raw, dict):
-        stages_raw = progress_raw.get("stages")
-        stages = None
-        if isinstance(stages_raw, list):
-            stages = [
-                ParseStageOut(
-                    stage_id=s.get("stage_id") if isinstance(s, dict) else None,
-                    status=s.get("status") if isinstance(s, dict) else None,
-                )
-                for s in stages_raw
-            ]
-        progress = ParseProgressOut(
-            current_stage=progress_raw.get("current_stage"),
-            message=progress_raw.get("message"),
-            stages=stages,
-        )
-    return AttachmentOut(
-        id=uuid.UUID(row["id"]),
-        chat_id=chat_id,
-        filename=row["filename"],
-        mime_type=row["mime_type"],
-        size_bytes=row["size_bytes"],
-        provider=row["provider"],
-        provider_file_id=row["provider_file_id"],
-        created_at=row.get("created_at"),
-        parse_status=resolve_parse_status_from_payload(row),
-        parse_pipeline_id=row.get("parse_pipeline_id"),
-        parse_job_id=row.get("parse_job_id"),
-        parse_error_message=row.get("parse_error_message"),
-        parse_progress=progress,
-    )
 
 
 def _chat_list_out(chat: Chat) -> ChatListOut:
@@ -376,7 +342,7 @@ async def list_attachments(
 ) -> list[AttachmentOut]:
     service = AttachmentService(db)
     rows = await service.list_for_chat(chat.id)
-    return [_attachment_out(chat.id, row) for row in rows]
+    return [attachment_out(chat.id, row) for row in rows]
 
 
 @router.post("/{chat_id}/attachments", response_model=AttachmentOut, status_code=201)
@@ -403,7 +369,7 @@ async def upload_attachment(
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"File upload failed: {exc}") from exc
 
-    return _attachment_out(chat.id, payload)
+    return attachment_out(chat.id, payload)
 
 
 @router.get("/{chat_id}/attachment-events")
@@ -430,6 +396,58 @@ async def delete_attachment(
         await service.delete(chat.id, attachment_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/{chat_id}/attachments/{attachment_id}/original")
+async def download_attachment_original(
+    attachment_id: uuid.UUID,
+    chat: Chat = Depends(get_owned_chat),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    repo = AttachmentRepository(db)
+    row = await repo.get(attachment_id)
+    if row is None or row.chat_id != chat.id:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    try:
+        data = load_inline_attachment(chat.id, attachment_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Attachment file not found") from exc
+    return Response(
+        content=data,
+        media_type=row.mime_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": content_disposition_attachment(row.filename),
+            "Content-Length": str(len(data)),
+            "Cache-Control": "private, no-store",
+        },
+    )
+
+
+@router.get("/{chat_id}/attachments/{attachment_id}/parsed/{artifact_key}")
+async def download_attachment_parsed(
+    attachment_id: uuid.UUID,
+    artifact_key: str,
+    chat: Chat = Depends(get_owned_chat),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    if artifact_key not in VALID_PARSED_ARTIFACT_KEYS:
+        raise HTTPException(status_code=400, detail="Invalid parsed artifact key")
+    repo = AttachmentRepository(db)
+    row = await repo.get(attachment_id)
+    if row is None or row.chat_id != chat.id:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    try:
+        data = load_parsed_artifact(chat.id, attachment_id, artifact_key)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Parsed artifact not found") from exc
+    return Response(
+        content=data,
+        media_type=parsed_artifact_media_type(artifact_key),
+        headers={
+            "Content-Length": str(len(data)),
+            "Cache-Control": "private, no-store",
+        },
+    )
 
 
 @router.post("/{chat_id}/messages")

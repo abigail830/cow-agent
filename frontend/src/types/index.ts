@@ -109,6 +109,16 @@ export interface ChatAttachment {
   parse_progress?: AttachmentParseProgress | null
 }
 
+export interface DocumentItem extends ChatAttachment {
+  chat_title: string | null
+  has_parsed_content: boolean
+}
+
+export interface DocumentListResult {
+  items: DocumentItem[]
+  total: number
+}
+
 export interface MessageAttachmentMeta {
   id: string
   filename: string

@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import App from './App'
 import { AuthProvider } from './context/AuthContext'
 import { LoginPage } from './pages/LoginPage'
+import { DocumentsSettingsPage } from './pages/DocumentsSettingsPage'
 import { IntegrationsSettingsPage } from './pages/IntegrationsSettingsPage'
 import './index.css'
 
@@ -13,6 +14,7 @@ createRoot(document.getElementById('root')!).render(
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/settings/documents" element={<DocumentsSettingsPage />} />
           <Route path="/settings/integrations" element={<IntegrationsSettingsPage />} />
           <Route path="/" element={<App />} />
           <Route path="*" element={<Navigate to="/" replace />} />

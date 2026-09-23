@@ -11,10 +11,17 @@ interface SidebarUserMenuProps {
   user: User | null
   collapsed: boolean
   onOpenIntegrations: () => void
+  onOpenDocuments: () => void
   onLogout: () => void | Promise<void>
 }
 
-export function SidebarUserMenu({ user, collapsed, onOpenIntegrations, onLogout }: SidebarUserMenuProps) {
+export function SidebarUserMenu({
+  user,
+  collapsed,
+  onOpenIntegrations,
+  onOpenDocuments,
+  onLogout,
+}: SidebarUserMenuProps) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -50,6 +57,17 @@ export function SidebarUserMenu({ user, collapsed, onOpenIntegrations, onLogout 
       </button>
       {open ? (
         <div className="agent-sidebar-user-menu" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            className="agent-sidebar-user-menu-item agent-sidebar-user-menu-item-neutral"
+            onClick={() => {
+              setOpen(false)
+              onOpenDocuments()
+            }}
+          >
+            Documents
+          </button>
           <button
             type="button"
             role="menuitem"

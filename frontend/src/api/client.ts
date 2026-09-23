@@ -2,6 +2,7 @@ import type {
   Agent,
   Chat,
   ChatAttachment,
+  DocumentListResult,
   ChatForkResult,
   ChatSummary,
   ChatTimeline,
@@ -156,6 +157,38 @@ export const api = {
       throw new Error(await res.text())
     }
     return res.json() as Promise<ChatAttachment>
+  },
+
+  listDocuments: (params?: {
+    q?: string
+    parse_status?: string
+    mime_type?: string
+    limit?: number
+    offset?: number
+  }) => {
+    const search = new URLSearchParams()
+    if (params?.q?.trim()) search.set('q', params.q.trim())
+    if (params?.parse_status) search.set('parse_status', params.parse_status)
+    if (params?.mime_type) search.set('mime_type', params.mime_type)
+    if (params?.limit != null) search.set('limit', String(params.limit))
+    if (params?.offset != null) search.set('offset', String(params.offset))
+    const query = search.toString()
+    return request<DocumentListResult>(`/documents${query ? `?${query}` : ''}`)
+  },
+
+  fetchAttachmentParsedText: async (
+    chatId: string,
+    attachmentId: string,
+    artifactKey: 'content_md' | 'meta_json' | 'pageindex_json',
+  ): Promise<string> => {
+    const res = await fetch(`${API}/chats/${chatId}/attachments/${attachmentId}/parsed/${artifactKey}`, {
+      ...defaultFetchInit,
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(text || res.statusText)
+    }
+    return res.text()
   },
 
   getProposalPreview: (chatId: string, draft = true) =>

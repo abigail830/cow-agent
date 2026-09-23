@@ -16,6 +16,7 @@ import { api, streamChat } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { AgentIcon } from '../components/AgentIcon'
 import { ChatHistoryPanel } from '../components/ChatHistoryPanel'
+import { DocumentsDrawer } from '../components/DocumentsDrawer'
 import { IntegrationsDrawer } from '../components/IntegrationsDrawer'
 import { MemoryPanel } from '../components/MemoryPanel'
 import { ProposalLivePanel } from '../components/ProposalLivePanel'
@@ -226,6 +227,7 @@ export function ChatPage() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [memoryOpen, setMemoryOpen] = useState(false)
   const [integrationsOpen, setIntegrationsOpen] = useState(() => searchParams.get('integrations') === '1')
+  const [documentsOpen, setDocumentsOpen] = useState(() => searchParams.get('documents') === '1')
   const [proposalPanelWidth, setProposalPanelWidth] = useState(readProposalPanelWidth)
   const streamRegistryRef = useRef(new StreamRegistry())
   const reloadInFlightRef = useRef(new Map<string, Promise<void>>())
@@ -520,12 +522,21 @@ export function ChatPage() {
     setHistoryOpen(false)
     setMemoryOpen(false)
     setIntegrationsOpen(false)
+    setDocumentsOpen(false)
   }, [])
 
   const openIntegrations = useCallback(() => {
     setIntegrationsOpen(true)
     setHistoryOpen(false)
     setMemoryOpen(false)
+    setDocumentsOpen(false)
+  }, [])
+
+  const openDocuments = useCallback(() => {
+    setDocumentsOpen(true)
+    setHistoryOpen(false)
+    setMemoryOpen(false)
+    setIntegrationsOpen(false)
   }, [])
 
   useEffect(() => {
@@ -533,10 +544,27 @@ export function ChatPage() {
     setIntegrationsOpen(true)
     setHistoryOpen(false)
     setMemoryOpen(false)
+    setDocumentsOpen(false)
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev)
         next.delete('integrations')
+        return next
+      },
+      { replace: true },
+    )
+  }, [searchParams, setSearchParams])
+
+  useEffect(() => {
+    if (searchParams.get('documents') !== '1') return
+    setDocumentsOpen(true)
+    setHistoryOpen(false)
+    setMemoryOpen(false)
+    setIntegrationsOpen(false)
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('documents')
         return next
       },
       { replace: true },
@@ -1963,6 +1991,7 @@ export function ChatPage() {
               user={user}
               collapsed={sidebarCollapsed}
               onOpenIntegrations={openIntegrations}
+              onOpenDocuments={openDocuments}
               onLogout={logout}
             />
           ) : null}
@@ -2324,6 +2353,11 @@ export function ChatPage() {
               onClose={() => setHistoryOpen(false)}
               onSelect={(id) => void openHistoryChat(id)}
               onDelete={handleDeleteChat}
+            />
+            <DocumentsDrawer
+              open={documentsOpen}
+              onClose={() => setDocumentsOpen(false)}
+              onOpenChat={(id) => void openHistoryChat(id)}
             />
             <IntegrationsDrawer open={integrationsOpen} onClose={() => setIntegrationsOpen(false)} />
           </div>

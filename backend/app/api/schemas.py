@@ -136,6 +136,16 @@ class AttachmentOut(BaseModel):
     parse_progress: ParseProgressOut | None = None
 
 
+class DocumentOut(AttachmentOut):
+    chat_title: str | None = None
+    has_parsed_content: bool = False
+
+
+class DocumentListOut(BaseModel):
+    items: list[DocumentOut] = Field(default_factory=list)
+    total: int = 0
+
+
 class MessageOut(BaseModel):
     id: str
     chat_id: str

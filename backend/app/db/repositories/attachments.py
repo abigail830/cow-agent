@@ -1,9 +1,9 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import ChatAttachment
+from app.db.models import Chat, ChatAttachment
 
 
 class AttachmentRepository:
@@ -20,6 +20,52 @@ class AttachmentRepository:
             .order_by(ChatAttachment.created_at.desc())
         )
         return list(result.scalars().all())
+
+    def _user_documents_filters(
+        self,
+        user_id: uuid.UUID,
+        *,
+        q: str | None = None,
+        parse_status: str | None = None,
+        mime_type: str | None = None,
+    ):
+        stmt = (
+            select(ChatAttachment, Chat)
+            .join(Chat, ChatAttachment.chat_id == Chat.id)
+            .where(Chat.user_id == user_id)
+        )
+        if q:
+            pattern = f"%{q.strip()}%"
+            stmt = stmt.where(ChatAttachment.filename.ilike(pattern))
+        if parse_status:
+            stmt = stmt.where(ChatAttachment.parse_status == parse_status.strip())
+        if mime_type:
+            stmt = stmt.where(ChatAttachment.mime_type.ilike(f"{mime_type.strip()}%"))
+        return stmt
+
+    async def list_for_user(
+        self,
+        user_id: uuid.UUID,
+        *,
+        q: str | None = None,
+        parse_status: str | None = None,
+        mime_type: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[tuple[ChatAttachment, Chat]], int]:
+        base = self._user_documents_filters(
+            user_id,
+            q=q,
+            parse_status=parse_status,
+            mime_type=mime_type,
+        )
+        count_stmt = select(func.count()).select_from(base.subquery())
+        count_result = await self._session.execute(count_stmt)
+        total = int(count_result.scalar_one())
+
+        list_stmt = base.order_by(ChatAttachment.created_at.desc()).limit(limit).offset(offset)
+        result = await self._session.execute(list_stmt)
+        return list(result.all()), total
 
     async def list_by_ids(self, chat_id: uuid.UUID, attachment_ids: list[uuid.UUID]) -> list[ChatAttachment]:
         if not attachment_ids:
