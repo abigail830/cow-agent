@@ -83,13 +83,21 @@ jobs:
           JOB_JSON: ${{ runner.temp }}/job.json
         run: |
           set -euo pipefail
-          curl -fsSL \
+          url="${PLATFORM_BASE_URL%/}/internal/parse/v1/run/${PLATFORM_JOB_ID}"
+          http_code="$(curl -sS -o "$JOB_JSON" -w "%{http_code}" \
             -H "Authorization: Bearer ${PLATFORM_RUN_TOKEN}" \
-            "${PLATFORM_BASE_URL%/}/internal/parse/v1/run/${PLATFORM_JOB_ID}" \
-            -o "$JOB_JSON"
+            -H "Accept: application/json" \
+            "$url")"
+          if [ "$http_code" != "200" ]; then
+            echo "Platform fetch failed HTTP ${http_code} from ${url}" >&2
+            head -c 400 "$JOB_JSON" >&2 || true
+            echo >&2
+            exit 1
+          fi
+          test -s "$JOB_JSON"
+          python -c "import json; d=json.load(open('$JOB_JSON')); assert isinstance(d, dict) and d.get('job_id')"
           echo "job_json=$JOB_JSON" >> "$GITHUB_OUTPUT"
           echo "mode=platform" >> "$GITHUB_OUTPUT"
-          python -c "import json; json.load(open('$JOB_JSON'))"
 
       - name: Build job payload
         id: build

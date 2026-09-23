@@ -16,6 +16,10 @@
       "destination": "https://cow-agent.vercel.app/health"
     },
     {
+      "source": "/internal/:path*",
+      "destination": "https://cow-agent.vercel.app/internal/:path*"
+    },
+    {
       "source": "/((?!api/|health).*)",
       "destination": "/index.html"
     }
