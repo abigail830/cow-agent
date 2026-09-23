@@ -2755,7 +2755,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 14rem;
 }
 
 .composer-staged-chip-remove {
@@ -2788,6 +2787,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  min-width: 0;
+  max-width: min(100%, 16rem);
   border: none;
   background: transparent;
   padding: 0;

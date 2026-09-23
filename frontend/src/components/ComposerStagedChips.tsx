@@ -38,11 +38,11 @@ export function ComposerStagedChips({ attachments, onRemove, onChipClick, disabl
             ) : null}
             <button
               type="button"
-              className="composer-staged-chip-name composer-staged-chip-name-btn"
+              className="composer-staged-chip-name-btn"
               title={att.filename}
               onClick={() => onChipClick?.(att)}
             >
-              {att.filename}
+              <span className="composer-staged-chip-name">{att.filename}</span>
               {parsing ? (
                 <span className="proposal-draft-bagel composer-staged-chip-bagel">Parsing</span>
               ) : null}
