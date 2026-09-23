@@ -48,6 +48,7 @@ from app.shared.artifacts.resolver import load_artifact_payload, load_preview_pa
 from app.shared.artifacts.storage import get_chat_artifact_format
 from app.shared.artifacts.preview_html import SLIDE_PREVIEW_CSP, prepare_html_ppt_preview_html, prepare_slide_preview_html
 from app.shared.artifacts.urls import content_disposition_attachment
+from app.platform.parse_pipeline.serialization import resolve_parse_status_from_payload
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
@@ -80,7 +81,7 @@ def _attachment_out(chat_id: uuid.UUID, row: dict[str, Any]) -> AttachmentOut:
         provider=row["provider"],
         provider_file_id=row["provider_file_id"],
         created_at=row.get("created_at"),
-        parse_status=row.get("parse_status") or "ready",
+        parse_status=resolve_parse_status_from_payload(row),
         parse_pipeline_id=row.get("parse_pipeline_id"),
         parse_job_id=row.get("parse_job_id"),
         parse_error_message=row.get("parse_error_message"),

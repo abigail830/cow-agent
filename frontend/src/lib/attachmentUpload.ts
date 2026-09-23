@@ -1,4 +1,5 @@
 import type { ChatAttachment } from '../types'
+import { effectiveParseStatus } from './attachmentParseProgress'
 
 export type AttachmentUploadStatus = 'uploading' | 'failed'
 
@@ -11,12 +12,12 @@ export function isPendingAttachmentId(id: string): boolean {
 }
 
 export function isParseReady(att: ChatAttachment): boolean {
-  const status = att.parse_status ?? 'ready'
+  const status = effectiveParseStatus(att)
   return status === 'ready' || status === 'skipped'
 }
 
 export function isAttachmentParsing(att: ChatAttachment): boolean {
-  const status = att.parse_status ?? 'ready'
+  const status = effectiveParseStatus(att)
   return status === 'pending' || status === 'running'
 }
 

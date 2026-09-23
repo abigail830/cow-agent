@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import ChatAttachment
 from app.platform.docstore.repository import DocstoreRepository
 from app.platform.parse_pipeline.dispatcher import dispatch_gha
+from app.platform.parse_pipeline.gha_watch import schedule_gha_run_watch
 from app.platform.parse_pipeline.inline_runner import schedule_inline_job
 from app.platform.parse_pipeline.job_builder import (
     build_job_payload,
@@ -63,6 +64,7 @@ async def enqueue_parse_job(
     try:
         if effective_mode == "gha":
             await dispatch_gha(job_id=job_id, run_token=run_token, pipeline_id=pipeline_id)
+            schedule_gha_run_watch(job_id=job_id)
         else:
             schedule_inline_job(payload)
     except Exception as exc:

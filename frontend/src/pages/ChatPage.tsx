@@ -1005,12 +1005,20 @@ export function ChatPage() {
   }, [chatId])
 
   useEffect(() => {
-    if (!chatId || !hasParsingAttachments || attachmentSseConnected) return
+    if (!chatId || !hasParsingAttachments) return
     const timer = window.setInterval(() => {
       void loadChatAttachments(chatId, { silent: true })
     }, 2500)
     return () => window.clearInterval(timer)
-  }, [chatId, hasParsingAttachments, attachmentSseConnected, loadChatAttachments])
+  }, [chatId, hasParsingAttachments, loadChatAttachments])
+
+  useEffect(() => {
+    setParseDrawerAttachment((current) => {
+      if (!current) return current
+      const fresh = chatAttachments.find((row) => row.id === current.id)
+      return fresh ?? current
+    })
+  }, [chatAttachments])
 
   const refreshMentionTrigger = useCallback(
     (value: string, cursorPos: number) => {
@@ -2137,10 +2145,6 @@ export function ChatPage() {
                         onChipClick={(att) => setParseDrawerAttachment(att)}
                         disabled={loading || chatSessionLoading}
                       />
-                      <AttachmentParseDrawer
-                        attachment={parseDrawerAttachment}
-                        onClose={() => setParseDrawerAttachment(null)}
-                      />
                       <div ref={composerMentionWrapRef} className="chat-composer-mention-wrap">
                         <AttachmentMentionPopup
                           open={mentionTrigger !== null}
@@ -2278,6 +2282,10 @@ export function ChatPage() {
                 </div>
               </div>
             </div>
+            <AttachmentParseDrawer
+              attachment={parseDrawerAttachment}
+              onClose={() => setParseDrawerAttachment(null)}
+            />
             </div>
 
             {isProposalComposer && (

@@ -1,5 +1,7 @@
 name: parse-pipeline run job
 
+run-name: platform-parse-${{ inputs.platform_job_id || inputs.job_id || github.run_id }}
+
 on:
   workflow_dispatch:
     inputs:
@@ -87,6 +89,7 @@ jobs:
             -o "$JOB_JSON"
           echo "job_json=$JOB_JSON" >> "$GITHUB_OUTPUT"
           echo "mode=platform" >> "$GITHUB_OUTPUT"
+          python -c "import json; json.load(open('$JOB_JSON'))"
 
       - name: Build job payload
         id: build
@@ -132,7 +135,17 @@ jobs:
           echo "job_json=$JOB_JSON" >> "$GITHUB_OUTPUT"
           echo "mode=fixture" >> "$GITHUB_OUTPUT"
 
+      - name: Validate job payload
+        if: always() && (steps.platform_fetch.outcome == 'success' || steps.build.outcome == 'success')
+        env:
+          JOB_JSON: ${{ runner.temp }}/job.json
+        run: |
+          set -euo pipefail
+          test -s "$JOB_JSON"
+          python -c "import json; json.load(open('$JOB_JSON'))"
+
       - name: Run parse job
+        if: steps.platform_fetch.outcome == 'success' || steps.build.outcome == 'success'
         env:
           DOCUMENT_MIND_ACCESS_KEY_ID: ${{ secrets.DOCUMENT_MIND_ACCESS_KEY_ID }}
           DOCUMENT_MIND_ACCESS_KEY_SECRET: ${{ secrets.DOCUMENT_MIND_ACCESS_KEY_SECRET }}
@@ -153,3 +166,17 @@ jobs:
         with:
           name: parse-pipeline-job-json-${{ github.run_id }}
           path: ${{ steps.build.outputs.job_json }}
+
+      - name: Report failure to platform
+        if: failure() && inputs.platform_job_id != '' && inputs.platform_run_token != '' && inputs.platform_base_url != ''
+        env:
+          PLATFORM_JOB_ID: ${{ inputs.platform_job_id }}
+          PLATFORM_RUN_TOKEN: ${{ inputs.platform_run_token }}
+          PLATFORM_BASE_URL: ${{ inputs.platform_base_url }}
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${PLATFORM_RUN_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"status\":\"failed\",\"error\":{\"code\":\"GHA_FAILED\",\"message\":\"GitHub Actions workflow failed (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}}" \
+            "${PLATFORM_BASE_URL%/}/internal/parse/v1/run/${PLATFORM_JOB_ID}/status" || true

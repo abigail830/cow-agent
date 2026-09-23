@@ -33,7 +33,6 @@ export function subscribeChatAttachmentParseEvents(
   es.onopen = () => options?.onConnectionChange?.(true)
   es.onerror = () => {
     options?.onConnectionChange?.(false)
-    es.close()
   }
 
   return () => {

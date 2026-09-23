@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -12,9 +13,16 @@ from app.platform.attachments.storage import load_inline_attachment
 from app.platform.docstore.blob import save_parsed_artifact
 from app.platform.parse_pipeline.job_builder import hash_run_token
 from app.platform.parse_pipeline.repository import ParseJobRepository
+from app.platform.parse_pipeline.status_report import report_parse_run_status
 from app.platform.parse_pipeline.webhook import apply_webhook_event, verify_webhook_signature
 
 router = APIRouter(prefix="/internal/parse/v1", tags=["parse-internal"])
+
+
+class RunStatusBody(BaseModel):
+    status: str = Field(description="failed | running | succeeded")
+    error: dict[str, str] | None = None
+    message: str | None = None
 
 _ARTIFACT_CONTENT_TYPES = {
     "content_md": "text/markdown; charset=utf-8",
@@ -41,6 +49,46 @@ async def get_run_payload(
     if row is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="invalid or expired run token")
     return row.job_payload_json
+
+
+@router.post("/run/{job_id}/status")
+async def post_run_status(
+    job_id: str,
+    body: RunStatusBody,
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    token = _extract_bearer(authorization)
+    jobs = ParseJobRepository(db)
+    run_row = await jobs.get_run_by_token_hash(job_id, hash_run_token(token))
+    if run_row is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="invalid or expired run token")
+
+    status_norm = body.status.strip().lower()
+    if status_norm == "failed":
+        error = body.error or {}
+        error_code = error.get("code") or "GHA_FAILED"
+        error_message = error.get("message") or body.message or "Parse job failed"
+        await report_parse_run_status(
+            db,
+            run_row=run_row,
+            parse_status="failed",
+            error_code=str(error_code),
+            error_message=str(error_message),
+            run_status="failed",
+        )
+    elif status_norm in {"running", "queued"}:
+        await report_parse_run_status(
+            db,
+            run_row=run_row,
+            parse_status="running",
+            run_status=status_norm,
+        )
+    else:
+        raise HTTPException(status_code=400, detail=f"unsupported status: {body.status}")
+
+    await db.commit()
+    return {"status": "ok"}
 
 
 @router.get("/files/{attachment_id}/original")
