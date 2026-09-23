@@ -62,8 +62,9 @@ def _figure_write_url(content_target: WriteTarget, figure_id: str, ext: str) -> 
         figure_path = content_path.parent / "figures" / f"{figure_id}.{ext}"
         return figure_path.as_uri()
     if "/artifacts/" in url:
+        # Platform API: PUT /figures/{figure_id} — extension comes from Content-Type, not path.
         base = url.rsplit("/artifacts/", 1)[0]
-        return f"{base}/figures/{figure_id}.{ext}"
+        return f"{base}/figures/{figure_id}"
     raise ValueError(f"cannot derive figure write URL from: {url}")
 
 

@@ -42,6 +42,16 @@ _MIME_TO_EXT = {
 }
 
 
+def _normalize_figure_id(raw: str) -> str:
+    """Accept f1 or legacy f1.jpeg path segments; API route uses bare figure id."""
+    figure_id = raw.strip()
+    if "." in figure_id:
+        figure_id = figure_id.rsplit(".", 1)[0]
+    if not _FIGURE_ID_RE.match(figure_id):
+        raise HTTPException(status_code=400, detail="invalid figure_id")
+    return figure_id
+
+
 def _extension_from_content_type(content_type: str | None) -> str:
     normalized = (content_type or "").split(";", 1)[0].strip().lower()
     ext = _MIME_TO_EXT.get(normalized)
@@ -173,8 +183,7 @@ async def put_figure(
     authorization: str | None = Header(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    if not _FIGURE_ID_RE.match(figure_id):
-        raise HTTPException(status_code=400, detail="invalid figure_id")
+    figure_id = _normalize_figure_id(figure_id)
     token = _extract_bearer(authorization)
     jobs = ParseJobRepository(db)
     row = await jobs.get_run_for_attachment_token(attachment_id, hash_run_token(token))
@@ -203,8 +212,7 @@ async def get_figure(
 ):
     from fastapi.responses import Response
 
-    if not _FIGURE_ID_RE.match(figure_id):
-        raise HTTPException(status_code=400, detail="invalid figure_id")
+    figure_id = _normalize_figure_id(figure_id)
     token = _extract_bearer(authorization)
     jobs = ParseJobRepository(db)
     row = await jobs.get_run_for_attachment_token(attachment_id, hash_run_token(token))
