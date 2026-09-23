@@ -23,6 +23,7 @@ class RunContext:
     agent_slug: str | None
     run_id: uuid.UUID | None = None
     context_usage: dict[str, Any] | None = None
+    turn_attachment_ids: frozenset[str] = frozenset()
 
 
 class AgentPlugin(ABC):

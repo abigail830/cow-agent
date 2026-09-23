@@ -360,8 +360,15 @@ class ChatRunService:
             agent_slug=await self._agent_slug_for_chat(chat),
         )
 
-    async def _prepare_run_plugins(self, chat: Chat) -> RunContext:
+    async def _prepare_run_plugins(
+        self,
+        chat: Chat,
+        *,
+        turn_attachment_ids: frozenset[str] | None = None,
+    ) -> RunContext:
         ctx = await self._build_run_context(chat)
+        if turn_attachment_ids is not None:
+            ctx.turn_attachment_ids = turn_attachment_ids
         await run_plugin_start(ctx)
         init_run_viz_state()
         return ctx
@@ -486,11 +493,14 @@ class ChatRunService:
         chat = await self._get_chat(chat_id)
         memory_config = await self._memory_config_for_chat(chat)
         session = await self._sessions.get_or_create(chat_id)
-        run_ctx = await self._prepare_run_plugins(chat)
         model_id, model_provider = await self._resolve_run_model(chat)
         attachments = await self._resolve_attachments(chat, attachment_ids or [])
         if not content.strip() and not attachments:
             raise ValueError("Message content or attachments required")
+        run_ctx = await self._prepare_run_plugins(
+            chat,
+            turn_attachment_ids=frozenset(str(att.id) for att in attachments),
+        )
         turn_id = uuid.uuid4()
         run_id = uuid.uuid4()
         already_full = await self._prior_already_full_attachment_ids(
@@ -581,11 +591,14 @@ class ChatRunService:
         chat = await self._get_chat(chat_id)
         memory_config = await self._memory_config_for_chat(chat)
         session = await self._sessions.get_or_create(chat_id)
-        run_ctx = await self._prepare_run_plugins(chat)
         model_id, model_provider = await self._resolve_run_model(chat)
         attachments = await self._resolve_attachments(chat, attachment_ids or [])
         if not content.strip() and not attachments:
             raise ValueError("Message content or attachments required")
+        run_ctx = await self._prepare_run_plugins(
+            chat,
+            turn_attachment_ids=frozenset(str(att.id) for att in attachments),
+        )
         turn_id = uuid.uuid4()
         already_full = await self._prior_already_full_attachment_ids(
             chat.id,

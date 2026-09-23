@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
@@ -10,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.platform.attachments.storage import load_inline_attachment
-from app.platform.docstore.blob import save_parsed_artifact
+from app.platform.docstore.blob import load_parsed_figure, save_parsed_artifact, save_parsed_figure
 from app.platform.parse_pipeline.job_builder import hash_run_token
 from app.platform.parse_pipeline.repository import ParseJobRepository
 from app.platform.parse_pipeline.status_report import report_parse_run_status
@@ -29,6 +30,23 @@ _ARTIFACT_CONTENT_TYPES = {
     "meta_json": "application/json",
     "pageindex_json": "application/json",
 }
+
+_FIGURE_ID_RE = re.compile(r"^f\d+$")
+_FIGURE_EXTENSIONS = {"jpeg", "jpg", "png", "gif", "webp"}
+_MIME_TO_EXT = {
+    "image/jpeg": "jpeg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/webp": "webp",
+}
+
+
+def _extension_from_content_type(content_type: str | None) -> str:
+    normalized = (content_type or "").split(";", 1)[0].strip().lower()
+    ext = _MIME_TO_EXT.get(normalized)
+    if ext is None:
+        raise HTTPException(status_code=400, detail=f"unsupported figure content type: {content_type}")
+    return ext
 
 
 def _extract_bearer(authorization: str | None) -> str:
@@ -135,6 +153,66 @@ async def put_artifact(
         content_type=_ARTIFACT_CONTENT_TYPES[artifact_key],
     )
     return {"status": "ok", "artifact": artifact_key}
+
+
+@router.put("/files/{attachment_id}/figures/{figure_id}")
+async def put_figure(
+    attachment_id: uuid.UUID,
+    figure_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    if not _FIGURE_ID_RE.match(figure_id):
+        raise HTTPException(status_code=400, detail="invalid figure_id")
+    token = _extract_bearer(authorization)
+    jobs = ParseJobRepository(db)
+    row = await jobs.get_run_for_attachment_token(attachment_id, hash_run_token(token))
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    content_type = request.headers.get("content-type")
+    extension = _extension_from_content_type(content_type)
+    data = await request.body()
+    save_parsed_figure(
+        row.chat_id,
+        attachment_id,
+        figure_id,
+        extension,
+        data,
+        content_type=content_type or "application/octet-stream",
+    )
+    return {"status": "ok", "figure": figure_id, "extension": extension}
+
+
+@router.get("/files/{attachment_id}/figures/{figure_id}")
+async def get_figure(
+    attachment_id: uuid.UUID,
+    figure_id: str,
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    from fastapi.responses import Response
+
+    if not _FIGURE_ID_RE.match(figure_id):
+        raise HTTPException(status_code=400, detail="invalid figure_id")
+    token = _extract_bearer(authorization)
+    jobs = ParseJobRepository(db)
+    row = await jobs.get_run_for_attachment_token(attachment_id, hash_run_token(token))
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    last_error: FileNotFoundError | None = None
+    for extension in _FIGURE_EXTENSIONS:
+        try:
+            data = load_parsed_figure(row.chat_id, attachment_id, figure_id, extension)
+        except FileNotFoundError as exc:
+            last_error = exc
+            continue
+        media_type = next(
+            (mime for mime, ext in _MIME_TO_EXT.items() if ext == extension or (extension == "jpg" and ext == "jpeg")),
+            "application/octet-stream",
+        )
+        return Response(content=data, media_type=media_type)
+    raise HTTPException(status_code=404, detail="figure not found") from last_error
 
 
 @router.post("/webhook")

@@ -12,6 +12,7 @@ from app.agent_specific.proposal.tools import PROPOSAL_BUILTIN_TOOLS
 from app.agent_specific.viz.tools import VIZ_BUILTIN_TOOLS
 from app.agent_specific.yl_worker2.tools import YL_WORKER2_TOOLS
 from app.platform.agent.platform_time import platform_time
+from app.platform.doc_retrieval.tools import DOC_RETRIEVAL_BUILTIN_TOOLS
 
 _TOOL_FRAGMENTS: tuple[dict[str, Callable[..., Any]], ...] = (
     PROPOSAL_BUILTIN_TOOLS,
@@ -21,6 +22,7 @@ _TOOL_FRAGMENTS: tuple[dict[str, Callable[..., Any]], ...] = (
     PUBLISH_BUILTIN_TOOLS,
     VIZ_BUILTIN_TOOLS,
     YL_WORKER2_TOOLS,
+    DOC_RETRIEVAL_BUILTIN_TOOLS,
 )
 
 

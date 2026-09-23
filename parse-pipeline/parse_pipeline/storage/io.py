@@ -52,3 +52,36 @@ async def write_artifact(spec: StorageSpec, key: str, data: bytes) -> bool:
         return False
     await put_bytes(target, data)
     return True
+
+
+def _figure_write_url(content_target: WriteTarget, figure_id: str, ext: str) -> str:
+    url = content_target.url
+    parsed = urlparse(url)
+    if parsed.scheme == "file":
+        content_path = _file_path_from_url(url)
+        figure_path = content_path.parent / "figures" / f"{figure_id}.{ext}"
+        return figure_path.as_uri()
+    if "/artifacts/" in url:
+        base = url.rsplit("/artifacts/", 1)[0]
+        return f"{base}/figures/{figure_id}.{ext}"
+    raise ValueError(f"cannot derive figure write URL from: {url}")
+
+
+async def write_figure(
+    spec: StorageSpec,
+    figure_id: str,
+    data: bytes,
+    mime_type: str,
+    ext: str,
+) -> bool:
+    content_target = spec.write.get("content_md")
+    if content_target is None:
+        return False
+    target = WriteTarget(
+        url=_figure_write_url(content_target, figure_id, ext),
+        method=content_target.method,
+        content_type=mime_type,
+        headers=content_target.headers,
+    )
+    await put_bytes(target, data)
+    return True

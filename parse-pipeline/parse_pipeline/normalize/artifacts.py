@@ -13,6 +13,8 @@ class NormalizedArtifacts:
     meta_json: dict[str, Any]
     pageindex_json: dict[str, Any] | None = None
     warnings: list[str] = field(default_factory=list)
+    # figure_id -> (bytes, mime_type, extension)
+    figure_files: dict[str, tuple[bytes, str, str]] = field(default_factory=dict)
 
 
 def normalize_text_artifacts(

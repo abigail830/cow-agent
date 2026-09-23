@@ -28,6 +28,10 @@ from app.platform.attachments.kinds import AttachmentKind, classify_attachment, 
 _IMAGE_MIMES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
 from app.platform.attachments.pages import load_attachment_bytes
 from app.platform.attachments.storage import is_inline_provider_file_id
+from app.platform.doc_retrieval.context import get_doc_retrieval_context
+from app.platform.doc_retrieval.manifest import build_hydrate_text
+from app.platform.docstore.blob import parsed_artifact_exists
+from app.platform.docstore.models import PARSE_READY_STATUSES
 
 
 def _item_attr(item: Any, name: str, default: Any = "") -> Any:
@@ -292,6 +296,45 @@ def _should_rematerialize_from_disk(item: Any, caps: AttachmentCapabilities) -> 
     return False
 
 
+def _explicit_parse_ready(item: Any) -> bool:
+    status = _item_attr(item, "parse_status")
+    if not status:
+        return False
+    return str(status) in PARSE_READY_STATUSES
+
+
+def should_hydrate_parsed_document(
+    item: Any,
+    caps: AttachmentCapabilities,
+    *,
+    chat_id: uuid.UUID | None = None,
+    settings: Settings | None = None,
+) -> bool:
+    """Use parse artifacts + doc_retrieval tools instead of inline extract/raster."""
+    settings = settings or get_settings()
+    if not _explicit_parse_ready(item):
+        return False
+    filename = str(_item_attr(item, "filename") or "attachment")
+    mime_type = str(_item_attr(item, "mime_type") or "application/octet-stream")
+    kind = classify_attachment(filename=filename, mime_type=mime_type)
+    if kind == AttachmentKind.IMAGE:
+        return False
+    if chat_id is not None:
+        att_id = str(_item_attr(item, "id") or "").strip()
+        if not att_id:
+            return False
+        try:
+            if not parsed_artifact_exists(chat_id, uuid.UUID(att_id), "content_md"):
+                return False
+        except (ValueError, FileNotFoundError):
+            return False
+    if settings.document_hydrate_unified:
+        return kind in (AttachmentKind.TEXT, AttachmentKind.SHEET, AttachmentKind.PDF)
+    if kind == AttachmentKind.PDF and caps.pdf_file_id:
+        return False
+    return kind in (AttachmentKind.TEXT, AttachmentKind.SHEET, AttachmentKind.PDF)
+
+
 def _has_usable_file_id(item: Any, *, provider: str | None) -> bool:
     file_id = str(_item_attr(item, "provider_file_id") or "")
     if not file_id or is_inline_provider_file_id(file_id):
@@ -417,12 +460,18 @@ def materialize_attachments(
     inline_modes = forced_inline_modes or {}
     text_blocks: list[str] = []
     binary: list[Content] = []
+    hydrate_items: list[Any] = []
     remaining_chars = settings.attachment_extract_max_chars_per_message
     for item in items:
         key = _attachment_key(item)
         forced_mode = inline_modes.get(key or "")
         if forced_mode == "reference" or (key and key in seen):
             parts = materialize_attachment_reference(item)
+        elif should_hydrate_parsed_document(item, caps, chat_id=chat_id, settings=settings):
+            hydrate_items.append(item)
+            parts = []
+            if key:
+                seen.add(key)
         else:
             parts = materialize_attachment(
                 item,
@@ -447,6 +496,10 @@ def materialize_attachments(
                     text_blocks.append(chunk)
             else:
                 binary.append(part)
+    if hydrate_items:
+        hydrate_text = build_hydrate_text(hydrate_items, ctx=get_doc_retrieval_context())
+        if hydrate_text:
+            text_blocks.insert(0, hydrate_text)
     contents: list[Content] = []
     if text_blocks:
         contents.append(Content.from_text("\n\n".join(text_blocks)))
@@ -596,6 +649,13 @@ def _materialize_attachment_parts_for_message(
         forced_mode = inline_modes.get(key)
         if forced_mode == "reference" or key in already_full_inlined or key in ref_only:
             parts.extend(materialize_attachment_reference(item))
+            continue
+        settings = get_settings()
+        if should_hydrate_parsed_document(item, caps, chat_id=chat_id, settings=settings):
+            hydrate_text = build_hydrate_text([item], ctx=get_doc_retrieval_context())
+            if hydrate_text:
+                parts.append(Content.from_text(hydrate_text))
+            already_full_inlined.add(key)
             continue
         if key in existing_full and not _should_rematerialize_from_disk(item, caps):
             preserved = _existing_full_parts_for_item(message, item)

@@ -138,6 +138,18 @@ class Settings(BaseSettings):
         default=2000,
         validation_alias="ATTACHMENT_TABLE_MAX_ROWS_PER_SHEET",
     )
+    document_hydrate_unified: bool = Field(
+        default=False,
+        validation_alias="DOCUMENT_HYDRATE_UNIFIED",
+    )
+    hydrate_preview_max_bytes: int = Field(
+        default=2048,
+        validation_alias="HYDRATE_PREVIEW_MAX_BYTES",
+    )
+    hydrate_library_max_items: int = Field(
+        default=20,
+        validation_alias="HYDRATE_LIBRARY_MAX_ITEMS",
+    )
     # Diagram rendering (agents/napkin-architect)
     plantuml_renderer: str = Field(default="kroki", validation_alias="PLANTUML_RENDERER")
     kroki_url: str = Field(default="https://kroki.io", validation_alias="KROKI_URL")

@@ -293,6 +293,36 @@ Slim 往返时在 row metadata 写入 `attachment_inline_modes`（`full` / `refe
 
 ---
 
+## Phase 2：Parse + Hydrate + doc_retrieval
+
+Parse pipeline 完成后，parsed 产物落在 `chat-attachments/{chat_id}/parsed/{attachment_id}/`（`content.md`、`meta.json`、`pageindex.json`、`figures/`）。国产模型（DeepSeek / Qwen / MiniMax 等）在 parse ready 时走 **双层 Hydrate**，不再 inline 32k 截断或 PDF 栅格化；Claude/GPT 默认仍用 file_id（`DOCUMENT_HYDRATE_UNIFIED=false`）。
+
+### Hydrate 注入
+
+| 块 | 内容 |
+|----|------|
+| **Turn manifest** | 本 turn `@` 的附件：filename、pages/lines、figure 数、section 摘要、tool 提示 |
+| **Chat library index** | 全 chat ready 附件紧凑目录（默认最多 20 条） |
+
+配置：`HYDRATE_PREVIEW_MAX_BYTES`、`HYDRATE_LIBRARY_MAX_ITEMS`、`DOCUMENT_HYDRATE_UNIFIED`。
+
+### doc_retrieval 工具（opt-in，`allowed_tools`）
+
+| Tool | 用途 |
+|------|------|
+| `attachment_find` | 模糊指代 → top 5 candidates |
+| `attachment_list_chat` | 全 chat 附件目录 |
+| `attachment_grep` | 搜 `content.md` |
+| `attachment_read` | 按行/页/章切片 |
+| `attachment_list_sections` | 结构目录 |
+| `attachment_read_figure` | 读镜像 figure → vision base64 |
+
+鉴权：**chat_library** — 同 chat 任意 parse ready 附件可读；turn manifest 仅控制 Hydrate 注入范围。
+
+模块：`backend/app/platform/doc_retrieval/`；注册于 `platform/agent/builtin_registry.py`。
+
+---
+
 ## 关键代码入口（快速跳转）
 
 ```
@@ -301,6 +331,9 @@ backend/app/platform/attachments/materialize.py  # LLM 注入
 backend/app/platform/attachments/capabilities.py # 模型路由
 backend/app/api/routes/chats.py                  # HTTP
 backend/app/platform/chat/run_service.py         # 发送编排
+backend/app/platform/doc_retrieval/              # grep/read/find + hydrate manifest
+parse-pipeline/parse_pipeline/normalize/         # figure 镜像 + meta.pages
+backend/app/platform/docstore/                   # parsed artifact 存储
 frontend/src/pages/ChatPage.tsx                  # UI 编排
 frontend/src/lib/attachmentMentions.ts           # @ mention
 frontend/src/lib/attachmentUpload.ts             # staged 合并

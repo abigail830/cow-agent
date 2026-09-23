@@ -34,3 +34,21 @@ def blob_parsed_prefix(chat_id: uuid.UUID, attachment_id: uuid.UUID) -> str:
 def blob_parsed_object_name(chat_id: uuid.UUID, attachment_id: uuid.UUID, artifact_key: str) -> str:
     filename = _ARTIFACT_NAMES.get(artifact_key, artifact_key)
     return f"{blob_parsed_prefix(chat_id, attachment_id)}/{filename}"
+
+
+def parsed_figure_path(
+    chat_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    figure_id: str,
+    extension: str,
+) -> Path:
+    return parsed_artifact_dir(chat_id, attachment_id) / "figures" / f"{figure_id}.{extension}"
+
+
+def blob_figure_object_name(
+    chat_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    figure_id: str,
+    extension: str,
+) -> str:
+    return f"{blob_parsed_prefix(chat_id, attachment_id)}/figures/{figure_id}.{extension}"

@@ -8,13 +8,14 @@ from parse_pipeline.config import Settings, get_settings
 from parse_pipeline.job_store.base import JobRecord
 from parse_pipeline.job_store.factory import get_job_store
 from parse_pipeline.normalize.artifacts import NormalizedArtifacts, artifacts_to_bytes, normalize_text_artifacts
+from parse_pipeline.normalize.finalize import finalize_normalized_artifacts
 from parse_pipeline.providers.local.sheet import extract_sheet_bytes
 from parse_pipeline.providers.local.text import extract_text_bytes
 from parse_pipeline.providers.document_mind.client import DEFAULT_OUTPUT_FORMATS
 from parse_pipeline.schemas.job import JobArtifacts, JobError, JobProgress, JobStatus, PipelineId
 from parse_pipeline.schemas.stages import StageId, StageStatus
 from parse_pipeline.schemas.storage import StorageSpec
-from parse_pipeline.storage.io import fetch_bytes, parse_storage_spec, write_artifact
+from parse_pipeline.storage.io import fetch_bytes, parse_storage_spec, write_artifact, write_figure
 from parse_pipeline.webhooks import sender
 
 logger = logging.getLogger(__name__)
@@ -260,13 +261,17 @@ class JobRunner:
         normalized: NormalizedArtifacts,
         pipeline_id: str,
     ) -> NormalizedArtifacts:
+        import asyncio
+
         await self._begin_stage(record, StageId.NORMALIZE)
+        normalized = await asyncio.to_thread(finalize_normalized_artifacts, normalized)
         await self._finish_stage(
             record,
             StageId.NORMALIZE,
             outputs={
                 "line_count": normalized.meta_json.get("line_count"),
                 "page_count": normalized.meta_json.get("page_count"),
+                "figure_count": len(normalized.figure_files),
             },
         )
         return normalized
@@ -279,6 +284,10 @@ class JobRunner:
         wrote_pageindex = False
         if pageindex_b is not None:
             wrote_pageindex = await write_artifact(spec, "pageindex_json", pageindex_b)
+        figure_writes = 0
+        for figure_id, (data, mime_type, ext) in normalized.figure_files.items():
+            if await write_figure(spec, figure_id, data, mime_type, ext):
+                figure_writes += 1
         record.artifacts = JobArtifacts(
             content_md=wrote_content,
             meta_json=wrote_meta,
@@ -292,6 +301,7 @@ class JobRunner:
                 "content_md": wrote_content,
                 "meta_json": wrote_meta,
                 "pageindex_json": wrote_pageindex,
+                "figure_writes": figure_writes,
             },
         )
 
