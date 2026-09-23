@@ -45,6 +45,10 @@ def _blob_object_name(chat_id: uuid.UUID, attachment_id: uuid.UUID) -> str:
     return f"{_BLOB_PREFIX}/{chat_id}/{attachment_id}"
 
 
+def inline_attachment_blob_path(chat_id: uuid.UUID, attachment_id: uuid.UUID) -> str:
+    return _blob_object_name(chat_id, attachment_id)
+
+
 def _require_writable_storage() -> None:
     if os.getenv("VERCEL") == "1" and not blob_storage_enabled():
         raise RuntimeError(

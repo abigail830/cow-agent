@@ -142,6 +142,11 @@ export const api = {
     }
   },
 
+  retryAttachmentParse: (chatId: string, attachmentId: string) =>
+    request<ChatAttachment>(`/chats/${chatId}/attachments/${attachmentId}/parse/retry`, {
+      method: 'POST',
+    }),
+
   uploadChatAttachment: async (
     chatId: string,
     file: File,

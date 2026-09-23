@@ -31,8 +31,8 @@ export function ComposerStagedChips({ attachments, onRemove, onChipClick, disabl
 
         return (
           <div key={att.id} className={chipClass} role="listitem">
-            {uploading || parsing ? (
-              <span className="composer-staged-chip-spinner" aria-label={parsing ? 'Parsing' : 'Uploading'}>
+            {uploading ? (
+              <span className="composer-staged-chip-spinner" aria-label="Uploading">
                 <LoadingSpinner size="sm" />
               </span>
             ) : null}
@@ -43,11 +43,13 @@ export function ComposerStagedChips({ attachments, onRemove, onChipClick, disabl
               onClick={() => onChipClick?.(att)}
             >
               <span className="composer-staged-chip-name">{att.filename}</span>
-              {parsing ? (
-                <span className="proposal-draft-bagel composer-staged-chip-bagel">Parsing</span>
-              ) : null}
-              {failed ? <span className="composer-staged-chip-failed-label">Failed</span> : null}
             </button>
+            {parsing ? (
+              <span className="composer-staged-chip-bagel" aria-label="Parsing">
+                Parsing
+              </span>
+            ) : null}
+            {failed ? <span className="composer-staged-chip-failed-label">Failed</span> : null}
             <button
               type="button"
               className="composer-staged-chip-remove"

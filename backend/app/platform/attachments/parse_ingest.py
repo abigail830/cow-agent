@@ -38,3 +38,24 @@ async def finalize_attachment_parse(
         return row
 
     return await enqueue_parse_job(session, row, pipeline_id=pipeline_id)
+
+
+async def retry_attachment_parse(
+    session: AsyncSession,
+    row: ChatAttachment,
+) -> ChatAttachment:
+    """Re-dispatch parse pipeline for a failed or stuck attachment (full job retry)."""
+    kind = classify_attachment(filename=row.filename, mime_type=row.mime_type)
+    resolution = resolve_pipeline(kind)
+
+    if resolution.action == PipelineRoute.SKIP.value:
+        docstore = DocstoreRepository(session)
+        updated = await docstore.mark_parse_ready(row.id, skipped=True)
+        return updated or row
+
+    if resolution.action == PipelineRoute.REJECT.value:
+        raise ValueError(f"Unsupported file type for parse: {row.mime_type or row.filename}")
+
+    pipeline_id = resolution.pipeline_id
+    assert pipeline_id is not None
+    return await enqueue_parse_job(session, row, pipeline_id=pipeline_id)

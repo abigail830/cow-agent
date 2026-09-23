@@ -106,3 +106,24 @@ def test_blob_put_retries_on_503(monkeypatch):
     assert mock_client.put.call_count == 2
 
     get_settings.cache_clear()
+
+
+def test_blob_delete_uses_control_api(monkeypatch):
+    from unittest.mock import MagicMock
+
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", "vercel_blob_rw_teststore_testsecret")
+    monkeypatch.setenv("ARTIFACT_STORAGE", "vercel_blob")
+    monkeypatch.setenv("BLOB_ACCESS", "private")
+    monkeypatch.setenv("BLOB_STORE_ID", "teststore")
+    get_settings.cache_clear()
+
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
+    mock_client.delete.return_value = MagicMock(status_code=200)
+    monkeypatch.setattr(blob_client.httpx, "Client", lambda **kwargs: mock_client)
+
+    assert blob_client.blob_delete("chat-attachments/demo/file.bin") is True
+    call_url = mock_client.delete.call_args.args[0]
+    assert call_url.startswith("https://vercel.com/api/blob/?pathname=")
+
+    get_settings.cache_clear()

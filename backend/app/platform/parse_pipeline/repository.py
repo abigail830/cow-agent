@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import ParseJobEvent, ParseJobRun
@@ -107,3 +107,29 @@ class ParseJobRepository:
         if exp < datetime.now(timezone.utc):
             return None
         return row
+
+    async def delete_for_attachment(self, attachment_id: uuid.UUID) -> None:
+        job_ids = list(
+            (
+                await self._session.execute(
+                    select(ParseJobRun.job_id).where(ParseJobRun.attachment_id == attachment_id)
+                )
+            ).scalars()
+        )
+        if job_ids:
+            await self._session.execute(delete(ParseJobEvent).where(ParseJobEvent.job_id.in_(job_ids)))
+        await self._session.execute(delete(ParseJobRun).where(ParseJobRun.attachment_id == attachment_id))
+        await self._session.flush()
+
+    async def delete_for_chat(self, chat_id: uuid.UUID) -> None:
+        job_ids = list(
+            (
+                await self._session.execute(
+                    select(ParseJobRun.job_id).where(ParseJobRun.chat_id == chat_id)
+                )
+            ).scalars()
+        )
+        if job_ids:
+            await self._session.execute(delete(ParseJobEvent).where(ParseJobEvent.job_id.in_(job_ids)))
+        await self._session.execute(delete(ParseJobRun).where(ParseJobRun.chat_id == chat_id))
+        await self._session.flush()

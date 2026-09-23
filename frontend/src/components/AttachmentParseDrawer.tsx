@@ -1,8 +1,10 @@
-import { Check, Circle, ImageIcon, Loader2, Minus, X } from 'lucide-react'
+import { useState } from 'react'
+import { Check, Circle, ImageIcon, Loader2, Minus, RotateCcw, X } from 'lucide-react'
 import type { ChatAttachmentListItem } from '../lib/attachmentUpload'
 import {
   PARSE_STAGE_ORDER,
   buildStageStatuses,
+  effectiveParseStatus,
   isImageAttachment,
   parseNotRequired,
   parseNotRequiredDetail,
@@ -63,17 +65,32 @@ function StageIcon({ status }: { status: ParseStageDisplayStatus }) {
 type Props = {
   attachment: ChatAttachmentListItem | null
   onClose: () => void
+  onRetry?: (attachment: ChatAttachmentListItem) => Promise<void>
 }
 
-export function AttachmentParseDrawer({ attachment, onClose }: Props) {
+export function AttachmentParseDrawer({ attachment, onClose, onRetry }: Props) {
+  const [retrying, setRetrying] = useState(false)
+
   if (!attachment) return null
 
   const notRequired = parseNotRequired(attachment)
+  const status = effectiveParseStatus(attachment)
   const statusLabel = parseStatusDisplayLabel(attachment)
   const stageStatuses = buildStageStatuses(attachment)
   const progressMessage = parseProgressMessage(attachment)
   const progressTone = parseProgressMessageTone(attachment)
   const notRequiredDetail = parseNotRequiredDetail(attachment)
+  const canRetry = Boolean(onRetry) && !notRequired && (status === 'failed' || status === 'running' || status === 'pending')
+
+  async function handleRetry() {
+    if (!onRetry || retrying) return
+    setRetrying(true)
+    try {
+      await onRetry(attachment)
+    } finally {
+      setRetrying(false)
+    }
+  }
 
   return (
     <>
@@ -122,6 +139,27 @@ export function AttachmentParseDrawer({ attachment, onClose }: Props) {
 
             {attachment.parse_error_message && progressTone !== 'error' ? (
               <p className="attachment-parse-drawer-error">{attachment.parse_error_message}</p>
+            ) : null}
+
+            {canRetry ? (
+              <div className="attachment-parse-drawer-actions">
+                <button
+                  type="button"
+                  className="attachment-parse-drawer-retry"
+                  disabled={retrying}
+                  onClick={() => void handleRetry()}
+                >
+                  {retrying ? (
+                    <Loader2 size={14} className="parse-pipeline-node-spinner" aria-hidden />
+                  ) : (
+                    <RotateCcw size={14} aria-hidden />
+                  )}
+                  {retrying ? 'Retrying…' : 'Retry parse'}
+                </button>
+                <p className="attachment-parse-drawer-retry-hint">
+                  Re-runs the full pipeline from fetch (v1). Partial step resume is not supported yet.
+                </p>
+              </div>
             ) : null}
 
             <ol className="parse-pipeline-track" aria-label="Parse pipeline stages">

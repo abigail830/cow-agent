@@ -11,7 +11,10 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Chat
+from app.db.repositories.attachments import AttachmentRepository
+from app.platform.attachments.cleanup import delete_attachment_storage, delete_chat_blob_storage
 from app.platform.chat.run_manager import get_run_manager
+from app.platform.parse_pipeline.repository import ParseJobRepository
 from app.platform.session.session_store import SessionStore
 
 logger = logging.getLogger(__name__)
@@ -52,7 +55,7 @@ def delete_chat_files(chat_id: uuid.UUID) -> list[Path]:
 
 
 async def delete_chat(db: AsyncSession, chat: Chat) -> None:
-    """Cancel an active run, drop Redis/files, then delete the chat row (DB CASCADE)."""
+    """Cancel an active run, delete blob/files, then delete the chat row (DB CASCADE)."""
     chat_id = chat.id
     try:
         await get_run_manager().discard_chat(chat_id)
@@ -65,9 +68,34 @@ async def delete_chat(db: AsyncSession, chat: Chat) -> None:
         logger.warning("Failed to clear Redis session for chat %s", chat_id, exc_info=True)
 
     try:
+        attachments = await AttachmentRepository(db).list_for_chat(chat_id)
+        for attachment in attachments:
+            try:
+                delete_attachment_storage(attachment)
+            except Exception:
+                logger.warning(
+                    "Failed to remove attachment storage %s for chat %s",
+                    attachment.id,
+                    chat_id,
+                    exc_info=True,
+                )
+    except Exception:
+        logger.warning("Failed to list attachments for chat %s during delete", chat_id, exc_info=True)
+
+    try:
+        delete_chat_blob_storage(chat_id)
+    except Exception:
+        logger.warning("Failed to remove blob storage for chat %s", chat_id, exc_info=True)
+
+    try:
         delete_chat_files(chat_id)
     except Exception:
         logger.warning("Failed to remove on-disk files for chat %s", chat_id, exc_info=True)
+
+    try:
+        await ParseJobRepository(db).delete_for_chat(chat_id)
+    except Exception:
+        logger.warning("Failed to remove parse job rows for chat %s", chat_id, exc_info=True)
 
     await db.execute(delete(Chat).where(Chat.id == chat_id))
     await db.commit()

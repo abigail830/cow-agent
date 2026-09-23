@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import time
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
@@ -60,12 +61,24 @@ def _should_mirror_url(url: str) -> bool:
     return True
 
 
-def _download_image(url: str, *, timeout_sec: float = 60.0) -> tuple[bytes, str]:
-    with httpx.Client(timeout=timeout_sec, follow_redirects=True) as client:
-        response = client.get(url)
-        response.raise_for_status()
-        content_type = (response.headers.get("content-type") or "application/octet-stream").split(";", 1)[0]
-        return response.content, content_type.strip().lower()
+def _download_image(url: str, *, timeout_sec: float = 120.0, retries: int = 3) -> tuple[bytes, str]:
+    last_exc: Exception | None = None
+    for attempt in range(max(1, retries)):
+        try:
+            with httpx.Client(timeout=timeout_sec, follow_redirects=True) as client:
+                response = client.get(url)
+                response.raise_for_status()
+                content_type = (response.headers.get("content-type") or "application/octet-stream").split(";", 1)[0]
+                return response.content, content_type.strip().lower()
+        except Exception as exc:
+            last_exc = exc
+            if attempt + 1 < retries:
+                time.sleep(float(attempt + 1))
+                continue
+            raise
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("figure download failed")
 
 
 def mirror_markdown_figures(content_md: str) -> FigureMirrorResult:

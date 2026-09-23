@@ -85,8 +85,30 @@ async def test_delete_chat_commits_even_if_sidecars_fail(monkeypatch) -> None:
             assert cid == chat_id
             raise RuntimeError("redis down")
 
+    class _AttachmentRepo:
+        def __init__(self, _db):
+            pass
+
+        async def list_for_chat(self, cid):
+            assert cid == chat_id
+            raise RuntimeError("attachments down")
+
+    class _ParseJobs:
+        def __init__(self, _db):
+            pass
+
+        async def delete_for_chat(self, cid):
+            assert cid == chat_id
+            raise RuntimeError("parse jobs down")
+
     monkeypatch.setattr("app.platform.chat.delete_service.get_run_manager", lambda: _RunManager())
     monkeypatch.setattr("app.platform.chat.delete_service.SessionStore", _SessionStore)
+    monkeypatch.setattr("app.platform.chat.delete_service.AttachmentRepository", _AttachmentRepo)
+    monkeypatch.setattr("app.platform.chat.delete_service.ParseJobRepository", _ParseJobs)
+    monkeypatch.setattr(
+        "app.platform.chat.delete_service.delete_chat_blob_storage",
+        lambda cid: (_ for _ in ()).throw(RuntimeError("blob down")),
+    )
     monkeypatch.setattr("app.platform.chat.delete_service.delete_chat_files", lambda cid: (_ for _ in ()).throw(OSError("disk")))
 
     await delete_chat(_Db(), chat)

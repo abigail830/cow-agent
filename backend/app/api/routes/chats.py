@@ -385,6 +385,22 @@ async def attachment_parse_events(
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
+@router.post("/{chat_id}/attachments/{attachment_id}/parse/retry", response_model=AttachmentOut)
+async def retry_attachment_parse(
+    attachment_id: uuid.UUID,
+    chat: Chat = Depends(get_owned_chat),
+    db: AsyncSession = Depends(get_db),
+) -> AttachmentOut:
+    service = AttachmentService(db)
+    try:
+        payload = await service.retry_parse(chat.id, attachment_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Parse retry failed: {exc}") from exc
+    return attachment_out(chat.id, payload)
+
+
 @router.delete("/{chat_id}/attachments/{attachment_id}", status_code=204)
 async def delete_attachment(
     attachment_id: uuid.UUID,

@@ -3,9 +3,11 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories.attachments import AttachmentRepository
+from app.platform.attachments.cleanup import delete_attachment_storage
 from app.platform.attachments.metadata import attachment_metadata
-from app.platform.attachments.storage import delete_inline_attachment
+from app.platform.attachments.parse_ingest import retry_attachment_parse
 from app.platform.attachments.upload import AttachmentUploader
+from app.platform.parse_pipeline.repository import ParseJobRepository
 
 
 class AttachmentService:
@@ -37,14 +39,25 @@ class AttachmentService:
         return await self._uploader.resolve_for_message(chat_id, attachment_ids)
 
     async def delete(self, chat_id: uuid.UUID, attachment_id: uuid.UUID) -> None:
-        row = await self._attachments.delete(chat_id, attachment_id)
-        if row is None:
+        row = await self._attachments.get(attachment_id)
+        if row is None or row.chat_id != chat_id:
             raise ValueError("Attachment not found for this chat")
-        try:
-            delete_inline_attachment(chat_id, attachment_id)
-        except OSError:
-            pass
+
+        delete_attachment_storage(row)
+        await ParseJobRepository(self._db).delete_for_attachment(attachment_id)
+        await self._attachments.delete(chat_id, attachment_id)
         await self._db.commit()
+
+    async def retry_parse(self, chat_id: uuid.UUID, attachment_id: uuid.UUID) -> dict:
+        row = await self._attachments.get(attachment_id)
+        if row is None or row.chat_id != chat_id:
+            raise ValueError("Attachment not found for this chat")
+        updated = await retry_attachment_parse(self._db, row)
+        await self._db.commit()
+        payload = attachment_metadata(updated)
+        if updated.created_at is not None:
+            payload["created_at"] = updated.created_at.isoformat()
+        return payload
 
     async def list_for_chat(self, chat_id: uuid.UUID) -> list[dict]:
         rows = await self._attachments.list_for_chat(chat_id)

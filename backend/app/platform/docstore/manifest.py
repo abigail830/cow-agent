@@ -93,3 +93,44 @@ def parsed_artifact_record(
         return None
     record = artifacts.get(artifact_key)
     return record if isinstance(record, dict) else None
+
+
+def iter_manifest_storage_paths(manifest: dict[str, Any] | None) -> list[str]:
+    """Return deduplicated blob/local logical paths recorded in a manifest."""
+    if not manifest:
+        return []
+    paths: list[str] = []
+    seen: set[str] = set()
+
+    def add(path: str | None) -> None:
+        if not path or not isinstance(path, str):
+            return
+        normalized = path.lstrip("/")
+        if not normalized or normalized in seen:
+            return
+        seen.add(normalized)
+        paths.append(normalized)
+
+    prefix = manifest.get("prefix")
+    if isinstance(prefix, str):
+        add(prefix)
+
+    artifacts = manifest.get("artifacts")
+    if isinstance(artifacts, dict):
+        for record in artifacts.values():
+            if isinstance(record, dict):
+                add(record.get("storage_path"))
+
+    return paths
+
+
+def manifest_parsed_prefix(
+    manifest: dict[str, Any] | None,
+    *,
+    chat_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+) -> str:
+    prefix = (manifest or {}).get("prefix")
+    if isinstance(prefix, str) and prefix.strip():
+        return prefix.lstrip("/")
+    return parsed_artifact_prefix(chat_id, attachment_id)

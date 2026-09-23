@@ -9,6 +9,7 @@ from parse_pipeline.job_store.base import JobRecord
 from parse_pipeline.job_store.factory import get_job_store
 from parse_pipeline.normalize.artifacts import NormalizedArtifacts, artifacts_to_bytes, normalize_text_artifacts
 from parse_pipeline.normalize.finalize import finalize_normalized_artifacts
+from parse_pipeline.orchestrator.errors import job_error_from_exception
 from parse_pipeline.providers.local.sheet import extract_sheet_bytes
 from parse_pipeline.providers.local.text import extract_text_bytes
 from parse_pipeline.providers.document_mind.client import DEFAULT_OUTPUT_FORMATS
@@ -42,11 +43,14 @@ class JobRunner:
         except Exception as exc:
             logger.exception("job failed job_id=%s", job_id)
             record.status = JobStatus.FAILED
-            record.error = JobError(
-                code=getattr(exc, "code", "PARSE_FAILED"),
-                message=str(exc),
-                stage_id=record.current_stage,
-            )
+            try:
+                record.error = job_error_from_exception(exc, record.current_stage)
+            except Exception:
+                record.error = JobError(
+                    code="PARSE_FAILED",
+                    message=str(exc) or type(exc).__name__,
+                    stage_id=record.current_stage,
+                )
             record.stats = {"duration_ms": int((time.monotonic() - started) * 1000)}
             await self.store.save_job(record)
             await sender.emit_job_failed(record)
@@ -264,7 +268,17 @@ class JobRunner:
         import asyncio
 
         await self._begin_stage(record, StageId.NORMALIZE)
-        normalized = await asyncio.to_thread(finalize_normalized_artifacts, normalized)
+        try:
+            normalized = await asyncio.to_thread(finalize_normalized_artifacts, normalized)
+        except Exception as exc:
+            logger.warning("normalize degraded job_id=%s: %s", record.job_id, exc)
+            warning = f"normalize_failed:{exc}"
+            warnings = list(normalized.warnings or [])
+            warnings.append(warning)
+            normalized.warnings = warnings
+            meta = dict(normalized.meta_json)
+            meta["warnings"] = list(meta.get("warnings") or []) + [warning]
+            normalized.meta_json = meta
         await self._finish_stage(
             record,
             StageId.NORMALIZE,

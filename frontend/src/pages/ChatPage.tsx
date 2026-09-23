@@ -943,6 +943,33 @@ export function ChatPage() {
     [patchSession, selectedId],
   )
 
+  const handleRetryAttachmentParse = useCallback(
+    async (attachment: ChatAttachmentListItem) => {
+      if (!chatId) return
+      try {
+        const updated = await api.retryAttachmentParse(chatId, attachment.id)
+        patchChatAttachments((prev) =>
+          mergeChatAttachmentList(
+            prev,
+            prev.some((row) => row.id === updated.id)
+              ? prev.map((row) => (row.id === updated.id ? { ...row, ...updated } : row))
+              : [updated, ...prev],
+          ),
+        )
+        setParseDrawerAttachment((current) =>
+          current?.id === updated.id ? { ...current, ...updated } : current,
+        )
+        patchSession(selectedId!, { error: null })
+      } catch (e) {
+        patchSession(selectedId!, {
+          error: formatApiError(e, 'Failed to retry parse'),
+        })
+        throw e
+      }
+    },
+    [chatId, patchChatAttachments, patchSession, selectedId],
+  )
+
   useEffect(() => {
     chatAttachmentsRef.current = chatAttachments
   }, [chatAttachments])
@@ -1009,6 +1036,17 @@ export function ChatPage() {
     }, ATTACHMENT_PARSE_POLL_MS)
     return () => window.clearInterval(timer)
   }, [chatId, hasParsingAttachments, loadChatAttachments])
+
+  useEffect(() => {
+    if (!chatId || !parseDrawerAttachment) return
+    const status = parseDrawerAttachment.parse_status ?? 'pending'
+    if (status !== 'pending' && status !== 'running') return
+    void loadChatAttachments(chatId, { silent: true })
+    const timer = window.setInterval(() => {
+      void loadChatAttachments(chatId, { silent: true })
+    }, ATTACHMENT_PARSE_POLL_MS)
+    return () => window.clearInterval(timer)
+  }, [chatId, loadChatAttachments, parseDrawerAttachment])
 
   useEffect(() => {
     setParseDrawerAttachment((current) => {
@@ -2289,6 +2327,7 @@ export function ChatPage() {
             <AttachmentParseDrawer
               attachment={parseDrawerAttachment}
               onClose={() => setParseDrawerAttachment(null)}
+              onRetry={chatId ? handleRetryAttachmentParse : undefined}
             />
             </div>
 

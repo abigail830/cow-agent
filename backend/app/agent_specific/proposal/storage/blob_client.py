@@ -155,3 +155,58 @@ def blob_get(pathname: str) -> bytes | None:
         logger.warning("Vercel Blob read failed (%s): %s", response.status_code, detail)
         return None
     return response.content
+
+
+def blob_delete(pathname: str) -> bool:
+    object_path = pathname.lstrip("/")
+    url = f"{_BLOB_CONTROL_API}/?{urlencode({'pathname': object_path})}"
+    with httpx.Client(timeout=30.0) as client:
+        response = client.delete(url, headers=_auth_headers())
+    if response.status_code in {200, 204, 404}:
+        return True
+    detail = (response.text or "").strip() or response.reason_phrase
+    logger.warning("Vercel Blob delete failed (%s): %s", response.status_code, detail)
+    return False
+
+
+def blob_list(pathname_prefix: str, *, limit: int = 1000) -> list[str]:
+    prefix = pathname_prefix.lstrip("/")
+    pathnames: list[str] = []
+    cursor: str | None = None
+    with httpx.Client(timeout=30.0) as client:
+        while True:
+            params: dict[str, str] = {"prefix": prefix, "limit": str(limit)}
+            if cursor:
+                params["cursor"] = cursor
+            url = f"{_BLOB_CONTROL_API}/?{urlencode(params)}"
+            response = client.get(url, headers=_auth_headers())
+            if response.status_code >= 400:
+                detail = (response.text or "").strip() or response.reason_phrase
+                logger.warning("Vercel Blob list failed (%s): %s", response.status_code, detail)
+                break
+            data = response.json()
+            if not isinstance(data, dict):
+                break
+            blobs = data.get("blobs") or []
+            if isinstance(blobs, list):
+                for item in blobs:
+                    if not isinstance(item, dict):
+                        continue
+                    pathname = item.get("pathname") or item.get("url")
+                    if isinstance(pathname, str) and pathname.strip():
+                        pathnames.append(pathname.lstrip("/"))
+            if not data.get("hasMore"):
+                break
+            next_cursor = data.get("cursor")
+            if not isinstance(next_cursor, str) or not next_cursor.strip():
+                break
+            cursor = next_cursor
+    return pathnames
+
+
+def blob_delete_prefix(pathname_prefix: str) -> int:
+    deleted = 0
+    for pathname in blob_list(pathname_prefix):
+        if blob_delete(pathname):
+            deleted += 1
+    return deleted
