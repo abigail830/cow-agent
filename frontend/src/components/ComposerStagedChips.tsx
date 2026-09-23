@@ -1,7 +1,7 @@
 import { X } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
 import type { ChatAttachmentListItem } from '../lib/attachmentUpload'
-import { isAttachmentParsing, isPendingAttachmentId } from '../lib/attachmentUpload'
+import { isAttachmentParsing, isAttachmentReady, isPendingAttachmentId } from '../lib/attachmentUpload'
 
 type Props = {
   attachments: ChatAttachmentListItem[]
@@ -19,11 +19,12 @@ export function ComposerStagedChips({ attachments, onRemove, onChipClick, disabl
         const uploading = att.upload_status === 'uploading' || isPendingAttachmentId(att.id)
         const failed = att.upload_status === 'failed' || att.parse_status === 'failed'
         const parsing = !uploading && !failed && isAttachmentParsing(att)
+        const ready = !failed && isAttachmentReady(att)
         const chipClass = [
           'composer-staged-chip',
           uploading || parsing ? 'composer-staged-chip-uploading' : '',
           failed ? 'composer-staged-chip-failed' : '',
-          att.parse_status === 'ready' ? 'composer-staged-chip-ready' : '',
+          ready ? 'composer-staged-chip-ready' : '',
         ]
           .filter(Boolean)
           .join(' ')

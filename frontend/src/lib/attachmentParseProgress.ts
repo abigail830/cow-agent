@@ -37,6 +37,31 @@ export function likelyNeedsParse(attachment: ChatAttachment): boolean {
   return false
 }
 
+export function isImageAttachment(attachment: ChatAttachment): boolean {
+  const mime = (attachment.mime_type ?? '').toLowerCase()
+  if (mime.startsWith('image/')) return true
+  return /\.(png|jpe?g|gif|webp)$/i.test(attachment.filename ?? '')
+}
+
+/** True when upload finished without entering the GHA / parse-pipeline worker. */
+export function parseNotRequired(attachment: ChatAttachment): boolean {
+  const status = effectiveParseStatus(attachment)
+  if (status === 'skipped') return true
+  return status === 'ready' && !likelyNeedsParse(attachment)
+}
+
+export function parseStatusDisplayLabel(attachment: ChatAttachment): string {
+  if (parseNotRequired(attachment)) return 'not required'
+  return effectiveParseStatus(attachment)
+}
+
+export function parseNotRequiredDetail(attachment: ChatAttachment): string {
+  if (isImageAttachment(attachment)) {
+    return 'Sent to the model as vision input — no document parse pipeline.'
+  }
+  return 'Parse not required for this file type.'
+}
+
 export function hasStageTelemetry(attachment: ChatAttachment): boolean {
   const progress = attachment.parse_progress
   if (!progress) return false
@@ -148,8 +173,8 @@ export function parseProgressMessage(attachment: ChatAttachment): string | null 
   if (status === 'failed') {
     return attachment.parse_error_message ?? 'Parse failed.'
   }
-  if (status === 'skipped' || (status === 'ready' && !likelyNeedsParse(attachment))) {
-    return 'Parse not required for this file type.'
+  if (parseNotRequired(attachment)) {
+    return parseNotRequiredDetail(attachment)
   }
   if (status === 'ready') {
     if (hasStageTelemetry(attachment)) return 'Parse complete.'

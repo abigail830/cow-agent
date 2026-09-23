@@ -2813,6 +2813,37 @@ body {
   border-color: #bbf7d0;
 }
 
+.attachment-parse-drawer-not-required {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 8px 0 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.attachment-parse-drawer-not-required-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.attachment-parse-drawer-not-required-text {
+  margin: 0;
+  padding-top: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #475569;
+}
+
 .attachment-parse-drawer-backdrop {
   position: absolute;
   inset: 0;

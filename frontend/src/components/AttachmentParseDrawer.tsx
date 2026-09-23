@@ -1,11 +1,14 @@
-import { Check, Circle, Loader2, Minus, X } from 'lucide-react'
+import { Check, Circle, ImageIcon, Loader2, Minus, X } from 'lucide-react'
 import type { ChatAttachmentListItem } from '../lib/attachmentUpload'
 import {
   PARSE_STAGE_ORDER,
   buildStageStatuses,
-  effectiveParseStatus,
+  isImageAttachment,
+  parseNotRequired,
+  parseNotRequiredDetail,
   parseProgressMessage,
   parseProgressMessageTone,
+  parseStatusDisplayLabel,
   type ParseStageDisplayStatus,
   type ParseStageId,
 } from '../lib/attachmentParseProgress'
@@ -65,10 +68,12 @@ type Props = {
 export function AttachmentParseDrawer({ attachment, onClose }: Props) {
   if (!attachment) return null
 
-  const status = effectiveParseStatus(attachment)
+  const notRequired = parseNotRequired(attachment)
+  const statusLabel = parseStatusDisplayLabel(attachment)
   const stageStatuses = buildStageStatuses(attachment)
   const progressMessage = parseProgressMessage(attachment)
   const progressTone = parseProgressMessageTone(attachment)
+  const notRequiredDetail = parseNotRequiredDetail(attachment)
 
   return (
     <>
@@ -83,7 +88,7 @@ export function AttachmentParseDrawer({ attachment, onClose }: Props) {
           <div>
             <h3 className="attachment-parse-drawer-title">{attachment.filename}</h3>
             <p className="attachment-parse-drawer-meta">
-              {formatFileSize(attachment.size_bytes)} · {status}
+              {formatFileSize(attachment.size_bytes)} · {statusLabel}
               {attachment.parse_pipeline_id ? ` · ${attachment.parse_pipeline_id}` : ''}
             </p>
           </div>
@@ -92,45 +97,56 @@ export function AttachmentParseDrawer({ attachment, onClose }: Props) {
           </button>
         </header>
 
-        {progressMessage ? (
-          <p
-            className={[
-              'attachment-parse-drawer-message',
-              progressTone === 'warning' ? 'attachment-parse-drawer-message-warning' : '',
-              progressTone === 'error' ? 'attachment-parse-drawer-message-error' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-          >
-            {progressMessage}
-          </p>
-        ) : null}
+        {notRequired ? (
+          <div className="attachment-parse-drawer-not-required" role="status">
+            <span className="attachment-parse-drawer-not-required-icon" aria-hidden>
+              {isImageAttachment(attachment) ? <ImageIcon size={20} /> : <Check size={20} />}
+            </span>
+            <p className="attachment-parse-drawer-not-required-text">{notRequiredDetail}</p>
+          </div>
+        ) : (
+          <>
+            {progressMessage ? (
+              <p
+                className={[
+                  'attachment-parse-drawer-message',
+                  progressTone === 'warning' ? 'attachment-parse-drawer-message-warning' : '',
+                  progressTone === 'error' ? 'attachment-parse-drawer-message-error' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                {progressMessage}
+              </p>
+            ) : null}
 
-        {attachment.parse_error_message && progressTone !== 'error' ? (
-          <p className="attachment-parse-drawer-error">{attachment.parse_error_message}</p>
-        ) : null}
+            {attachment.parse_error_message && progressTone !== 'error' ? (
+              <p className="attachment-parse-drawer-error">{attachment.parse_error_message}</p>
+            ) : null}
 
-        <ol className="parse-pipeline-track" aria-label="Parse pipeline stages">
-          {PARSE_STAGE_ORDER.map((stageId) => {
-            const stageStatus = stageStatuses.get(stageId) ?? 'pending'
-            const active = stageStatus === 'running'
-            const label = STAGE_LABELS[stageId]
-            return (
-              <li key={stageId} className={stageNodeClass(stageStatus, active)}>
-                <span className="parse-pipeline-node-rail" aria-hidden>
-                  <span className="parse-pipeline-node-dot">
-                    <StageIcon status={stageStatus} />
-                  </span>
-                </span>
-                <div className="parse-pipeline-node-body">
-                  <span className="parse-pipeline-node-label">{label}</span>
-                  <span className="parse-pipeline-node-id">{stageId}</span>
-                  <span className="parse-pipeline-node-status">{STAGE_STATUS_LABELS[stageStatus]}</span>
-                </div>
-              </li>
-            )
-          })}
-        </ol>
+            <ol className="parse-pipeline-track" aria-label="Parse pipeline stages">
+              {PARSE_STAGE_ORDER.map((stageId) => {
+                const stageStatus = stageStatuses.get(stageId) ?? 'pending'
+                const active = stageStatus === 'running'
+                const label = STAGE_LABELS[stageId]
+                return (
+                  <li key={stageId} className={stageNodeClass(stageStatus, active)}>
+                    <span className="parse-pipeline-node-rail" aria-hidden>
+                      <span className="parse-pipeline-node-dot">
+                        <StageIcon status={stageStatus} />
+                      </span>
+                    </span>
+                    <div className="parse-pipeline-node-body">
+                      <span className="parse-pipeline-node-label">{label}</span>
+                      <span className="parse-pipeline-node-id">{stageId}</span>
+                      <span className="parse-pipeline-node-status">{STAGE_STATUS_LABELS[stageStatus]}</span>
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+          </>
+        )}
       </aside>
     </>
   )
