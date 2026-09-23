@@ -31,10 +31,7 @@ frontend/public/udoc/
 # Runtime / local dev
 backend/.venv/
 backend/.run/
-backend/data/proposal-artifacts/
-backend/data/chat-artifacts/
-backend/data/chat-attachments/
-backend/data/slide-build-cache/
+backend/data/
 frontend/.run/
 
 # IDE & OS
