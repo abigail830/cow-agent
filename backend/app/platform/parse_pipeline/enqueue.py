@@ -16,6 +16,8 @@ from app.platform.parse_pipeline.job_builder import (
     new_webhook_secret,
     run_expires_at,
 )
+from app.platform.docstore.models import ParseStatus
+from app.platform.parse_pipeline.notify import notify_attachment_parse_updated
 from app.platform.parse_pipeline.repository import ParseJobRepository
 from app.config import get_settings
 
@@ -77,5 +79,21 @@ async def enqueue_parse_job(
             error_message=str(exc),
         )
         raise
+
+    dispatch_message = (
+        "Dispatched to GitHub Actions — waiting for worker to start…"
+        if effective_mode == "gha"
+        else "Parse worker started…"
+    )
+    await notify_attachment_parse_updated(
+        session,
+        updated.id,
+        parse_status=ParseStatus.RUNNING.value,
+        stage_snapshot={
+            "current_stage": "fetch",
+            "message": dispatch_message,
+            "stages": [],
+        },
+    )
 
     return updated

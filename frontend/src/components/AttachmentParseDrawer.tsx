@@ -81,7 +81,7 @@ export function AttachmentParseDrawer({ attachment, onClose, onRetry }: Props) {
   const progressMessage = parseProgressMessage(currentAttachment)
   const progressTone = parseProgressMessageTone(currentAttachment)
   const notRequiredDetail = parseNotRequiredDetail(currentAttachment)
-  const canRetry = Boolean(onRetry) && !notRequired && (status === 'failed' || status === 'running' || status === 'pending')
+  const canRetry = Boolean(onRetry) && !notRequired && status === 'failed'
 
   async function handleRetry() {
     if (!onRetry || retrying) return

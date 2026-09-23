@@ -80,6 +80,15 @@ async def _watch_gha_run(*, job_id: str) -> None:
 
             status = str(matched.get("status") or "")
             if status != "completed":
+                html_url = str(matched.get("html_url") or "")
+                message = "GitHub Actions job in progress…"
+                if html_url:
+                    message = f"{message} ({html_url})"
+                await _mark_job_running_if_pending(
+                    job_id=job_id,
+                    message=message,
+                    current_stage="fetch",
+                )
                 await asyncio.sleep(poll_interval)
                 continue
 
@@ -150,6 +159,35 @@ async def _reconcile_gha_success(*, job_id: str, matched: dict) -> None:
     if html_url:
         message = f"{message} ({html_url})"
     await _mark_job_failed(job_id=job_id, error_code="WEBHOOK_DELIVERY_LOST", error_message=message)
+
+
+async def _mark_job_running_if_pending(
+    *,
+    job_id: str,
+    message: str,
+    current_stage: str = "fetch",
+) -> None:
+    factory = get_async_session_factory()
+    async with factory() as session:
+        jobs = ParseJobRepository(session)
+        run_row = await jobs.get_run(job_id)
+        if run_row is None or run_row.status in {"failed", "succeeded"}:
+            return
+        attachment = await session.get(ChatAttachment, run_row.attachment_id)
+        if attachment is None or attachment.parse_status != ParseStatus.PENDING.value:
+            return
+        await report_parse_run_status(
+            session,
+            run_row=run_row,
+            parse_status=ParseStatus.RUNNING.value,
+            run_status="running",
+            stage_snapshot={
+                "current_stage": current_stage,
+                "message": message,
+                "stages": [],
+            },
+        )
+        await session.commit()
 
 
 async def _mark_job_failed(*, job_id: str, error_code: str, error_message: str) -> None:

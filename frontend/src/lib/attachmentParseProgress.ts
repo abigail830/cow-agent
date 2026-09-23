@@ -168,8 +168,17 @@ export function parseProgressMessage(attachment: ChatAttachment): string | null 
   if (attachment.parse_progress?.message) return attachment.parse_progress.message
 
   const status = effectiveParseStatus(attachment)
-  if (status === 'pending') return 'Queued — waiting for parse worker…'
-  if (status === 'running') return 'Parse in progress…'
+  if (status === 'pending') {
+    if (attachment.parse_job_id) {
+      return 'Dispatched — waiting for parse worker to start…'
+    }
+    return 'Queued — waiting for parse worker…'
+  }
+  if (status === 'running') {
+    if (hasStageTelemetry(attachment)) return 'Parse in progress…'
+    if (attachment.parse_job_id) return 'Parse worker started — waiting for step updates…'
+    return 'Parse in progress…'
+  }
   if (status === 'failed') {
     return attachment.parse_error_message ?? 'Parse failed.'
   }

@@ -72,7 +72,14 @@ export function mergeChatAttachmentList(
   }
 
   for (const row of uploading) push(row)
-  for (const row of server) push(row)
+  for (const row of server) {
+    const localRow = local.find((item) => item.id === row.id)
+    if (localRow && localRow.upload_status !== 'uploading') {
+      push({ ...localRow, ...row })
+    } else {
+      push(row)
+    }
+  }
   for (const row of localOnlyReady) push(row)
   return merged
 }

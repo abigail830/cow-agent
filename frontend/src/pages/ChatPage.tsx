@@ -1001,31 +1001,29 @@ export function ChatPage() {
     !stagedParsing &&
     (input.trim().length > 0 || stagedReadyCount > 0)
 
-  useEffect(() => {
-    if (!chatId || !hasParsingAttachments) return
-    void loadChatAttachments(chatId, { silent: true })
-    const timer = window.setInterval(() => {
-      void loadChatAttachments(chatId, { silent: true })
-    }, ATTACHMENT_PARSE_POLL_MS)
-    return () => window.clearInterval(timer)
-  }, [chatId, hasParsingAttachments, loadChatAttachments])
+  const parseDrawerNeedsPoll = useMemo(() => {
+    if (!parseDrawerAttachment) return false
+    const status = parseDrawerAttachment.parse_status ?? 'pending'
+    return status === 'pending' || status === 'running'
+  }, [parseDrawerAttachment])
+
+  const shouldPollParseProgress = hasParsingAttachments || parseDrawerNeedsPoll
 
   useEffect(() => {
-    if (!chatId || !parseDrawerAttachment) return
-    const status = parseDrawerAttachment.parse_status ?? 'pending'
-    if (status !== 'pending' && status !== 'running') return
+    if (!chatId || !shouldPollParseProgress) return
     void loadChatAttachments(chatId, { silent: true })
     const timer = window.setInterval(() => {
       void loadChatAttachments(chatId, { silent: true })
     }, ATTACHMENT_PARSE_POLL_MS)
     return () => window.clearInterval(timer)
-  }, [chatId, loadChatAttachments, parseDrawerAttachment])
+  }, [chatId, loadChatAttachments, shouldPollParseProgress])
 
   useEffect(() => {
     setParseDrawerAttachment((current) => {
       if (!current) return current
       const fresh = chatAttachments.find((row) => row.id === current.id)
-      return fresh ?? current
+      if (!fresh) return current
+      return { ...current, ...fresh }
     })
   }, [chatAttachments])
 
