@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "pipeline_id": "text_standard",
+  "storage": {
+    "read": {
+      "url": "file://PLACEHOLDER",
+      "filename": "sample.md"
+    },
+    "write": {
+      "content_md": {"url": "file://PLACEHOLDER/content.md", "method": "PUT"},
+      "meta_json": {"url": "file://PLACEHOLDER/meta.json", "method": "PUT"}
+    }
+  },
+  "source": {"filename": "sample.md", "mime_type": "text/markdown"},
+  "options": {},
+  "callbacks": {}
+}

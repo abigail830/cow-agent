@@ -1,0 +1,36 @@
+name: parse-pipeline CI
+
+on:
+  push:
+    paths:
+      - "parse-pipeline/**"
+      - ".github/workflows/parse-pipeline-ci.yml"
+  pull_request:
+    paths:
+      - "parse-pipeline/**"
+      - ".github/workflows/parse-pipeline-ci.yml"
+
+defaults:
+  run:
+    working-directory: parse-pipeline
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: parse-pipeline/pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Pytest
+        env:
+          JOB_STORE: memory
+          PARSE_PIPELINE_API_KEYS: test:test_dev_key
+        run: pytest -q
