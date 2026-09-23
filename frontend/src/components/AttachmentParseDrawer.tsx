@@ -73,20 +73,21 @@ export function AttachmentParseDrawer({ attachment, onClose, onRetry }: Props) {
 
   if (!attachment) return null
 
-  const notRequired = parseNotRequired(attachment)
-  const status = effectiveParseStatus(attachment)
-  const statusLabel = parseStatusDisplayLabel(attachment)
-  const stageStatuses = buildStageStatuses(attachment)
-  const progressMessage = parseProgressMessage(attachment)
-  const progressTone = parseProgressMessageTone(attachment)
-  const notRequiredDetail = parseNotRequiredDetail(attachment)
+  const currentAttachment = attachment
+  const notRequired = parseNotRequired(currentAttachment)
+  const status = effectiveParseStatus(currentAttachment)
+  const statusLabel = parseStatusDisplayLabel(currentAttachment)
+  const stageStatuses = buildStageStatuses(currentAttachment)
+  const progressMessage = parseProgressMessage(currentAttachment)
+  const progressTone = parseProgressMessageTone(currentAttachment)
+  const notRequiredDetail = parseNotRequiredDetail(currentAttachment)
   const canRetry = Boolean(onRetry) && !notRequired && (status === 'failed' || status === 'running' || status === 'pending')
 
   async function handleRetry() {
     if (!onRetry || retrying) return
     setRetrying(true)
     try {
-      await onRetry(attachment)
+      await onRetry(currentAttachment)
     } finally {
       setRetrying(false)
     }

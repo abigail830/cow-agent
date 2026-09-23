@@ -943,33 +943,6 @@ export function ChatPage() {
     [patchSession, selectedId],
   )
 
-  const handleRetryAttachmentParse = useCallback(
-    async (attachment: ChatAttachmentListItem) => {
-      if (!chatId) return
-      try {
-        const updated = await api.retryAttachmentParse(chatId, attachment.id)
-        patchChatAttachments((prev) =>
-          mergeChatAttachmentList(
-            prev,
-            prev.some((row) => row.id === updated.id)
-              ? prev.map((row) => (row.id === updated.id ? { ...row, ...updated } : row))
-              : [updated, ...prev],
-          ),
-        )
-        setParseDrawerAttachment((current) =>
-          current?.id === updated.id ? { ...current, ...updated } : current,
-        )
-        patchSession(selectedId!, { error: null })
-      } catch (e) {
-        patchSession(selectedId!, {
-          error: formatApiError(e, 'Failed to retry parse'),
-        })
-        throw e
-      }
-    },
-    [chatId, patchChatAttachments, patchSession, selectedId],
-  )
-
   useEffect(() => {
     chatAttachmentsRef.current = chatAttachments
   }, [chatAttachments])
@@ -1179,6 +1152,33 @@ export function ChatPage() {
       })
     },
     [],
+  )
+
+  const handleRetryAttachmentParse = useCallback(
+    async (attachment: ChatAttachmentListItem) => {
+      if (!chatId) return
+      try {
+        const updated = await api.retryAttachmentParse(chatId, attachment.id)
+        patchChatAttachments((prev) =>
+          mergeChatAttachmentList(
+            prev,
+            prev.some((row) => row.id === updated.id)
+              ? prev.map((row) => (row.id === updated.id ? { ...row, ...updated } : row))
+              : [updated, ...prev],
+          ),
+        )
+        setParseDrawerAttachment((current) =>
+          current?.id === updated.id ? { ...current, ...updated } : current,
+        )
+        patchSession(selectedId!, { error: null })
+      } catch (e) {
+        patchSession(selectedId!, {
+          error: formatApiError(e, 'Failed to retry parse'),
+        })
+        throw e
+      }
+    },
+    [chatId, patchChatAttachments, patchSession, selectedId],
   )
 
   const uploadToLibrary = useCallback(
