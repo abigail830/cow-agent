@@ -34,9 +34,7 @@ Text/sheet jobs using repo fixtures **do not** need Document Mind secrets.
 ### 3. Run a test job (text, no DM cost)
 
 1. **Actions** tab → **parse-pipeline run job** → **Run workflow**
-2. Inputs:
-   - `pipeline_id`: `text_standard`
-   - `source_repo_path`: `parse-pipeline/tests/fixtures/sample.md`
+2. Inputs: leave defaults (`text_standard` + `parse-pipeline/tests/fixtures/sample.md`) or set `source_url` for remote files.
 3. Run → download artifact **parse-pipeline-artifacts-*** → `content.md`, `meta.json`
 
 ### 4. Run PDF via Document Mind
@@ -49,8 +47,7 @@ Text/sheet jobs using repo fixtures **do not** need Document Mind secrets.
 **Option B — presigned URL** (recommended for real files):
 
 - `pipeline_id`: `pdf_standard`
-- `source_repo_path`: leave default or empty
-- `source_url`: `https://...presigned-get...`
+- `source_url`: `https://...presigned-get...` (overrides `source_repo_path`)
 - `filename`: `report.pdf` (if URL has no extension)
 
 Timeout is 120 minutes (DM VLM can be slow).

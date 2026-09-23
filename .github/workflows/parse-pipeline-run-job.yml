@@ -15,9 +15,9 @@ on:
           - office_standard
           - document_mind_generic
       source_repo_path:
-        description: "Repo-relative path to source file (e.g. parse-pipeline/tests/fixtures/sample.md). Required unless source_url is set."
+        description: "Repo-relative path to source file. Ignored when source_url is set."
         required: false
-        default: ""
+        default: parse-pipeline/tests/fixtures/sample.md
         type: string
       source_url:
         description: "Optional HTTPS presigned URL to source file (for PDF/Office not in repo). Overrides source_repo_path when set."
@@ -59,13 +59,6 @@ jobs:
         working-directory: parse-pipeline
         run: pip install -e .
 
-      - name: Validate inputs
-        run: |
-          if [ -z "${{ inputs.source_url }}" ] && [ -z "${{ inputs.source_repo_path }}" ]; then
-            echo "Set source_repo_path or source_url"
-            exit 1
-          fi
-
       - name: Build job payload
         id: build
         env:
@@ -81,6 +74,7 @@ jobs:
           JOB_JSON: ${{ runner.temp }}/job.json
         run: |
           set -euo pipefail
+          DEFAULT_SOURCE="parse-pipeline/tests/fixtures/sample.md"
           ARGS=(
             --pipeline-id "$PIPELINE_ID"
             --out-dir "$ARTIFACTS_DIR"
@@ -90,8 +84,11 @@ jobs:
             ARGS+=(--source-url "$SOURCE_URL")
           elif [ -n "${SOURCE_REPO_PATH:-}" ]; then
             ARGS+=(--source-path "${GITHUB_WORKSPACE}/${SOURCE_REPO_PATH}")
+          elif [ -f "${GITHUB_WORKSPACE}/${DEFAULT_SOURCE}" ]; then
+            echo "Using default source: ${DEFAULT_SOURCE}"
+            ARGS+=(--source-path "${GITHUB_WORKSPACE}/${DEFAULT_SOURCE}")
           else
-            echo "missing source"
+            echo "Set source_repo_path or source_url"
             exit 1
           fi
           if [ -n "${FILENAME:-}" ]; then ARGS+=(--filename "$FILENAME"); fi
@@ -112,7 +109,7 @@ jobs:
         run: parse-pipeline run-job --job-file "$JOB_JSON" --caller-id gha
 
       - name: Upload parse artifacts
-        if: always()
+        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: parse-pipeline-artifacts-${{ github.run_id }}
@@ -120,7 +117,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload job JSON
-        if: always()
+        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: parse-pipeline-job-json-${{ github.run_id }}
