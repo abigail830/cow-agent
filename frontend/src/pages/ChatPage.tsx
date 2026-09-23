@@ -17,7 +17,7 @@ import { useAuth } from '../context/AuthContext'
 import { AgentIcon } from '../components/AgentIcon'
 import { ChatHistoryPanel } from '../components/ChatHistoryPanel'
 import { DocumentsView } from '../components/DocumentsView'
-import { IntegrationsDrawer } from '../components/IntegrationsDrawer'
+import { IntegrationsView } from '../components/IntegrationsView'
 import { MemoryPanel } from '../components/MemoryPanel'
 import { ProposalLivePanel } from '../components/ProposalLivePanel'
 import { ProposalPanelShell, readProposalPanelWidth, type ProposalPanelTab } from '../components/ProposalPanelShell'
@@ -814,6 +814,8 @@ export function ChatPage() {
     async (agent: Agent) => {
       setSelectedId(agent.id)
       setHistoryOpen(false)
+      setDocumentsOpen(false)
+      setIntegrationsOpen(false)
       try {
         await ensureAgentChatLoaded(agent.id)
       } catch (e) {
@@ -1797,6 +1799,7 @@ export function ChatPage() {
     const current = getAgentSession(sessionsRef.current, selectedId)
     if (current.loading && current.chatId === id) return
     setHistoryOpen(false)
+    setDocumentsOpen(false)
     proposalFetchKeyRef.current = null
     fulfillment.resetFetchKey()
     try {
@@ -2049,6 +2052,8 @@ export function ChatPage() {
             onClose={() => setDocumentsOpen(false)}
             onOpenChat={(id) => void openHistoryChat(id)}
           />
+        ) : integrationsOpen ? (
+          <IntegrationsView onClose={() => setIntegrationsOpen(false)} />
         ) : showChat && selected ? (
           <div className={`chat-main-layout${isProposalComposer ? ' chat-main-layout-proposal' : ''}`}>
             <div className="chat-main-inner">
@@ -2396,7 +2401,6 @@ export function ChatPage() {
               onSelect={(id) => void openHistoryChat(id)}
               onDelete={handleDeleteChat}
             />
-            <IntegrationsDrawer open={integrationsOpen} onClose={() => setIntegrationsOpen(false)} />
           </div>
         ) : (
           <div className="chat-main-placeholder">

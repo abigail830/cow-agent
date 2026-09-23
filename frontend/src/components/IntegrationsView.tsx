@@ -6,7 +6,6 @@ import { LoadingSpinner } from './LoadingSpinner'
 import type { IntegrationStatus } from '../types'
 
 type Props = {
-  open: boolean
   onClose: () => void
 }
 
@@ -29,7 +28,7 @@ function statusLabel(item: IntegrationStatus): string {
   return 'Not configured'
 }
 
-export function IntegrationsDrawer({ open, onClose }: Props) {
+export function IntegrationsView({ onClose }: Props) {
   const [searchParams, setSearchParams] = useSearchParams()
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([])
   const [loading, setLoading] = useState(true)
@@ -57,13 +56,10 @@ export function IntegrationsDrawer({ open, onClose }: Props) {
   }, [])
 
   useEffect(() => {
-    if (!open) return
     void refresh()
-  }, [open, refresh])
+  }, [refresh])
 
   useEffect(() => {
-    if (!open) return
-
     const provider = searchParams.get('provider')
     const status = searchParams.get('status')
     const oauthError = searchParams.get('error')
@@ -87,16 +83,15 @@ export function IntegrationsDrawer({ open, onClose }: Props) {
       { replace: true },
     )
     void refresh()
-  }, [open, searchParams, setSearchParams, refresh])
+  }, [searchParams, setSearchParams, refresh])
 
   useEffect(() => {
-    if (!open) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
     }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [open, onClose])
+    window.document.addEventListener('keydown', onKeyDown)
+    return () => window.document.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
 
   const handleConnect = async (provider: string) => {
     setBusyProvider(provider)
@@ -147,35 +142,30 @@ export function IntegrationsDrawer({ open, onClose }: Props) {
   }
 
   return (
-    <aside className={`integrations-drawer ${open ? 'integrations-drawer-open' : ''}`} aria-hidden={!open}>
-      <div className="integrations-drawer-inner">
-        <div className="integrations-drawer-header">
-          <div>
-            <h2 className="integrations-drawer-title">Integrations</h2>
-            <p className="integrations-drawer-subtitle">Connect once, reuse across agents.</p>
-          </div>
-          <button
-            type="button"
-            className="integrations-drawer-close"
-            onClick={onClose}
-            aria-label="Close integrations"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
+    <div className="integrations-view">
+      <header className="integrations-view-header">
+        <div>
+          <h1 className="integrations-view-title">Integrations</h1>
+          <p className="integrations-view-subtitle">Connect once, reuse across agents.</p>
         </div>
+        <button type="button" className="integrations-view-close" onClick={onClose} aria-label="Back to chat">
+          <X size={18} aria-hidden="true" />
+        </button>
+      </header>
 
-        {notice ? <div className="integrations-drawer-notice">{notice}</div> : null}
-        {error ? <div className="integrations-drawer-error">{error}</div> : null}
+      <div className="integrations-view-body">
+        {notice ? <div className="integrations-view-notice">{notice}</div> : null}
+        {error ? <div className="integrations-view-error">{error}</div> : null}
 
-        <div className="integrations-drawer-scroll">
+        <div className="integrations-view-scroll">
           {loading ? (
-            <div className="integrations-drawer-loading">
+            <div className="integrations-view-loading">
               <LoadingSpinner />
             </div>
           ) : integrations.length === 0 ? (
-            <p className="integrations-drawer-empty">No integrations available.</p>
+            <p className="integrations-view-empty">No integrations available.</p>
           ) : (
-            <ul className="integrations-drawer-list">
+            <ul className="integrations-view-list">
               {integrations.map((item) => {
                 const docsUrl = PROVIDER_DOCS[item.provider]
                 const busy = busyProvider === item.provider
@@ -292,6 +282,6 @@ export function IntegrationsDrawer({ open, onClose }: Props) {
           )}
         </div>
       </div>
-    </aside>
+    </div>
   )
 }

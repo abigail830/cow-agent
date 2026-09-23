@@ -1,6 +1,6 @@
 import { Navigate, useSearchParams } from 'react-router-dom'
 
-/** Legacy OAuth callback route — forwards to chat with the integrations drawer open. */
+/** Legacy OAuth callback route — forwards to chat with the integrations view open. */
 export function IntegrationsSettingsPage() {
   const [searchParams] = useSearchParams()
   const next = new URLSearchParams(searchParams)
