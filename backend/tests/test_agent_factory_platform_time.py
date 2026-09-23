@@ -6,6 +6,7 @@ from uuid import UUID
 import pytest
 
 from app.platform.agent.agent_factory import AgentFactory
+from app.platform.doc_retrieval.tools import DOC_RETRIEVAL_TOOL_NAMES
 from app.platform.hooks.allowed_tools import AllowedToolsMiddleware
 from app.platform.hooks.hook_registry import resolve_middleware
 
@@ -64,6 +65,8 @@ async def test_agent_factory_injects_platform_time():
     names = _tool_names(created.get("tools"))
     assert "platform_time" in names
     assert "platform_time" in middleware_kwargs.get("extra_allowed_tools", set())
+    assert DOC_RETRIEVAL_TOOL_NAMES.issubset(names)
+    assert DOC_RETRIEVAL_TOOL_NAMES.issubset(middleware_kwargs.get("extra_allowed_tools", set()))
     assert "analyze_image" not in names
     assert "inline_attachment" not in names
     assert "read_attachment" not in names

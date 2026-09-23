@@ -306,7 +306,9 @@ Parse pipeline 完成后，parsed 产物落在 `chat-attachments/{chat_id}/parse
 
 配置：`HYDRATE_PREVIEW_MAX_BYTES`、`HYDRATE_LIBRARY_MAX_ITEMS`、`DOCUMENT_HYDRATE_UNIFIED`。
 
-### doc_retrieval 工具（opt-in，`allowed_tools`）
+### doc_retrieval 工具（全 agent 自动注入）
+
+与 `platform_time` 相同，六个 attachment 工具由 `AgentFactory` 自动挂载，**无需**在各 agent `profile.yaml` 的 `allowed_tools` 重复声明：
 
 | Tool | 用途 |
 |------|------|

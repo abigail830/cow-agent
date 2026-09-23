@@ -109,9 +109,16 @@ export interface ChatAttachment {
   parse_progress?: AttachmentParseProgress | null
 }
 
+export interface ParsedArtifactsAvailability {
+  content_md: boolean
+  meta_json: boolean
+  pageindex_json: boolean
+}
+
 export interface DocumentItem extends ChatAttachment {
   chat_title: string | null
   has_parsed_content: boolean
+  parsed_artifacts: ParsedArtifactsAvailability
 }
 
 export interface DocumentListResult {

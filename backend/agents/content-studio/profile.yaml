@@ -20,12 +20,6 @@ mcp_servers:
   - notion
 
 allowed_tools:
-  - attachment_find
-  - attachment_list_chat
-  - attachment_grep
-  - attachment_read
-  - attachment_list_sections
-  - attachment_read_figure
   - hybrid-search_list_knowledge_bases
   - hybrid-search_hybrid_search
   - zhipu-web-search_web_search_prime

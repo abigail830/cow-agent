@@ -136,9 +136,16 @@ class AttachmentOut(BaseModel):
     parse_progress: ParseProgressOut | None = None
 
 
+class ParsedArtifactsOut(BaseModel):
+    content_md: bool = False
+    meta_json: bool = False
+    pageindex_json: bool = False
+
+
 class DocumentOut(AttachmentOut):
     chat_title: str | None = None
     has_parsed_content: bool = False
+    parsed_artifacts: ParsedArtifactsOut = Field(default_factory=ParsedArtifactsOut)
 
 
 class DocumentListOut(BaseModel):

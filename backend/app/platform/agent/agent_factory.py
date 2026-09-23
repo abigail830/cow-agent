@@ -30,6 +30,7 @@ from app.platform.agent.tool_registry import ToolRegistry
 from app.platform.agent.plugin_registry import tool_names_for_slug, viz_tool_names
 from app.platform.agent.builtin_registry import BUILTIN_TOOLS
 from app.platform.agent.platform_time import PLATFORM_TIME_TOOL_NAME
+from app.platform.doc_retrieval.tools import DOC_RETRIEVAL_TOOL_NAMES
 from app.platform.agent.tool_groups import resolve_builtin_tools
 from app.platform.llm.utility_models import UtilityModelRegistry, UtilityPurpose
 
@@ -137,7 +138,7 @@ class AgentFactory:
             context_providers.append(skills_provider)
             skill_tools.update({"load_skill", "read_skill_resource"})
 
-        always_builtin_names = frozenset({PLATFORM_TIME_TOOL_NAME})
+        always_builtin_names = frozenset({PLATFORM_TIME_TOOL_NAME}) | DOC_RETRIEVAL_TOOL_NAMES
         extra_allowed_tools = set(always_builtin_names) | skill_tools
 
         scoped_kb_ids = await self._resolve_enabled_kb_ids(

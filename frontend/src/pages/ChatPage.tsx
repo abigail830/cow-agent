@@ -16,7 +16,7 @@ import { api, streamChat } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { AgentIcon } from '../components/AgentIcon'
 import { ChatHistoryPanel } from '../components/ChatHistoryPanel'
-import { DocumentsDrawer } from '../components/DocumentsDrawer'
+import { DocumentsView } from '../components/DocumentsView'
 import { IntegrationsDrawer } from '../components/IntegrationsDrawer'
 import { MemoryPanel } from '../components/MemoryPanel'
 import { ProposalLivePanel } from '../components/ProposalLivePanel'
@@ -2008,7 +2008,12 @@ export function ChatPage() {
       </aside>
 
       <section className="chat-main flex min-w-0 flex-1 flex-col">
-        {showChat && selected ? (
+        {documentsOpen ? (
+          <DocumentsView
+            onClose={() => setDocumentsOpen(false)}
+            onOpenChat={(id) => void openHistoryChat(id)}
+          />
+        ) : showChat && selected ? (
           <div className={`chat-main-layout${isProposalComposer ? ' chat-main-layout-proposal' : ''}`}>
             <div className="chat-main-inner">
             <div className="chat-header">
@@ -2353,11 +2358,6 @@ export function ChatPage() {
               onClose={() => setHistoryOpen(false)}
               onSelect={(id) => void openHistoryChat(id)}
               onDelete={handleDeleteChat}
-            />
-            <DocumentsDrawer
-              open={documentsOpen}
-              onClose={() => setDocumentsOpen(false)}
-              onOpenChat={(id) => void openHistoryChat(id)}
             />
             <IntegrationsDrawer open={integrationsOpen} onClose={() => setIntegrationsOpen(false)} />
           </div>
