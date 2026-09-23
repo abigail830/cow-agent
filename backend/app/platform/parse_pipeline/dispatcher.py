@@ -13,6 +13,7 @@ async def dispatch_gha(
     *,
     job_id: str,
     run_token: str,
+    pipeline_id: str,
 ) -> None:
     settings = get_settings()
     token = (settings.github_token or "").strip()
@@ -26,6 +27,7 @@ async def dispatch_gha(
 
     url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow}/dispatches"
     inputs = {
+        "pipeline_id": pipeline_id,
         "platform_job_id": job_id,
         "platform_run_token": run_token,
         "platform_base_url": public_base,

@@ -62,7 +62,7 @@ async def enqueue_parse_job(
     effective_mode = "inline" if use_file_urls else "gha"
     try:
         if effective_mode == "gha":
-            await dispatch_gha(job_id=job_id, run_token=run_token)
+            await dispatch_gha(job_id=job_id, run_token=run_token, pipeline_id=pipeline_id)
         else:
             schedule_inline_job(payload)
     except Exception as exc:
