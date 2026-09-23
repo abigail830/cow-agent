@@ -67,10 +67,7 @@ import {
   mergeChatAttachmentList,
   replacePendingAttachment,
 } from '../lib/attachmentUpload'
-import {
-  patchAttachmentFromParseEvent,
-  subscribeChatAttachmentParseEvents,
-} from '../lib/attachmentParseEvents'
+import { ATTACHMENT_PARSE_POLL_MS } from '../lib/attachmentParseProgress'
 import { isAttachmentReferenceCompatible } from '../lib/attachmentCompat'
 import {
   detectMentionTrigger,
@@ -219,7 +216,6 @@ export function ChatPage() {
   const [chatAttachments, setChatAttachments] = useState<ChatAttachmentListItem[]>([])
   const [chatAttachmentsLoading, setChatAttachmentsLoading] = useState(false)
   const [parseDrawerAttachment, setParseDrawerAttachment] = useState<ChatAttachmentListItem | null>(null)
-  const [attachmentSseConnected, setAttachmentSseConnected] = useState(false)
   const [stagedAttachmentIds, setStagedAttachmentIds] = useState<string[]>([])
   const [composerDragOver, setComposerDragOver] = useState(false)
   const [mentionTrigger, setMentionTrigger] = useState<MentionTrigger | null>(null)
@@ -978,37 +974,11 @@ export function ChatPage() {
     (input.trim().length > 0 || stagedReadyCount > 0)
 
   useEffect(() => {
-    if (!chatId) {
-      setAttachmentSseConnected(false)
-      return
-    }
-    const unsubscribe = subscribeChatAttachmentParseEvents(
-      chatId,
-      (event) => {
-        setChatAttachments((prev) => {
-          const next = patchAttachmentFromParseEvent(prev, event) as ChatAttachmentListItem[]
-          chatAttachmentsRef.current = next
-          return next
-        })
-        setParseDrawerAttachment((current) => {
-          if (!current || current.id !== event.attachment_id) return current
-          const patched = patchAttachmentFromParseEvent([current], event)[0] as ChatAttachmentListItem
-          return patched
-        })
-      },
-      { onConnectionChange: setAttachmentSseConnected },
-    )
-    return () => {
-      setAttachmentSseConnected(false)
-      unsubscribe()
-    }
-  }, [chatId])
-
-  useEffect(() => {
     if (!chatId || !hasParsingAttachments) return
+    void loadChatAttachments(chatId, { silent: true })
     const timer = window.setInterval(() => {
       void loadChatAttachments(chatId, { silent: true })
-    }, 2500)
+    }, ATTACHMENT_PARSE_POLL_MS)
     return () => window.clearInterval(timer)
   }, [chatId, hasParsingAttachments, loadChatAttachments])
 

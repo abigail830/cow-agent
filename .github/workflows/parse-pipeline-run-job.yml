@@ -175,8 +175,17 @@ jobs:
           PLATFORM_BASE_URL: ${{ inputs.platform_base_url }}
         run: |
           set -euo pipefail
-          curl -fsS -X POST \
-            -H "Authorization: Bearer ${PLATFORM_RUN_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "{\"status\":\"failed\",\"error\":{\"code\":\"GHA_FAILED\",\"message\":\"GitHub Actions workflow failed (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}}" \
-            "${PLATFORM_BASE_URL%/}/internal/parse/v1/run/${PLATFORM_JOB_ID}/status" || true
+          payload="{\"status\":\"failed\",\"error\":{\"code\":\"GHA_FAILED\",\"message\":\"GitHub Actions workflow failed (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}}"
+          url="${PLATFORM_BASE_URL%/}/internal/parse/v1/run/${PLATFORM_JOB_ID}/status"
+          for attempt in 1 2 3; do
+            if curl -fsS -X POST \
+              -H "Authorization: Bearer ${PLATFORM_RUN_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$payload" \
+              "$url"; then
+              exit 0
+            fi
+            sleep "$attempt"
+          done
+          echo "Failed to notify platform after 3 attempts" >&2
+          exit 0

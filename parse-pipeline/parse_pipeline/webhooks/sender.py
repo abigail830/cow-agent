@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -10,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from parse_pipeline.config import get_settings
 from parse_pipeline.job_store.base import JobRecord
 from parse_pipeline.schemas.job import JobStatus
 
@@ -67,12 +69,37 @@ async def emit_event(record: JobRecord, event_type: str) -> None:
         "X-Parse-Sequence": str(_next_sequence()),
         "X-Parse-Signature": _sign(secret, timestamp, body),
     }
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, content=body, headers=headers)
-            response.raise_for_status()
-    except Exception:
-        logger.exception("webhook delivery failed job_id=%s event=%s", record.job_id, event_type)
+
+    settings = get_settings()
+    max_retries = max(0, int(settings.webhook_max_retries))
+    last_exc: Exception | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=settings.webhook_timeout_sec) as client:
+                response = await client.post(url, content=body, headers=headers)
+                response.raise_for_status()
+            return
+        except Exception as exc:
+            last_exc = exc
+            if attempt < max_retries:
+                delay = min(2.0, 0.5 * (attempt + 1))
+                logger.warning(
+                    "webhook delivery retry job_id=%s event=%s attempt=%s/%s",
+                    record.job_id,
+                    event_type,
+                    attempt + 1,
+                    max_retries,
+                )
+                await asyncio.sleep(delay)
+                continue
+            logger.exception(
+                "webhook delivery failed job_id=%s event=%s after %s retries",
+                record.job_id,
+                event_type,
+                max_retries,
+            )
+    if last_exc is not None:
+        del last_exc
 
 
 async def emit_stage_updated(record: JobRecord) -> None:

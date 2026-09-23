@@ -226,8 +226,24 @@ class Settings(BaseSettings):
         validation_alias="PARSE_PIPELINE_WEBHOOK_PATH",
     )
     parse_pipeline_run_token_ttl_sec: int = Field(
-        default=3600,
+        default=7200,
         validation_alias="PARSE_PIPELINE_RUN_TOKEN_TTL_SEC",
+    )
+    parse_pipeline_gha_watch_max_sec: int = Field(
+        default=5400,
+        validation_alias="PARSE_PIPELINE_GHA_WATCH_MAX_SEC",
+    )
+    parse_pipeline_gha_watch_poll_sec: int = Field(
+        default=20,
+        validation_alias="PARSE_PIPELINE_GHA_WATCH_POLL_SEC",
+    )
+    parse_pipeline_job_stale_sec: int = Field(
+        default=7200,
+        validation_alias="PARSE_PIPELINE_JOB_STALE_SEC",
+    )
+    parse_pipeline_stale_sweep_interval_sec: int = Field(
+        default=300,
+        validation_alias="PARSE_PIPELINE_STALE_SWEEP_INTERVAL_SEC",
     )
     parse_pipeline_dispatch: str = Field(
         default="auto",

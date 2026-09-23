@@ -1,5 +1,8 @@
 import type { AttachmentParseStatus, ChatAttachment } from '../types'
 
+/** Primary parse status refresh interval (polling; works across multi-instance backend). */
+export const ATTACHMENT_PARSE_POLL_MS = 3000
+
 export const PARSE_STAGE_ORDER = [
   'fetch',
   'analyze',

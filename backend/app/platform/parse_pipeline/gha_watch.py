@@ -7,14 +7,17 @@ from datetime import datetime, timezone
 import httpx
 
 from app.config import get_settings
+from app.db.models import ChatAttachment
 from app.db.session import get_async_session_factory
+from app.platform.docstore.blob import parsed_artifact_exists
+from app.platform.docstore.models import ParseStatus
 from app.platform.parse_pipeline.repository import ParseJobRepository
 from app.platform.parse_pipeline.status_report import report_parse_run_status
 
 logger = logging.getLogger(__name__)
 
-_POLL_INTERVAL_SEC = 20.0
-_MAX_WAIT_SEC = 45 * 60
+_RECONCILE_ATTEMPTS = 3
+_RECONCILE_DELAY_SEC = 10.0
 
 
 def schedule_gha_run_watch(*, job_id: str) -> None:
@@ -29,6 +32,8 @@ async def _watch_gha_run(*, job_id: str) -> None:
     if not token or not repo:
         return
 
+    poll_interval = max(5.0, float(settings.parse_pipeline_gha_watch_poll_sec))
+    max_wait = max(300, int(settings.parse_pipeline_gha_watch_max_sec))
     started = datetime.now(timezone.utc)
     await asyncio.sleep(8.0)
     headers = {
@@ -40,7 +45,7 @@ async def _watch_gha_run(*, job_id: str) -> None:
     run_name_prefix = f"platform-parse-{job_id}"
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        while (datetime.now(timezone.utc) - started).total_seconds() < _MAX_WAIT_SEC:
+        while (datetime.now(timezone.utc) - started).total_seconds() < max_wait:
             factory = get_async_session_factory()
             async with factory() as session:
                 jobs = ParseJobRepository(session)
@@ -58,7 +63,7 @@ async def _watch_gha_run(*, job_id: str) -> None:
                 runs = response.json().get("workflow_runs") or []
             except Exception:
                 logger.exception("GHA watch poll failed job_id=%s", job_id)
-                await asyncio.sleep(_POLL_INTERVAL_SEC)
+                await asyncio.sleep(poll_interval)
                 continue
 
             matched = next(
@@ -71,36 +76,92 @@ async def _watch_gha_run(*, job_id: str) -> None:
                 None,
             )
             if matched is None:
-                await asyncio.sleep(_POLL_INTERVAL_SEC)
+                await asyncio.sleep(poll_interval)
                 continue
 
             status = str(matched.get("status") or "")
             if status != "completed":
-                await asyncio.sleep(_POLL_INTERVAL_SEC)
+                await asyncio.sleep(poll_interval)
                 continue
 
             conclusion = str(matched.get("conclusion") or "")
             if conclusion == "success":
+                await _reconcile_gha_success(job_id=job_id, matched=matched)
                 return
 
             html_url = str(matched.get("html_url") or "")
             message = "GitHub Actions parse job failed"
             if html_url:
                 message = f"{message} ({html_url})"
+            await _mark_job_failed(job_id=job_id, error_code="GHA_FAILED", error_message=message)
+            return
 
-            factory = get_async_session_factory()
-            async with factory() as session:
-                jobs = ParseJobRepository(session)
-                run_row = await jobs.get_run(job_id)
-                if run_row is None or run_row.status in {"failed", "succeeded"}:
-                    return
+        await asyncio.sleep(poll_interval)
+
+    await _mark_job_failed(
+        job_id=job_id,
+        error_code="PARSE_TIMEOUT",
+        error_message="Timed out waiting for GitHub Actions parse job to finish",
+    )
+
+
+async def _reconcile_gha_success(*, job_id: str, matched: dict) -> None:
+    """GHA succeeded — verify platform received artifacts / ready status via webhook."""
+
+    for attempt in range(_RECONCILE_ATTEMPTS):
+        factory = get_async_session_factory()
+        async with factory() as session:
+            jobs = ParseJobRepository(session)
+            run_row = await jobs.get_run(job_id)
+            if run_row is None:
+                return
+            if run_row.status in {"failed", "succeeded"}:
+                return
+
+            attachment = await session.get(ChatAttachment, run_row.attachment_id)
+            if attachment is not None and attachment.parse_status == ParseStatus.READY.value:
+                await jobs.update_run_status(job_id, "succeeded")
+                await session.commit()
+                return
+
+            if parsed_artifact_exists(run_row.chat_id, run_row.attachment_id, "meta_json"):
                 await report_parse_run_status(
                     session,
                     run_row=run_row,
-                    parse_status="failed",
-                    error_code="GHA_FAILED",
-                    error_message=message,
-                    run_status="failed",
+                    parse_status=ParseStatus.READY.value,
+                    run_status="succeeded",
+                    stage_snapshot={
+                        "current_stage": "finalize",
+                        "message": "Parse complete (reconciled after GHA success)",
+                        "stages": [],
+                    },
                 )
                 await session.commit()
+                return
+
+        if attempt + 1 < _RECONCILE_ATTEMPTS:
+            await asyncio.sleep(_RECONCILE_DELAY_SEC)
+
+    html_url = str(matched.get("html_url") or "")
+    message = "GitHub Actions succeeded but platform did not receive parse results"
+    if html_url:
+        message = f"{message} ({html_url})"
+    await _mark_job_failed(job_id=job_id, error_code="WEBHOOK_DELIVERY_LOST", error_message=message)
+
+
+async def _mark_job_failed(*, job_id: str, error_code: str, error_message: str) -> None:
+    factory = get_async_session_factory()
+    async with factory() as session:
+        jobs = ParseJobRepository(session)
+        run_row = await jobs.get_run(job_id)
+        if run_row is None or run_row.status in {"failed", "succeeded"}:
             return
+        await report_parse_run_status(
+            session,
+            run_row=run_row,
+            parse_status=ParseStatus.FAILED.value,
+            error_code=error_code,
+            error_message=error_message,
+            run_status="failed",
+        )
+        await session.commit()

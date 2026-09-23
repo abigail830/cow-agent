@@ -1,6 +1,7 @@
+import asyncio
 import logging
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -92,7 +93,16 @@ async def lifespan(app: FastAPI):
         logger.exception("Startup seed/profile sync failed")
         if not IS_VERCEL:
             raise
-    yield
+
+    from app.platform.parse_pipeline.stale_sweep import run_stale_parse_job_sweep_loop
+
+    stale_sweep_task = asyncio.create_task(run_stale_parse_job_sweep_loop())
+    try:
+        yield
+    finally:
+        stale_sweep_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await stale_sweep_task
 
 
 def create_app() -> FastAPI:
