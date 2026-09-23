@@ -217,6 +217,31 @@ class Settings(BaseSettings):
     auth_cookie_samesite: str = Field(default="lax", validation_alias="AUTH_COOKIE_SAMESITE")
     auth_session_ttl_hours: int = Field(default=168, validation_alias="AUTH_SESSION_TTL_HOURS")
 
+    parse_pipeline_public_base_url: str | None = Field(
+        default=None,
+        validation_alias="PARSE_PIPELINE_PUBLIC_BASE_URL",
+    )
+    parse_pipeline_webhook_path: str = Field(
+        default="/internal/parse/v1/webhook",
+        validation_alias="PARSE_PIPELINE_WEBHOOK_PATH",
+    )
+    parse_pipeline_run_token_ttl_sec: int = Field(
+        default=3600,
+        validation_alias="PARSE_PIPELINE_RUN_TOKEN_TTL_SEC",
+    )
+    parse_pipeline_dispatch: str = Field(
+        default="auto",
+        validation_alias="PARSE_PIPELINE_DISPATCH",
+    )
+
+    github_token: str | None = Field(default=None, validation_alias="GITHUB_TOKEN")
+    github_repo: str | None = Field(default=None, validation_alias="GITHUB_REPO")
+    github_workflow_file: str = Field(
+        default="parse-pipeline-run-job.yml",
+        validation_alias="GITHUB_WORKFLOW_FILE",
+    )
+    github_ref: str = Field(default="main", validation_alias="GITHUB_REF")
+
     @field_validator("auth_cookie_samesite", mode="before")
     @classmethod
     def normalize_samesite(cls, value: object) -> object:

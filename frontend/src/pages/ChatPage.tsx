@@ -28,6 +28,7 @@ import { ArtifactPanelHost } from '../components/ArtifactPanelHost'
 import { useArtifactPanel } from '../hooks/useArtifactPanel'
 import { AttachmentMentionPopup } from '../components/AttachmentMentionPopup'
 import { ComposerMentionInput } from '../components/ComposerMentionInput'
+import { AttachmentParseDrawer } from '../components/AttachmentParseDrawer'
 import { ComposerStagedChips } from '../components/ComposerStagedChips'
 import {
   clearForkBanner,
@@ -57,6 +58,7 @@ import {
 } from '../lib/attachments'
 import {
   createPendingAttachment,
+  isAttachmentParsing,
   isAttachmentReady,
   isPendingAttachmentId,
   mergeAttachmentIdsForSend,
@@ -65,6 +67,10 @@ import {
   mergeChatAttachmentList,
   replacePendingAttachment,
 } from '../lib/attachmentUpload'
+import {
+  patchAttachmentFromParseEvent,
+  subscribeChatAttachmentParseEvents,
+} from '../lib/attachmentParseEvents'
 import { isAttachmentReferenceCompatible } from '../lib/attachmentCompat'
 import {
   detectMentionTrigger,
@@ -212,6 +218,8 @@ export function ChatPage() {
   const [attachmentLimits, setAttachmentLimits] = useState<AttachmentLimits>(DEFAULT_ATTACHMENT_LIMITS)
   const [chatAttachments, setChatAttachments] = useState<ChatAttachmentListItem[]>([])
   const [chatAttachmentsLoading, setChatAttachmentsLoading] = useState(false)
+  const [parseDrawerAttachment, setParseDrawerAttachment] = useState<ChatAttachmentListItem | null>(null)
+  const [attachmentSseConnected, setAttachmentSseConnected] = useState(false)
   const [stagedAttachmentIds, setStagedAttachmentIds] = useState<string[]>([])
   const [composerDragOver, setComposerDragOver] = useState(false)
   const [mentionTrigger, setMentionTrigger] = useState<MentionTrigger | null>(null)
@@ -956,9 +964,53 @@ export function ChatPage() {
   const stagedUploading = stagedAttachmentItems.some(
     (row) => row.upload_status === 'uploading' || isPendingAttachmentId(row.id),
   )
+  const stagedParsing = stagedAttachmentItems.some(isAttachmentParsing)
+  const hasParsingAttachments = useMemo(
+    () => chatAttachments.some(isAttachmentParsing),
+    [chatAttachments],
+  )
   const stagedReadyCount = stagedAttachmentItems.filter(isAttachmentReady).length
   const composerCanSend =
-    !loading && !chatSessionLoading && !stagedUploading && (input.trim().length > 0 || stagedReadyCount > 0)
+    !loading &&
+    !chatSessionLoading &&
+    !stagedUploading &&
+    !stagedParsing &&
+    (input.trim().length > 0 || stagedReadyCount > 0)
+
+  useEffect(() => {
+    if (!chatId) {
+      setAttachmentSseConnected(false)
+      return
+    }
+    const unsubscribe = subscribeChatAttachmentParseEvents(
+      chatId,
+      (event) => {
+        setChatAttachments((prev) => {
+          const next = patchAttachmentFromParseEvent(prev, event) as ChatAttachmentListItem[]
+          chatAttachmentsRef.current = next
+          return next
+        })
+        setParseDrawerAttachment((current) => {
+          if (!current || current.id !== event.attachment_id) return current
+          const patched = patchAttachmentFromParseEvent([current], event)[0] as ChatAttachmentListItem
+          return patched
+        })
+      },
+      { onConnectionChange: setAttachmentSseConnected },
+    )
+    return () => {
+      setAttachmentSseConnected(false)
+      unsubscribe()
+    }
+  }, [chatId])
+
+  useEffect(() => {
+    if (!chatId || !hasParsingAttachments || attachmentSseConnected) return
+    const timer = window.setInterval(() => {
+      void loadChatAttachments(chatId, { silent: true })
+    }, 2500)
+    return () => window.clearInterval(timer)
+  }, [chatId, hasParsingAttachments, attachmentSseConnected, loadChatAttachments])
 
   const refreshMentionTrigger = useCallback(
     (value: string, cursorPos: number) => {
@@ -2082,7 +2134,12 @@ export function ChatPage() {
                       <ComposerStagedChips
                         attachments={stagedAttachmentItems}
                         onRemove={removeStagedAttachment}
+                        onChipClick={(att) => setParseDrawerAttachment(att)}
                         disabled={loading || chatSessionLoading}
+                      />
+                      <AttachmentParseDrawer
+                        attachment={parseDrawerAttachment}
+                        onClose={() => setParseDrawerAttachment(null)}
                       />
                       <div ref={composerMentionWrapRef} className="chat-composer-mention-wrap">
                         <AttachmentMentionPopup

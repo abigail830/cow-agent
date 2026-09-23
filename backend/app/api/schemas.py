@@ -109,6 +109,17 @@ class MessageCreate(BaseModel):
     attachment_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
+class ParseStageOut(BaseModel):
+    stage_id: str | None = None
+    status: str | None = None
+
+
+class ParseProgressOut(BaseModel):
+    current_stage: str | None = None
+    message: str | None = None
+    stages: list[ParseStageOut] | None = None
+
+
 class AttachmentOut(BaseModel):
     id: uuid.UUID
     chat_id: uuid.UUID
@@ -118,6 +129,11 @@ class AttachmentOut(BaseModel):
     provider: str
     provider_file_id: str
     created_at: str | None = None
+    parse_status: Literal["pending", "running", "ready", "failed", "skipped"] = "ready"
+    parse_pipeline_id: str | None = None
+    parse_job_id: str | None = None
+    parse_error_message: str | None = None
+    parse_progress: ParseProgressOut | None = None
 
 
 class MessageOut(BaseModel):

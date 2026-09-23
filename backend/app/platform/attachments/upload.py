@@ -22,7 +22,9 @@ from app.platform.attachments.storage import (
     load_inline_attachment,
     save_inline_attachment,
 )
+from app.platform.attachments.parse_ingest import finalize_attachment_parse
 from app.platform.attachments.validation import validate_attachment_file, validate_message_attachments
+from app.platform.docstore.gate import assert_parse_ready
 from app.platform.llm.chat_model import resolve_chat_model
 
 
@@ -133,6 +135,9 @@ class AttachmentUploader:
                 caps=caps,
                 provider=provider,
             )
+            existing = await finalize_attachment_parse(
+                self._db, existing, kind=kind
+            )
             await self._db.commit()
             await self._db.refresh(existing)
             return attachment_metadata(existing)
@@ -159,6 +164,7 @@ class AttachmentUploader:
             size_bytes=len(data),
             content_hash=content_hash,
         )
+        row = await finalize_attachment_parse(self._db, row, kind=kind)
         await self._db.commit()
         await self._db.refresh(row)
         return attachment_metadata(row)
@@ -201,4 +207,5 @@ class AttachmentUploader:
             size_bytes_list=[row.size_bytes for row in refreshed],
             page_counts=page_counts,
         )
+        assert_parse_ready(refreshed)
         return refreshed

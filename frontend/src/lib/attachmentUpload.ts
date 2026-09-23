@@ -10,8 +10,22 @@ export function isPendingAttachmentId(id: string): boolean {
   return id.startsWith('pending-')
 }
 
+export function isParseReady(att: ChatAttachment): boolean {
+  const status = att.parse_status ?? 'ready'
+  return status === 'ready' || status === 'skipped'
+}
+
+export function isAttachmentParsing(att: ChatAttachment): boolean {
+  const status = att.parse_status ?? 'ready'
+  return status === 'pending' || status === 'running'
+}
+
 export function isAttachmentReady(att: ChatAttachmentListItem): boolean {
-  return !isPendingAttachmentId(att.id) && att.upload_status !== 'uploading'
+  return (
+    !isPendingAttachmentId(att.id) &&
+    att.upload_status !== 'uploading' &&
+    isParseReady(att)
+  )
 }
 
 export function createPendingAttachment(file: File): ChatAttachmentListItem {

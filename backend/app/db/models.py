@@ -220,9 +220,43 @@ class ChatAttachment(Base):
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     gist: Mapped[str | None] = mapped_column(Text, nullable=True)
+    parse_status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="ready")
+    parse_pipeline_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    parse_job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    parse_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    parse_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    parse_stage_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     chat: Mapped["Chat"] = relationship(back_populates="attachments")
+
+
+class ParseJobEvent(Base):
+    __tablename__ = "parse_job_events"
+    __table_args__ = (Index("idx_parse_job_events_job_id", "job_id"),)
+
+    event_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    job_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    attachment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ParseJobRun(Base):
+    __tablename__ = "parse_job_runs"
+    __table_args__ = (Index("idx_parse_job_runs_attachment_id", "attachment_id"),)
+
+    job_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    attachment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    chat_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    run_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    webhook_secret: Mapped[str] = mapped_column(String(128), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    job_payload_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    github_run_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="queued")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class UserIntegration(Base):

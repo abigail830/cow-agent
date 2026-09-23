@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
+from app.api.routes import parse_internal
 from app.config import get_settings
 from app.db.redis_client import check_redis_connection
 from sqlalchemy import func, select
@@ -127,6 +128,7 @@ def create_app() -> FastAPI:
         }
 
     app.include_router(api_router)
+    app.include_router(parse_internal.router)
 
     @app.get("/health/models")
     async def health_models():

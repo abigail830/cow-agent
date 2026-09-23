@@ -1,42 +1,52 @@
 import { X } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
 import type { ChatAttachmentListItem } from '../lib/attachmentUpload'
-import { isPendingAttachmentId } from '../lib/attachmentUpload'
+import { isAttachmentParsing, isPendingAttachmentId } from '../lib/attachmentUpload'
 
 type Props = {
   attachments: ChatAttachmentListItem[]
   onRemove: (id: string) => void
+  onChipClick?: (attachment: ChatAttachmentListItem) => void
   disabled?: boolean
 }
 
-export function ComposerStagedChips({ attachments, onRemove, disabled = false }: Props) {
+export function ComposerStagedChips({ attachments, onRemove, onChipClick, disabled = false }: Props) {
   if (attachments.length === 0) return null
 
   return (
     <div className="composer-staged-chips" role="list" aria-label="Attachments for this message">
       {attachments.map((att) => {
         const uploading = att.upload_status === 'uploading' || isPendingAttachmentId(att.id)
-        const failed = att.upload_status === 'failed'
+        const failed = att.upload_status === 'failed' || att.parse_status === 'failed'
+        const parsing = !uploading && !failed && isAttachmentParsing(att)
+        const chipClass = [
+          'composer-staged-chip',
+          uploading || parsing ? 'composer-staged-chip-uploading' : '',
+          failed ? 'composer-staged-chip-failed' : '',
+          att.parse_status === 'ready' ? 'composer-staged-chip-ready' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+
         return (
-          <div
-            key={att.id}
-            className={[
-              'composer-staged-chip',
-              uploading ? 'composer-staged-chip-uploading' : '',
-              failed ? 'composer-staged-chip-failed' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            role="listitem"
-          >
-            {uploading ? (
-              <span className="composer-staged-chip-spinner" aria-label="Uploading">
+          <div key={att.id} className={chipClass} role="listitem">
+            {uploading || parsing ? (
+              <span className="composer-staged-chip-spinner" aria-label={parsing ? 'Parsing' : 'Uploading'}>
                 <LoadingSpinner size="sm" />
               </span>
             ) : null}
-            <span className="composer-staged-chip-name" title={att.filename}>
+            <button
+              type="button"
+              className="composer-staged-chip-name composer-staged-chip-name-btn"
+              title={att.filename}
+              onClick={() => onChipClick?.(att)}
+            >
               {att.filename}
-            </span>
+              {parsing ? (
+                <span className="proposal-draft-bagel composer-staged-chip-bagel">Parsing</span>
+              ) : null}
+              {failed ? <span className="composer-staged-chip-failed-label">Failed</span> : null}
+            </button>
             <button
               type="button"
               className="composer-staged-chip-remove"

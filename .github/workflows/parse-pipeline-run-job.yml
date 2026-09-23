@@ -35,6 +35,18 @@ on:
         description: "Optional idempotency key"
         required: false
         type: string
+      platform_job_id:
+        description: "Platform-driven job id (from agent-platform upload)"
+        required: false
+        type: string
+      platform_run_token:
+        description: "Platform run token for GET /internal/parse/v1/run/{job_id}"
+        required: false
+        type: string
+      platform_base_url:
+        description: "Platform public base URL (PARSE_PIPELINE_PUBLIC_BASE_URL)"
+        required: false
+        type: string
 
 env:
   JOB_STORE: memory
@@ -59,8 +71,26 @@ jobs:
         working-directory: parse-pipeline
         run: pip install -e .
 
+      - name: Fetch job payload from platform
+        id: platform_fetch
+        if: inputs.platform_job_id != '' && inputs.platform_run_token != '' && inputs.platform_base_url != ''
+        env:
+          PLATFORM_JOB_ID: ${{ inputs.platform_job_id }}
+          PLATFORM_RUN_TOKEN: ${{ inputs.platform_run_token }}
+          PLATFORM_BASE_URL: ${{ inputs.platform_base_url }}
+          JOB_JSON: ${{ runner.temp }}/job.json
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            -H "Authorization: Bearer ${PLATFORM_RUN_TOKEN}" \
+            "${PLATFORM_BASE_URL%/}/internal/parse/v1/run/${PLATFORM_JOB_ID}" \
+            -o "$JOB_JSON"
+          echo "job_json=$JOB_JSON" >> "$GITHUB_OUTPUT"
+          echo "mode=platform" >> "$GITHUB_OUTPUT"
+
       - name: Build job payload
         id: build
+        if: inputs.platform_job_id == '' || inputs.platform_run_token == '' || inputs.platform_base_url == ''
         env:
           PIPELINE_ID: ${{ inputs.pipeline_id }}
           SOURCE_REPO_PATH: ${{ inputs.source_repo_path }}
@@ -100,12 +130,13 @@ jobs:
           python -m parse_pipeline.gha.build_job "${ARGS[@]}"
           echo "artifacts_dir=$ARTIFACTS_DIR" >> "$GITHUB_OUTPUT"
           echo "job_json=$JOB_JSON" >> "$GITHUB_OUTPUT"
+          echo "mode=fixture" >> "$GITHUB_OUTPUT"
 
       - name: Run parse job
         env:
           DOCUMENT_MIND_ACCESS_KEY_ID: ${{ secrets.DOCUMENT_MIND_ACCESS_KEY_ID }}
           DOCUMENT_MIND_ACCESS_KEY_SECRET: ${{ secrets.DOCUMENT_MIND_ACCESS_KEY_SECRET }}
-          JOB_JSON: ${{ steps.build.outputs.job_json }}
+          JOB_JSON: ${{ runner.temp }}/job.json
         run: parse-pipeline run-job --job-file "$JOB_JSON" --caller-id gha
 
       - name: Upload parse artifacts

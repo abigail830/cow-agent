@@ -80,6 +80,19 @@ export interface ChatSummary {
   updated_at: string | null
 }
 
+export type AttachmentParseStatus = 'pending' | 'running' | 'ready' | 'failed' | 'skipped'
+
+export interface ParseStageSnapshot {
+  stage_id?: string | null
+  status?: string | null
+}
+
+export interface AttachmentParseProgress {
+  current_stage?: string | null
+  message?: string | null
+  stages?: ParseStageSnapshot[] | null
+}
+
 export interface ChatAttachment {
   id: string
   chat_id: string
@@ -89,6 +102,11 @@ export interface ChatAttachment {
   provider: string
   provider_file_id: string
   created_at: string | null
+  parse_status?: AttachmentParseStatus
+  parse_pipeline_id?: string | null
+  parse_job_id?: string | null
+  parse_error_message?: string | null
+  parse_progress?: AttachmentParseProgress | null
 }
 
 export interface MessageAttachmentMeta {

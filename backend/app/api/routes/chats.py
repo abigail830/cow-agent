@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import (
     AttachmentOut,
+    ParseProgressOut,
+    ParseStageOut,
     ChatCreate,
     ChatForkOut,
     ChatForkSourceOut,
@@ -48,6 +50,42 @@ from app.shared.artifacts.preview_html import SLIDE_PREVIEW_CSP, prepare_html_pp
 from app.shared.artifacts.urls import content_disposition_attachment
 
 router = APIRouter(prefix="/chats", tags=["chats"])
+
+
+def _attachment_out(chat_id: uuid.UUID, row: dict[str, Any]) -> AttachmentOut:
+    progress_raw = row.get("parse_progress")
+    progress = None
+    if isinstance(progress_raw, dict):
+        stages_raw = progress_raw.get("stages")
+        stages = None
+        if isinstance(stages_raw, list):
+            stages = [
+                ParseStageOut(
+                    stage_id=s.get("stage_id") if isinstance(s, dict) else None,
+                    status=s.get("status") if isinstance(s, dict) else None,
+                )
+                for s in stages_raw
+            ]
+        progress = ParseProgressOut(
+            current_stage=progress_raw.get("current_stage"),
+            message=progress_raw.get("message"),
+            stages=stages,
+        )
+    return AttachmentOut(
+        id=uuid.UUID(row["id"]),
+        chat_id=chat_id,
+        filename=row["filename"],
+        mime_type=row["mime_type"],
+        size_bytes=row["size_bytes"],
+        provider=row["provider"],
+        provider_file_id=row["provider_file_id"],
+        created_at=row.get("created_at"),
+        parse_status=row.get("parse_status") or "ready",
+        parse_pipeline_id=row.get("parse_pipeline_id"),
+        parse_job_id=row.get("parse_job_id"),
+        parse_error_message=row.get("parse_error_message"),
+        parse_progress=progress,
+    )
 
 
 def _chat_list_out(chat: Chat) -> ChatListOut:
@@ -337,19 +375,7 @@ async def list_attachments(
 ) -> list[AttachmentOut]:
     service = AttachmentService(db)
     rows = await service.list_for_chat(chat.id)
-    return [
-        AttachmentOut(
-            id=uuid.UUID(row["id"]),
-            chat_id=chat.id,
-            filename=row["filename"],
-            mime_type=row["mime_type"],
-            size_bytes=row["size_bytes"],
-            provider=row["provider"],
-            provider_file_id=row["provider_file_id"],
-            created_at=row.get("created_at"),
-        )
-        for row in rows
-    ]
+    return [_attachment_out(chat.id, row) for row in rows]
 
 
 @router.post("/{chat_id}/attachments", response_model=AttachmentOut, status_code=201)
@@ -376,16 +402,20 @@ async def upload_attachment(
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"File upload failed: {exc}") from exc
 
-    return AttachmentOut(
-        id=uuid.UUID(payload["id"]),
-        chat_id=chat.id,
-        filename=payload["filename"],
-        mime_type=payload["mime_type"],
-        size_bytes=payload["size_bytes"],
-        provider=payload["provider"],
-        provider_file_id=payload["provider_file_id"],
-        created_at=None,
-    )
+    return _attachment_out(chat.id, payload)
+
+
+@router.get("/{chat_id}/attachment-events")
+async def attachment_parse_events(
+    chat: Chat = Depends(get_owned_chat),
+) -> StreamingResponse:
+    from app.platform.parse_pipeline.events import subscribe_chat_parse_events
+
+    async def event_generator():
+        async for event in subscribe_chat_parse_events(str(chat.id)):
+            yield f"event: attachment.parse_updated\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.delete("/{chat_id}/attachments/{attachment_id}", status_code=204)
