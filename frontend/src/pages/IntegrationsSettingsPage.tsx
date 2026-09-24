@@ -5,5 +5,5 @@ export function IntegrationsSettingsPage() {
   const [searchParams] = useSearchParams()
   const next = new URLSearchParams(searchParams)
   next.set('integrations', '1')
-  return <Navigate to={`/?${next.toString()}`} replace />
+  return <Navigate to={`/chat?${next.toString()}`} replace />
 }

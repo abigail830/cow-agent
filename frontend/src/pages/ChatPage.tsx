@@ -11,7 +11,7 @@ import {
 import { Paperclip } from 'lucide-react'
 import { ContextUsageIndicator } from '../components/ContextUsageIndicator'
 import { KbScopePopover } from '../components/KbScopePopover'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, streamChat } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { AgentIcon } from '../components/AgentIcon'
@@ -205,6 +205,7 @@ function readSidebarCollapsed(): boolean {
 }
 
 export function ChatPage() {
+  const navigate = useNavigate()
   const { user, logout } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [agents, setAgents] = useState<Agent[]>([])
@@ -849,9 +850,29 @@ export function ChatPage() {
   }, [ensureAgentChatLoaded])
 
   useEffect(() => {
-    void loadAgents({ autoSelect: true })
+    void loadAgents({ autoSelect: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only bootstrap
   }, [])
+
+  useEffect(() => {
+    if (agentsLoading) return
+    const agentParam = searchParams.get('agent')
+    if (!agentParam) return
+
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('agent')
+        return next
+      },
+      { replace: true },
+    )
+
+    const agent = agents.find((item) => item.id === agentParam)
+    if (agent) {
+      void selectAgent(agent)
+    }
+  }, [agents, agentsLoading, searchParams, selectAgent, setSearchParams])
 
   useEffect(() => {
     if (!isProposalComposer || !selectedId || !chatId) {
@@ -1945,10 +1966,12 @@ export function ChatPage() {
         <div
           className={`sidebar-brand-wrap${sidebarCollapsed ? ' sidebar-brand-wrap-collapsed' : ''}`}
         >
-          <h1
-            className="sidebar-brand"
-            aria-label="Agent Team"
-            title={sidebarCollapsed ? 'Agent Team' : undefined}
+          <button
+            type="button"
+            className="sidebar-brand sidebar-brand-btn"
+            aria-label="Home"
+            title={sidebarCollapsed ? 'Home' : undefined}
+            onClick={() => navigate('/')}
           >
             <img src="/cow.png" alt="" className="sidebar-brand-icon" />
             {!sidebarCollapsed && (
@@ -1957,7 +1980,7 @@ export function ChatPage() {
                 <span className="sidebar-brand-team">Team</span>
               </>
             )}
-          </h1>
+          </button>
         </div>
 
         {!sidebarCollapsed && (
