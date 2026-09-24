@@ -1,6 +1,6 @@
 id: lrqa-assist
 name: "AQRL"
-description: "LRQA 中国区系统迁移与交付辅助 — 知识整理、方案/架构设计（含 PlantUML 图）、项目管理文档与内容产出（Word / PPT / HTML slides）。"
+description: "System migration and delivery assistant — knowledge synthesis, solution and architecture design, project docs, and content output (Word, PPT, HTML slides)."
 
 model_provider: azure_anthropic
 default_model: claude-sonnet-4-6

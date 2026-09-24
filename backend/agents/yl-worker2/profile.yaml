@@ -1,6 +1,6 @@
 id: yl-worker2
 name: "YL-Worker-002"
-description: "伊利成人营养品事业部调度管理组工作助手（本体驱动）"
+description: "Ontology-driven dispatch, inventory planning, and transfer recommendations for nutrition operations."
 
 model_provider: azure_anthropic
 default_model: claude-sonnet-4-6

@@ -1,6 +1,6 @@
 id: yl-worker1
 name: "YL-Worker-001"
-description: "伊利奶粉分仓补货供应链分析助手"
+description: "Multi-warehouse replenishment and supply chain analytics for FMCG distribution."
 
 model_provider: azure_anthropic
 default_model: claude-sonnet-4-6
