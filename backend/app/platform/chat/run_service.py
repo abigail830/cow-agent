@@ -335,10 +335,13 @@ class ChatRunService:
 
     async def snapshot_context_usage(self, chat: Chat, *, memory_config: MemoryConfig | None = None) -> dict[str, Any] | None:
         resolved = memory_config or await self._memory_config_for_chat(chat)
+        model_entry = await resolve_chat_model(self._db, chat)
         snapshot = await estimate_context_usage(
             db=self._db,
             chat_id=chat.id,
             memory_config=resolved,
+            model_id=model_entry.id,
+            model_provider=model_entry.provider,
         )
         return snapshot.to_dict() if snapshot is not None else None
 

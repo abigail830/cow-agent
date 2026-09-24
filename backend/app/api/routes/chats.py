@@ -153,12 +153,12 @@ async def get_context_usage(
     db: AsyncSession = Depends(get_db),
 ) -> ContextUsageOut:
     service = ChatRunService(db)
-    cached = await service.get_cached_context_usage(chat.id)
-    if cached is not None:
-        return ContextUsageOut(**cached)
     live = await service.snapshot_context_usage(chat)
     if live is not None:
         return ContextUsageOut(**live)
+    cached = await service.get_cached_context_usage(chat.id)
+    if cached is not None:
+        return ContextUsageOut(**cached)
     memory_config = await service._memory_config_for_chat(chat)
     budget = max(1, memory_config.compaction.max_context_window_tokens - memory_config.compaction.max_output_tokens)
     return ContextUsageOut(tokens=0, budget_tokens=budget, percent=0.0)

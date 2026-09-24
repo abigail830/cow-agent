@@ -7,7 +7,9 @@ from app.platform.llm.model_catalog import ModelEntry
 from app.platform.memory.context_budget import (
     estimate_messages_token_count,
     input_budget_tokens,
+    prepare_messages_for_usage_estimate,
 )
+from app.platform.memory.maf_mapping import to_maf_messages
 from app.platform.memory.memory_config import apply_model_compaction_defaults, parse_memory_config
 
 
@@ -46,6 +48,59 @@ def test_estimate_messages_token_count_uses_maf_heuristic():
     ]
     tokens = estimate_messages_token_count(messages)
     assert tokens > 0
+
+
+@pytest.mark.asyncio
+async def test_prepare_messages_for_usage_estimate_applies_slim():
+    memory_config = apply_model_compaction_defaults(
+        parse_memory_config({}),
+        ModelEntry(
+            id="deepseek-flash",
+            label="DeepSeek Flash",
+            provider="deepseek",
+            deployment="deepseek-flash",
+            context_window_tokens=1_000_000,
+            max_output_tokens=16_384,
+        ),
+    )
+    rows = [
+        {
+            "role": "assistant",
+            "message_type": "tool_call",
+            "content": None,
+            "sequence": 1,
+            "metadata": {
+                "call_id": "c1",
+                "tool_name": "hybrid_search",
+                "arguments": {"query": "nova " + "x" * 4000},
+            },
+        },
+        {
+            "role": "tool",
+            "message_type": "tool_result",
+            "content": '{"hits": ' + str(list(range(200))) + "}",
+            "sequence": 2,
+            "metadata": {
+                "call_id": "c1",
+                "tool_name": "hybrid_search",
+                "result": {"hits": 200},
+            },
+        },
+    ]
+    raw_messages = to_maf_messages(rows)
+    raw_tokens = estimate_messages_token_count(list(raw_messages))
+
+    effective = await prepare_messages_for_usage_estimate(
+        list(raw_messages),
+        memory_config,
+        chat_id=uuid.uuid4(),
+        model_id="deepseek-flash",
+        model_provider="deepseek",
+    )
+    effective_tokens = estimate_messages_token_count(effective)
+
+    assert effective_tokens < raw_tokens
+    assert effective_tokens / input_budget_tokens(memory_config) < 0.5
 
 
 @pytest.mark.asyncio
