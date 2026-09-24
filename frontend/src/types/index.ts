@@ -115,13 +115,33 @@ export interface ParsedArtifactsAvailability {
   pageindex_json: boolean
 }
 
-export interface DocumentItem extends ChatAttachment {
+export type DocumentSourceType = 'attachment' | 'artifact'
+
+export interface DocumentItem {
+  source_type: DocumentSourceType
+  id: string
+  chat_id: string
+  filename: string
+  created_at: string | null
   agent_id: string
   agent_name: string
   agent_slug: string | null
   chat_title: string | null
-  has_parsed_content: boolean
-  parsed_artifacts: ParsedArtifactsAvailability
+  mime_type?: string | null
+  size_bytes?: number | null
+  provider?: string | null
+  provider_file_id?: string | null
+  parse_status?: AttachmentParseStatus | null
+  parse_pipeline_id?: string | null
+  parse_job_id?: string | null
+  parse_error_message?: string | null
+  parse_progress?: AttachmentParseProgress | null
+  has_parsed_content?: boolean
+  parsed_artifacts?: ParsedArtifactsAvailability
+  artifact_id?: string | null
+  artifact_kind?: string | null
+  artifact_format?: string | null
+  artifact_spec?: import('./artifact').ArtifactSpec | null
 }
 
 export interface DocumentListResult {

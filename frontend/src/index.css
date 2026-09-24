@@ -1680,7 +1680,7 @@ body {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
   line-height: 1.4;
-  color: var(--color-muted);
+  color: color-mix(in oklab, var(--color-muted) 88%, var(--color-ink));
 }
 
 .documents-view-close {
@@ -1798,35 +1798,37 @@ body {
 }
 
 .documents-table {
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   border-radius: 10px;
   background: #fff;
   overflow: hidden;
+  box-shadow: 0 1px 2px rgba(24, 24, 27, 0.04);
 }
 
 .documents-table-head,
 .documents-table-row {
   display: grid;
   grid-template-columns:
-    minmax(4.5rem, 0.95fr)
-    minmax(5.5rem, 1.05fr)
-    minmax(7rem, 1.85fr)
-    minmax(3.25rem, 0.5fr)
-    minmax(4.25rem, 0.65fr)
-    minmax(5rem, 0.95fr);
+    minmax(3.25rem, 0.68fr)
+    minmax(5rem, 1.05fr)
+    minmax(4.25rem, 0.5fr)
+    minmax(7rem, 2fr)
+    minmax(2.5rem, 0.36fr)
+    minmax(3.25rem, 0.48fr)
+    minmax(5rem, 0.88fr);
   gap: 0.75rem;
   align-items: center;
   padding: 0.55rem 0.875rem;
 }
 
 .documents-table-head {
-  border-bottom: 1px solid var(--color-border);
-  background: color-mix(in oklab, var(--cover-paper) 72%, oklch(0.9 0.018 75));
+  border-bottom: 1px solid var(--color-border-strong);
+  background: #fafafa;
   font-size: 0.6875rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: var(--color-muted);
+  color: #52525b;
 }
 
 .documents-table-list {
@@ -1839,7 +1841,7 @@ body {
 .documents-table-row {
   width: 100%;
   border: none;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid var(--color-border);
   background: #fff;
   text-align: left;
   cursor: pointer;
@@ -1855,11 +1857,12 @@ body {
 }
 
 .documents-table-row-selected {
-  background: #fff7ed;
+  background: var(--color-brand-50);
+  box-shadow: inset 3px 0 0 var(--color-brand-400);
 }
 
 .documents-table-row-selected:hover {
-  background: #fff7ed;
+  background: var(--color-brand-50);
 }
 
 .documents-col {
@@ -1889,8 +1892,7 @@ body {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.625rem;
   line-height: 1.3;
-  color: var(--color-muted);
-  opacity: 0.72;
+  color: var(--color-subtle);
 }
 
 .documents-col-session-name {
@@ -1909,8 +1911,13 @@ body {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.625rem;
   line-height: 1.3;
-  color: var(--color-muted);
-  opacity: 0.72;
+  color: var(--color-subtle);
+}
+
+.documents-col-source {
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
 
 .documents-col-file {
@@ -1918,6 +1925,13 @@ body {
   align-items: center;
   gap: 0.45rem;
   min-width: 0;
+  padding-left: 0.5rem;
+}
+
+.documents-col-empty {
+  font-size: 0.6875rem;
+  color: var(--color-muted);
+  opacity: 0.55;
 }
 
 .documents-col-file-icon {
@@ -1928,8 +1942,9 @@ body {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 6px;
-  background: color-mix(in oklab, var(--cover-paper) 68%, transparent);
-  color: var(--color-muted);
+  border: 1px solid var(--color-border);
+  background: #fafafa;
+  color: #52525b;
 }
 
 .documents-col-file-name {
@@ -1944,8 +1959,13 @@ body {
 .documents-col-date {
   font-size: 0.6875rem;
   line-height: 1.35;
-  color: var(--color-muted);
+  color: #52525b;
   white-space: nowrap;
+  padding-right: 0.15rem;
+}
+
+.documents-col-size {
+  font-variant-numeric: tabular-nums;
 }
 
 .documents-col-status {
@@ -2030,8 +2050,54 @@ body {
 
 .documents-status-badge-skipped,
 .documents-status-badge-extra {
-  color: var(--color-muted);
-  background: color-mix(in oklab, var(--cover-paper) 68%, transparent);
+  color: #57534e;
+  background: #f5f5f4;
+  border: 1px solid #e7e5e4;
+}
+
+.documents-source-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+/* Upload: cool stone — incoming file */
+.documents-source-badge-upload {
+  color: #44403c;
+  background: #f5f5f4;
+  border-color: #d6d3d1;
+}
+
+/* Generated: warm brand — agent output */
+.documents-source-badge-generated {
+  color: var(--color-brand-800);
+  background: var(--color-brand-50);
+  border-color: var(--color-brand-200);
+}
+
+.documents-artifact-preview-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.documents-artifact-preview-body .artifact-side-panel {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .documents-preview-header {

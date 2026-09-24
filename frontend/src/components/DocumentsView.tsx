@@ -8,12 +8,15 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { ExternalLink, FileText, Search, X } from 'lucide-react'
+import { ExternalLink, FileImage, FileText, Search, Sparkles, Workflow, X } from 'lucide-react'
 import { api } from '../api/client'
 import { LoadingSpinner } from './LoadingSpinner'
 import { MarkdownContent } from './MarkdownContent'
+import { ArtifactPanelContent } from './ArtifactPanelHost'
 import { formatAttachmentTimestamp } from '../lib/attachmentMentions'
 import { parseStatusDisplayLabel } from '../lib/attachmentParseProgress'
+import { artifactCardSubtitle, isSidePanelArtifact } from '../lib/artifactKinds'
+import { downloadArtifactFile } from '../lib/artifactDownload'
 import { attachmentOriginalUrl } from '../lib/documentUrls'
 import {
   layoutPreviewText,
@@ -22,7 +25,7 @@ import {
   type PageIndexData,
 } from '../lib/pageIndexPreview'
 import type { ArtifactSpec } from '../types/artifact'
-import type { Agent, AttachmentParseStatus, DocumentItem } from '../types'
+import type { Agent, AttachmentParseStatus, DocumentItem, DocumentSourceType } from '../types'
 
 const UDocArtifactViewer = lazy(async () => {
   const mod = await import('./UDocArtifactViewer')
@@ -59,6 +62,22 @@ const MIME_FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: 'application/vnd', label: 'Spreadsheets / Office' },
 ]
 
+const SOURCE_FILTER_OPTIONS: { value: DocumentSourceType | 'all'; label: string }[] = [
+  { value: 'all', label: 'All sources' },
+  { value: 'attachment', label: 'Uploads' },
+  { value: 'artifact', label: 'Generated' },
+]
+
+const ARTIFACT_KIND_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'All kinds' },
+  { value: 'diagram_svg', label: 'Diagrams' },
+  { value: 'slide_deck', label: 'Slides' },
+  { value: 'content_document', label: 'Documents' },
+  { value: 'proposal_preview', label: 'Proposal preview' },
+  { value: 'proposal_document', label: 'Proposal export' },
+  { value: 'proposal_word', label: 'Proposal Word' },
+]
+
 function formatFileSize(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`
   if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`
@@ -77,11 +96,61 @@ function parseStatusClass(status: AttachmentParseStatus | undefined): string {
   return `documents-status-badge documents-status-badge-${status ?? 'ready'}`
 }
 
+function isArtifactDocument(doc: DocumentItem): boolean {
+  return doc.source_type === 'artifact'
+}
+
+function documentRowKey(doc: DocumentItem): string {
+  return `${doc.source_type}:${doc.id}`
+}
+
+function documentsMatch(a: DocumentItem, b: DocumentItem): boolean {
+  return a.source_type === b.source_type && a.id === b.id
+}
+
+function formatDocumentSize(doc: DocumentItem): string {
+  if (isArtifactDocument(doc) || doc.size_bytes == null) return '—'
+  return formatFileSize(doc.size_bytes)
+}
+
 function documentStatusBadges(doc: DocumentItem): string[] {
-  const badges = [parseStatusDisplayLabel(doc)]
+  if (isArtifactDocument(doc)) {
+    if (doc.artifact_spec) return [artifactCardSubtitle(doc.artifact_spec)]
+    return [doc.artifact_kind ?? 'generated']
+  }
+  const badges = [parseStatusDisplayLabel(doc as Parameters<typeof parseStatusDisplayLabel>[0])]
   if (doc.has_parsed_content) badges.push('parsed')
   if (doc.parsed_artifacts?.pageindex_json) badges.push('page index')
   return badges
+}
+
+function documentSourceBadge(doc: DocumentItem): string | null {
+  if (doc.source_type === 'artifact') return 'generated'
+  if (doc.source_type === 'attachment') return 'upload'
+  return null
+}
+
+function isSvgDocument(doc: DocumentItem): boolean {
+  if (doc.artifact_kind === 'diagram_svg' || doc.artifact_format === 'svg') return true
+  const name = doc.filename.toLowerCase()
+  if (name.endsWith('.svg')) return true
+  const mime = (doc.mime_type ?? '').toLowerCase()
+  return mime === 'image/svg+xml'
+}
+
+function isRasterImageDocument(doc: DocumentItem): boolean {
+  if (isSvgDocument(doc)) return false
+  const mime = (doc.mime_type ?? '').toLowerCase()
+  if (mime.startsWith('image/')) return true
+  const name = doc.filename.toLowerCase()
+  return /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|heic|heif)$/.test(name)
+}
+
+function DocumentFileIcon({ doc }: { doc: DocumentItem }) {
+  if (isSvgDocument(doc)) return <Workflow size={14} />
+  if (isRasterImageDocument(doc)) return <FileImage size={14} />
+  if (isArtifactDocument(doc)) return <Sparkles size={14} />
+  return <FileText size={14} />
 }
 
 function canPreviewOriginal(mimeType: string): boolean {
@@ -110,7 +179,7 @@ function attachmentPreviewSpec(doc: DocumentItem): ArtifactSpec {
 }
 
 function AttachmentOriginalPreview({ doc }: { doc: DocumentItem }) {
-  const mime = doc.mime_type.toLowerCase()
+  const mime = (doc.mime_type ?? '').toLowerCase()
   const inlineUrl = attachmentOriginalUrl(doc.chat_id, doc.id, { inline: true })
 
   if (mime.startsWith('image/')) {
@@ -255,7 +324,7 @@ function DocumentPreviewPane({
     }
   }, [tab, artifacts.content_md, artifacts.meta_json, doc.chat_id, doc.id, hasPageIndex])
 
-  const showOriginalPreview = tab === 'original' && canPreviewOriginal(doc.mime_type)
+  const showOriginalPreview = tab === 'original' && canPreviewOriginal(doc.mime_type ?? '')
 
   return (
     <div className="documents-preview-pane">
@@ -263,8 +332,8 @@ function DocumentPreviewPane({
         <div className="documents-preview-heading">
           <h3 className="documents-preview-title">{doc.filename}</h3>
           <p className="documents-preview-meta">
-            {agentLabel(doc)} · {sessionLabel(doc)} · {formatFileSize(doc.size_bytes)} ·{' '}
-            {parseStatusDisplayLabel(doc)}
+            {agentLabel(doc)} · {sessionLabel(doc)} · {formatDocumentSize(doc)} ·{' '}
+            {parseStatusDisplayLabel(doc as Parameters<typeof parseStatusDisplayLabel>[0])}
           </p>
         </div>
         <button type="button" className="documents-preview-close" onClick={onClose} aria-label="Close preview">
@@ -433,6 +502,102 @@ function DocumentPreviewPane({
   )
 }
 
+function ArtifactDocumentPreviewPane({
+  document: doc,
+  onClose,
+  onOpenChat,
+}: {
+  document: DocumentItem
+  onClose: () => void
+  onOpenChat?: (chatId: string) => void
+}) {
+  const spec = doc.artifact_spec
+  const [downloading, setDownloading] = useState(false)
+
+  if (!spec) {
+    return (
+      <div className="documents-preview-pane">
+        <header className="documents-preview-header">
+          <div className="documents-preview-heading">
+            <h3 className="documents-preview-title">{doc.filename}</h3>
+            <p className="documents-preview-meta">{agentLabel(doc)} · {sessionLabel(doc)}</p>
+          </div>
+          <button type="button" className="documents-preview-close" onClick={onClose} aria-label="Close preview">
+            <X size={18} aria-hidden="true" />
+          </button>
+        </header>
+        <div className="documents-preview-body">
+          <p className="documents-preview-empty">Artifact metadata is unavailable.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const sidePanel = isSidePanelArtifact(spec)
+  const subtitle = artifactCardSubtitle(spec)
+
+  async function handleDownload() {
+    if (downloading || !spec?.download_url?.trim()) return
+    setDownloading(true)
+    try {
+      await downloadArtifactFile(spec)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  return (
+    <div className="documents-preview-pane">
+      <header className="documents-preview-header">
+        <div className="documents-preview-heading">
+          <h3 className="documents-preview-title">{spec.title || doc.filename}</h3>
+          <p className="documents-preview-meta">
+            {agentLabel(doc)} · {sessionLabel(doc)} · {subtitle}
+          </p>
+        </div>
+        <button type="button" className="documents-preview-close" onClick={onClose} aria-label="Close preview">
+          <X size={18} aria-hidden="true" />
+        </button>
+      </header>
+
+      <div className="documents-preview-toolbar">
+        <div className="documents-preview-actions">
+          {spec.download_url?.trim() ? (
+            <button
+              type="button"
+              className="documents-preview-link-btn"
+              disabled={downloading}
+              onClick={() => void handleDownload()}
+            >
+              {downloading ? 'Downloading…' : 'Download'}
+            </button>
+          ) : null}
+          {onOpenChat ? (
+            <button type="button" className="documents-preview-link-btn" onClick={() => onOpenChat(doc.chat_id)}>
+              <ExternalLink size={14} aria-hidden="true" />
+              Open in chat
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="documents-preview-body documents-artifact-preview-body">
+        {spec.kind === 'proposal_preview' ? (
+          <p className="documents-preview-empty">
+            Proposal preview opens in the original chat session. Use Open in chat to continue editing.
+          </p>
+        ) : sidePanel ? (
+          <ArtifactPanelContent spec={spec} onClose={onClose} />
+        ) : (
+          <p className="documents-preview-empty">
+            Download this generated file or open the session to view it in context.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function DocumentsView({ onClose, onOpenChat }: Props) {
   const [documents, setDocuments] = useState<DocumentItem[]>([])
   const [total, setTotal] = useState(0)
@@ -440,8 +605,10 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
+  const [source, setSource] = useState<DocumentSourceType | 'all'>('all')
   const [parseStatus, setParseStatus] = useState('')
   const [mimeType, setMimeType] = useState('')
+  const [artifactKind, setArtifactKind] = useState('')
   const [agentId, setAgentId] = useState('')
   const [agents, setAgents] = useState<Agent[]>([])
   const [selected, setSelected] = useState<DocumentItem | null>(null)
@@ -455,16 +622,21 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
     return () => window.clearTimeout(timer)
   }, [searchInput])
 
+  const showAttachmentFilters = source === 'all' || source === 'attachment'
+  const showArtifactFilters = source === 'all' || source === 'artifact'
+
   const filters = useMemo(
     () => ({
       q: debouncedQuery || undefined,
-      parse_status: parseStatus || undefined,
-      mime_type: mimeType || undefined,
+      parse_status: showAttachmentFilters && parseStatus ? parseStatus : undefined,
+      mime_type: showAttachmentFilters && mimeType ? mimeType : undefined,
+      artifact_kind: showArtifactFilters && artifactKind ? artifactKind : undefined,
       agent_id: agentId || undefined,
+      source,
       limit: 100,
       offset: 0,
     }),
-    [agentId, debouncedQuery, mimeType, parseStatus],
+    [agentId, artifactKind, debouncedQuery, mimeType, parseStatus, showArtifactFilters, showAttachmentFilters, source],
   )
 
   useEffect(() => {
@@ -487,7 +659,7 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
       setTotal(result.total)
       setSelected((current) => {
         if (!current) return null
-        return result.items.find((item) => item.id === current.id) ?? null
+        return result.items.find((item) => documentsMatch(item, current)) ?? null
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load documents'
@@ -577,8 +749,8 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
     <div className="documents-view">
       <header className="documents-view-header">
         <div>
-          <h1 className="documents-view-title">Documents</h1>
-          <p className="documents-view-subtitle">Attachments and parse results across sessions.</p>
+          <h1 className="documents-view-title">Chat Documents</h1>
+          <p className="documents-view-subtitle">Uploads and generated artifacts across sessions.</p>
         </div>
         <button type="button" className="documents-view-close" onClick={onClose} aria-label="Back to chat">
           <X size={18} aria-hidden="true" />
@@ -593,7 +765,7 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
               <input
                 type="search"
                 value={searchInput}
-                placeholder="Search filename…"
+                placeholder="Search name…"
                 onChange={(event) => setSearchInput(event.target.value)}
               />
             </label>
@@ -612,28 +784,58 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
             </select>
             <select
               className="documents-filter-select"
-              value={parseStatus}
-              aria-label="Filter by parse status"
-              onChange={(event) => setParseStatus(event.target.value)}
+              value={source}
+              aria-label="Filter by source"
+              onChange={(event) => setSource(event.target.value as DocumentSourceType | 'all')}
             >
-              {PARSE_STATUS_OPTIONS.map((option) => (
-                <option key={option.value || 'all-status'} value={option.value}>
+              {SOURCE_FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
             </select>
-            <select
-              className="documents-filter-select"
-              value={mimeType}
-              aria-label="Filter by file type"
-              onChange={(event) => setMimeType(event.target.value)}
-            >
-              {MIME_FILTER_OPTIONS.map((option) => (
-                <option key={option.value || 'all-types'} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            {showAttachmentFilters ? (
+              <select
+                className="documents-filter-select"
+                value={parseStatus}
+                aria-label="Filter by parse status"
+                onChange={(event) => setParseStatus(event.target.value)}
+              >
+                {PARSE_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value || 'all-status'} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            {showAttachmentFilters ? (
+              <select
+                className="documents-filter-select"
+                value={mimeType}
+                aria-label="Filter by file type"
+                onChange={(event) => setMimeType(event.target.value)}
+              >
+                {MIME_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value || 'all-types'} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            {showArtifactFilters ? (
+              <select
+                className="documents-filter-select"
+                value={artifactKind}
+                aria-label="Filter by artifact kind"
+                onChange={(event) => setArtifactKind(event.target.value)}
+              >
+                {ARTIFACT_KIND_OPTIONS.map((option) => (
+                  <option key={option.value || 'all-kinds'} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ) : null}
           </div>
 
           {error ? <div className="documents-drawer-error">{error}</div> : null}
@@ -656,6 +858,7 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
                   <div className="documents-table-head" aria-hidden="true">
                     <span className="documents-col documents-col-agent">Agent</span>
                     <span className="documents-col documents-col-session">Session</span>
+                    <span className="documents-col documents-col-source">Source</span>
                     <span className="documents-col documents-col-file">File</span>
                     <span className="documents-col documents-col-size">Size</span>
                     <span className="documents-col documents-col-date">Date</span>
@@ -663,10 +866,10 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
                   </div>
                   <ul className="documents-table-list">
                     {documents.map((doc) => (
-                      <li key={doc.id}>
+                      <li key={documentRowKey(doc)}>
                         <button
                           type="button"
-                          className={`documents-table-row${selected?.id === doc.id ? ' documents-table-row-selected' : ''}`}
+                          className={`documents-table-row${selected && documentsMatch(selected, doc) ? ' documents-table-row-selected' : ''}`}
                           onClick={() => handleSelect(doc)}
                         >
                           <span className="documents-col documents-col-agent">
@@ -687,16 +890,25 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
                               {doc.chat_id}
                             </span>
                           </span>
+                          <span className="documents-col documents-col-source">
+                            {documentSourceBadge(doc) ? (
+                              <span className={`documents-source-badge documents-source-badge-${documentSourceBadge(doc)}`}>
+                                {documentSourceBadge(doc)}
+                              </span>
+                            ) : (
+                              <span className="documents-col-empty">—</span>
+                            )}
+                          </span>
                           <span className="documents-col documents-col-file">
                             <span className="documents-col-file-icon" aria-hidden="true">
-                              <FileText size={14} />
+                              <DocumentFileIcon doc={doc} />
                             </span>
                             <span className="documents-col-file-name" title={doc.filename}>
                               {doc.filename}
                             </span>
                           </span>
                           <span className="documents-col documents-col-size">
-                            {formatFileSize(doc.size_bytes)}
+                            {formatDocumentSize(doc)}
                           </span>
                           <span className="documents-col documents-col-date">
                             {doc.created_at ? formatAttachmentTimestamp(doc.created_at) : '—'}
@@ -706,8 +918,9 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
                               <span
                                 key={badge}
                                 className={
-                                  badge === parseStatusDisplayLabel(doc)
-                                    ? parseStatusClass(doc.parse_status)
+                                  !isArtifactDocument(doc) &&
+                                  badge === parseStatusDisplayLabel(doc as Parameters<typeof parseStatusDisplayLabel>[0])
+                                    ? parseStatusClass(doc.parse_status ?? undefined)
                                     : 'documents-status-badge documents-status-badge-extra'
                                 }
                               >
@@ -739,11 +952,19 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
               onPointerCancel={onResizePointerUp}
             />
             <div className="documents-view-preview-pane" style={{ width: previewWidth }}>
-              <DocumentPreviewPane
-                document={selected}
-                onClose={() => setSelected(null)}
-                onOpenChat={onOpenChat ? handleOpenChat : undefined}
-              />
+              {isArtifactDocument(selected) ? (
+                <ArtifactDocumentPreviewPane
+                  document={selected}
+                  onClose={() => setSelected(null)}
+                  onOpenChat={onOpenChat ? handleOpenChat : undefined}
+                />
+              ) : (
+                <DocumentPreviewPane
+                  document={selected}
+                  onClose={() => setSelected(null)}
+                  onOpenChat={onOpenChat ? handleOpenChat : undefined}
+                />
+              )}
             </div>
           </>
         ) : null}

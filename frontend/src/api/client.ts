@@ -169,6 +169,8 @@ export const api = {
     parse_status?: string
     mime_type?: string
     agent_id?: string
+    source?: 'all' | 'attachment' | 'artifact'
+    artifact_kind?: string
     limit?: number
     offset?: number
   }) => {
@@ -177,6 +179,8 @@ export const api = {
     if (params?.parse_status) search.set('parse_status', params.parse_status)
     if (params?.mime_type) search.set('mime_type', params.mime_type)
     if (params?.agent_id) search.set('agent_id', params.agent_id)
+    if (params?.source) search.set('source', params.source)
+    if (params?.artifact_kind) search.set('artifact_kind', params.artifact_kind)
     if (params?.limit != null) search.set('limit', String(params.limit))
     if (params?.offset != null) search.set('offset', String(params.offset))
     const query = search.toString()

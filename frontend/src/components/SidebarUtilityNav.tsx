@@ -24,14 +24,14 @@ export function SidebarUtilityNav({
         <li>
           <button
             type="button"
-            title={collapsed ? 'Documents' : undefined}
+            title={collapsed ? 'Chat Documents' : undefined}
             className={`agent-nav-item ${documentsOpen ? 'agent-nav-item-active' : ''} ${
               collapsed ? 'agent-nav-item-collapsed' : ''
             }`}
             onClick={onOpenDocuments}
           >
             <FileText className="h-[1.375rem] w-[1.375rem] shrink-0" strokeWidth={1.75} aria-hidden="true" />
-            {!collapsed ? <span className="agent-nav-label">Documents</span> : null}
+            {!collapsed ? <span className="agent-nav-label">Chat Documents</span> : null}
           </button>
         </li>
         <li>

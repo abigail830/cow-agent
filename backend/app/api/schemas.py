@@ -142,13 +142,31 @@ class ParsedArtifactsOut(BaseModel):
     pageindex_json: bool = False
 
 
-class DocumentOut(AttachmentOut):
+class DocumentOut(BaseModel):
+    source_type: Literal["attachment", "artifact"] = "attachment"
+    id: uuid.UUID
+    chat_id: uuid.UUID
+    filename: str
+    created_at: str | None = None
     agent_id: uuid.UUID
     agent_name: str
     agent_slug: str | None = None
     chat_title: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    provider: str | None = None
+    provider_file_id: str | None = None
+    parse_status: Literal["pending", "running", "ready", "failed", "skipped"] | None = None
+    parse_pipeline_id: str | None = None
+    parse_job_id: str | None = None
+    parse_error_message: str | None = None
+    parse_progress: ParseProgressOut | None = None
     has_parsed_content: bool = False
     parsed_artifacts: ParsedArtifactsOut = Field(default_factory=ParsedArtifactsOut)
+    artifact_id: str | None = None
+    artifact_kind: str | None = None
+    artifact_format: str | None = None
+    artifact_spec: dict[str, Any] | None = None
 
 
 class DocumentListOut(BaseModel):

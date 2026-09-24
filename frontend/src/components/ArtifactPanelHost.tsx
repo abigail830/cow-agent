@@ -13,7 +13,7 @@ type Props = {
   onClose: () => void
 }
 
-function ArtifactPanelContent({
+export function ArtifactPanelContent({
   spec,
   onClose,
 }: {
