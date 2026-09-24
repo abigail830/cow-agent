@@ -1348,6 +1348,32 @@ body {
   padding: 0.4375rem;
 }
 
+.agent-sidebar-utility {
+  flex-shrink: 0;
+  border-top: 1px solid var(--color-border);
+  padding: 0.625rem 0 0.375rem;
+}
+
+.agent-sidebar-utility-heading {
+  margin: 0;
+  padding: 0 1rem 0.375rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-subtle, var(--color-muted));
+}
+
+.agent-sidebar-utility-list {
+  margin: 0;
+  padding: 0 0.5rem;
+  list-style: none;
+}
+
+.agent-sidebar-utility-list-collapsed {
+  padding: 0 0.375rem;
+}
+
 .agent-sidebar-footer {
   position: relative;
   display: flex;

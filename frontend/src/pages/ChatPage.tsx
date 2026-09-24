@@ -42,6 +42,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner'
 import { PanelLoadingState } from '../components/PanelLoadingState'
 import { NewChatIcon } from '../components/NewChatIcon'
 import { SidebarToggleIcon } from '../components/SidebarToggleIcon'
+import { SidebarUtilityNav } from '../components/SidebarUtilityNav'
 import { SidebarUserMenu } from '../components/SidebarUserMenu'
 import { formatAgentLabel } from '../lib/agentLabel'
 import {
@@ -1998,7 +1999,7 @@ export function ChatPage() {
           )}
           {!agentsLoading &&
             agents.map((agent) => {
-            const active = agent.id === selectedId
+            const active = agent.id === selectedId && !documentsOpen && !integrationsOpen
             const agentSession = getAgentSession(sessions, agent.id)
             const agentBusy = agentSession.loading
             return (
@@ -2024,15 +2025,17 @@ export function ChatPage() {
           })}
         </ul>
 
+        <SidebarUtilityNav
+          collapsed={sidebarCollapsed}
+          documentsOpen={documentsOpen}
+          integrationsOpen={integrationsOpen}
+          onOpenDocuments={openDocuments}
+          onOpenIntegrations={openIntegrations}
+        />
+
         <div className="agent-sidebar-footer">
           {!sidebarCollapsed ? (
-            <SidebarUserMenu
-              user={user}
-              collapsed={sidebarCollapsed}
-              onOpenIntegrations={openIntegrations}
-              onOpenDocuments={openDocuments}
-              onLogout={logout}
-            />
+            <SidebarUserMenu user={user} collapsed={sidebarCollapsed} onLogout={logout} />
           ) : null}
           <button
             type="button"

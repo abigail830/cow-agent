@@ -10,16 +10,12 @@ function userDisplayName(user: User): string {
 interface SidebarUserMenuProps {
   user: User | null
   collapsed: boolean
-  onOpenIntegrations: () => void
-  onOpenDocuments: () => void
   onLogout: () => void | Promise<void>
 }
 
 export function SidebarUserMenu({
   user,
   collapsed,
-  onOpenIntegrations,
-  onOpenDocuments,
   onLogout,
 }: SidebarUserMenuProps) {
   const [open, setOpen] = useState(false)
@@ -57,28 +53,6 @@ export function SidebarUserMenu({
       </button>
       {open ? (
         <div className="agent-sidebar-user-menu" role="menu">
-          <button
-            type="button"
-            role="menuitem"
-            className="agent-sidebar-user-menu-item agent-sidebar-user-menu-item-neutral"
-            onClick={() => {
-              setOpen(false)
-              onOpenDocuments()
-            }}
-          >
-            Documents
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="agent-sidebar-user-menu-item agent-sidebar-user-menu-item-neutral"
-            onClick={() => {
-              setOpen(false)
-              onOpenIntegrations()
-            }}
-          >
-            Integrations
-          </button>
           <button
             type="button"
             role="menuitem"
