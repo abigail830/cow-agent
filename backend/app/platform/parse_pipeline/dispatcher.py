@@ -41,5 +41,8 @@ async def dispatch_gha(
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(url, json={"ref": ref, "inputs": inputs}, headers=headers)
         if response.status_code not in (201, 204):
-            logger.error("GHA dispatch failed status=%s body=%s", response.status_code, response.text)
-            response.raise_for_status()
+            detail = (response.text or "").strip() or response.reason_phrase
+            logger.error("GHA dispatch failed status=%s body=%s", response.status_code, detail)
+            raise RuntimeError(
+                f"GitHub Actions dispatch failed ({response.status_code}): {detail}"
+            )
