@@ -261,6 +261,10 @@ class Settings(BaseSettings):
         default="auto",
         validation_alias="PARSE_PIPELINE_DISPATCH",
     )
+    office_markitdown_enabled: bool = Field(
+        default=True,
+        validation_alias="OFFICE_MARKITDOWN_ENABLED",
+    )
 
     github_token: str | None = Field(default=None, validation_alias="GITHUB_TOKEN")
     github_repo: str | None = Field(default=None, validation_alias="GITHUB_REPO")

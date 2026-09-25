@@ -52,13 +52,23 @@ Workflows live at repo root:
 | `text_standard` | local text |
 | `sheet_standard` | local sheet (CSV/XLSX); fallback Document Mind on failure |
 | `pdf_standard` | Document Mind (VLM default) |
-| `office_standard` | Document Mind |
+| `office_standard` | `.docx`: markitdown + quality gate → synthetic `pageindex.json`; fallback Document Mind. Other Office formats: Document Mind |
 | `document_mind_generic` | Document Mind |
 
 ## Job store
 
 - `JOB_STORE=memory` (default): in-process state for `GET /v1/jobs` during service lifetime
 - `JOB_STORE=postgres`: optional durable store (migration scaffold planned)
+
+## Office (.docx)
+
+When `OFFICE_MARKITDOWN_ENABLED=true` (default) and the file is `.docx`:
+
+1. **markitdown** converts with `keep_data_uris=True` (figures materialized in normalize)
+2. **quality gate** checks yield, garbled text, table/image retention; failure → Document Mind fallback (`llm_enhancement=false`)
+3. **Synthetic `pageindex.json`** — OOXML page-break anchors aligned to final `content.md` (subset schema vs DM layouts; no bbox)
+
+Toggle per job: `options.office.markitdown_enabled`.
 
 ## Document Mind
 

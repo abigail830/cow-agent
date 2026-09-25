@@ -31,9 +31,14 @@ class DocumentMindOptions(BaseModel):
     output_formats: list[str] = Field(default_factory=lambda: ["markdown", "visualLayoutInfo"])
 
 
+class OfficeOptions(BaseModel):
+    markitdown_enabled: bool | None = None
+
+
 class JobOptions(BaseModel):
     max_pages: int | None = 50
     table_max_rows_per_sheet: int = 2000
+    office: OfficeOptions = Field(default_factory=OfficeOptions)
     document_mind: DocumentMindOptions = Field(default_factory=DocumentMindOptions)
 
 

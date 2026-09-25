@@ -82,6 +82,9 @@ def build_job_payload(
             "content_hash": row.content_hash,
         },
         "options": {
+            "office": {
+                "markitdown_enabled": settings.office_markitdown_enabled,
+            },
             "document_mind": {
                 "llm_enhancement": True,
                 "enhancement_mode": "VLM",

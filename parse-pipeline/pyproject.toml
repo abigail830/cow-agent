@@ -14,6 +14,8 @@ dependencies = [
     "alibabacloud-docmind-api20220711>=1.4.0",
     "alibabacloud-tea-openapi>=0.4.3",
     "alibabacloud-tea-util>=0.3.13",
+    "markitdown[docx]>=0.1.0",
+    "ftfy>=6.3.0",
 ]
 
 [project.optional-dependencies]

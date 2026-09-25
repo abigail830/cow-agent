@@ -2,17 +2,22 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import asdict
+from pathlib import Path
 from typing import Any, Callable
 
 from parse_pipeline.config import Settings, get_settings
 from parse_pipeline.job_store.base import JobRecord
 from parse_pipeline.job_store.factory import get_job_store
 from parse_pipeline.normalize.artifacts import NormalizedArtifacts, artifacts_to_bytes, normalize_text_artifacts
-from parse_pipeline.normalize.finalize import finalize_normalized_artifacts
+from parse_pipeline.normalize.finalize import finalize_normalized_artifacts, finalize_office_markitdown_artifacts
 from parse_pipeline.orchestrator.errors import job_error_from_exception
+from parse_pipeline.providers.local.markitdown_office import extract_docx_markdown
 from parse_pipeline.providers.local.sheet import extract_sheet_bytes
 from parse_pipeline.providers.local.text import extract_text_bytes
 from parse_pipeline.providers.document_mind.client import DEFAULT_OUTPUT_FORMATS
+from parse_pipeline.quality.office_gate import GateDecision, evaluate_office_markdown
+from parse_pipeline.quality.docx_probe import probe_docx_bytes
 from parse_pipeline.schemas.job import JobArtifacts, JobError, JobProgress, JobStatus, PipelineId
 from parse_pipeline.schemas.stages import StageId, StageStatus
 from parse_pipeline.schemas.storage import StorageSpec
@@ -79,11 +84,23 @@ class JobRunner:
         )
         return data
 
+    def _office_markitdown_enabled(self, record: JobRecord, filename: str) -> bool:
+        office_opts = (record.options or {}).get("office") or {}
+        enabled = office_opts.get("markitdown_enabled")
+        if enabled is None:
+            enabled = self.settings.office_markitdown_enabled
+        return Path(filename).suffix.lower() == ".docx" and bool(enabled)
+
     async def _maybe_skip_analyze(self, record: JobRecord, pipeline_id: str) -> None:
         reason = None
-        if pipeline_id in {
+        filename = record.source.get("filename") or ""
+        if pipeline_id == PipelineId.OFFICE_STANDARD.value:
+            if self._office_markitdown_enabled(record, filename):
+                reason = "local_office_no_analyze"
+            else:
+                reason = "office_dm_only_v1"
+        elif pipeline_id in {
             PipelineId.PDF_STANDARD.value,
-            PipelineId.OFFICE_STANDARD.value,
             PipelineId.DOCUMENT_MIND_GENERIC.value,
         }:
             reason = "pdf_dm_only_v1"
@@ -104,9 +121,10 @@ class JobRunner:
             return await self._parse_local_text(record, file_bytes)
         if pipeline_id == PipelineId.SHEET_STANDARD.value:
             return await self._parse_local_sheet(record, file_bytes, filename)
+        if pipeline_id == PipelineId.OFFICE_STANDARD.value:
+            return await self._parse_office(record, file_bytes, filename)
         if pipeline_id in {
             PipelineId.PDF_STANDARD.value,
-            PipelineId.OFFICE_STANDARD.value,
             PipelineId.DOCUMENT_MIND_GENERIC.value,
         }:
             return await self._parse_document_mind(record, file_bytes, filename, pipeline_id)
@@ -169,12 +187,135 @@ class JobRunner:
             warnings=warnings,
         )
 
+    def _office_dm_fallback_options(self, record: JobRecord) -> dict[str, Any]:
+        options = dict(record.options or {})
+        dm_opts = dict(options.get("document_mind") or {})
+        dm_opts["llm_enhancement"] = False
+        dm_opts["enhancement_mode"] = None
+        dm_opts["output_formats"] = ["markdown", "visualLayoutInfo"]
+        options["document_mind"] = dm_opts
+        return options
+
+    async def _parse_office(
+        self,
+        record: JobRecord,
+        file_bytes: bytes,
+        filename: str,
+    ) -> NormalizedArtifacts:
+        if not self._office_markitdown_enabled(record, filename):
+            return await self._parse_document_mind(
+                record,
+                file_bytes,
+                filename,
+                record.pipeline_id,
+            )
+
+        import asyncio
+
+        await self._skip_stage(record, StageId.PARSE_SUBMIT, reason="sync_local")
+        await self._skip_stage(record, StageId.PARSE_WAIT, reason="sync_local")
+        await self._begin_stage(record, StageId.PARSE_COLLECT)
+
+        probe = await asyncio.to_thread(probe_docx_bytes, file_bytes)
+        converter_ok = True
+        converter_error: str | None = None
+        content = ""
+        conv_warnings: list[str] = []
+
+        try:
+            content, conv_warnings = await asyncio.to_thread(extract_docx_markdown, file_bytes)
+        except Exception as exc:
+            converter_ok = False
+            converter_error = str(exc)
+            logger.warning("markitdown office failed job_id=%s: %s", record.job_id, exc)
+
+        gate = evaluate_office_markdown(
+            content,
+            probe=probe,
+            converter_ok=converter_ok,
+            converter_error=converter_error,
+        )
+
+        if gate.decision == GateDecision.FALLBACK:
+            await self._finish_stage(
+                record,
+                StageId.PARSE_COLLECT,
+                status=StageStatus.SKIPPED,
+                outputs={
+                    "provider_id": "markitdown",
+                    "fallback": "document_mind",
+                    "gate_decision": gate.decision.value,
+                    "gate_grade": gate.grade.value,
+                    "parse_score": gate.parse_score,
+                    "gate_reasons": gate.fallback_reasons(),
+                },
+            )
+            fallback_options = self._office_dm_fallback_options(record)
+            artifacts = await self._parse_document_mind(
+                record,
+                file_bytes,
+                filename,
+                record.pipeline_id,
+                job_options=fallback_options,
+            )
+            meta = dict(artifacts.meta_json)
+            warnings = list(meta.get("warnings") or [])
+            reasons = gate.fallback_reasons()
+            if reasons:
+                warnings.append(f"office_gate_fallback:{','.join(reasons)}")
+            meta["warnings"] = warnings
+            meta["fallback_from"] = "markitdown"
+            meta["gate"] = {
+                "decision": gate.decision.value,
+                "grade": gate.grade.value,
+                "parse_score": gate.parse_score,
+                "checks": [asdict(c) for c in gate.checks],
+            }
+            artifacts.meta_json = meta
+            artifacts.warnings = warnings
+            return artifacts
+
+        await self._finish_stage(
+            record,
+            StageId.PARSE_COLLECT,
+            outputs={
+                "provider_id": "markitdown",
+                "gate_decision": gate.decision.value,
+                "gate_grade": gate.grade.value,
+                "parse_score": gate.parse_score,
+                "line_count": content.count("\n") + (1 if content and not content.endswith("\n") else 0),
+            },
+        )
+        record.provider_id = "markitdown"
+        warnings = list(conv_warnings)
+        artifacts = normalize_text_artifacts(
+            content=content,
+            job_id=record.job_id,
+            pipeline_id=record.pipeline_id,
+            parse_engine="markitdown",
+            provider_id="markitdown",
+            warnings=warnings,
+        )
+        meta = dict(artifacts.meta_json)
+        meta["gate"] = {
+            "decision": gate.decision.value,
+            "grade": gate.grade.value,
+            "parse_score": gate.parse_score,
+            "checks": [asdict(c) for c in gate.checks],
+        }
+        artifacts.meta_json = meta
+        artifacts.docx_probe = probe
+        artifacts.office_source_bytes = file_bytes
+        return artifacts
+
     async def _parse_document_mind(
         self,
         record: JobRecord,
         file_bytes: bytes,
         filename: str,
         pipeline_id: str,
+        *,
+        job_options: dict[str, Any] | None = None,
     ) -> NormalizedArtifacts:
         import asyncio
 
@@ -184,8 +325,9 @@ class JobRunner:
         if not self.settings.document_mind_configured:
             raise RuntimeError("Document Mind credentials not configured (DOCUMENT_MIND_ACCESS_KEY_ID/SECRET)")
 
-        client = build_client_from_settings(self.settings, record.options)
-        dm_opts = (record.options or {}).get("document_mind") or {}
+        effective_options = job_options if job_options is not None else record.options
+        client = build_client_from_settings(self.settings, effective_options)
+        dm_opts = (effective_options or {}).get("document_mind") or {}
         output_formats = list(dm_opts.get("output_formats") or DEFAULT_OUTPUT_FORMATS)
         poll_state: dict[str, Any] = {}
 
@@ -269,7 +411,10 @@ class JobRunner:
 
         await self._begin_stage(record, StageId.NORMALIZE)
         try:
-            normalized = await asyncio.to_thread(finalize_normalized_artifacts, normalized)
+            if normalized.meta_json.get("parse_engine") == "markitdown":
+                normalized = await asyncio.to_thread(finalize_office_markitdown_artifacts, normalized)
+            else:
+                normalized = await asyncio.to_thread(finalize_normalized_artifacts, normalized)
         except Exception as exc:
             logger.warning("normalize degraded job_id=%s: %s", record.job_id, exc)
             warning = f"normalize_failed:{exc}"

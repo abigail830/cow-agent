@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from parse_pipeline.normalize.line_index import build_line_index
+from parse_pipeline.quality.docx_probe import DocxProbe
 
 
 @dataclass
@@ -15,6 +16,8 @@ class NormalizedArtifacts:
     warnings: list[str] = field(default_factory=list)
     # figure_id -> (bytes, mime_type, extension)
     figure_files: dict[str, tuple[bytes, str, str]] = field(default_factory=dict)
+    docx_probe: DocxProbe | None = None
+    office_source_bytes: bytes | None = None
 
 
 def normalize_text_artifacts(

@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     document_mind_poll_interval_sec: float = Field(default=5.0, alias="DOCUMENT_MIND_POLL_INTERVAL_SEC")
     document_mind_layout_step_size: int = Field(default=50, alias="DOCUMENT_MIND_LAYOUT_STEP_SIZE")
 
+    office_markitdown_enabled: bool = Field(default=True, alias="OFFICE_MARKITDOWN_ENABLED")
+
     webhook_max_retries: int = Field(default=1, alias="WEBHOOK_MAX_RETRIES")
     webhook_timeout_sec: float = Field(default=10.0, alias="WEBHOOK_TIMEOUT_SEC")
 

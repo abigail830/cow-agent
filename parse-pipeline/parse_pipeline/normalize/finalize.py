@@ -4,6 +4,7 @@ from parse_pipeline.normalize.artifacts import NormalizedArtifacts
 from parse_pipeline.normalize.figures import figures_to_meta, mirror_markdown_figures
 from parse_pipeline.normalize.line_index import build_line_index
 from parse_pipeline.normalize.pageindex_pages import build_pages_from_pageindex
+from parse_pipeline.normalize.pageindex_synthetic import build_pageindex_from_markdown
 
 
 def finalize_normalized_artifacts(
@@ -43,4 +44,40 @@ def finalize_normalized_artifacts(
         pageindex_json=artifacts.pageindex_json,
         warnings=warnings,
         figure_files=figure_files,
+        docx_probe=artifacts.docx_probe,
+        office_source_bytes=artifacts.office_source_bytes,
+    )
+
+
+def finalize_office_markitdown_artifacts(artifacts: NormalizedArtifacts) -> NormalizedArtifacts:
+    finalized = finalize_normalized_artifacts(artifacts)
+    probe = artifacts.docx_probe
+    if probe is None:
+        return finalized
+
+    synthetic = build_pageindex_from_markdown(
+        finalized.content_md,
+        probe,
+        file_bytes=artifacts.office_source_bytes,
+    )
+    if synthetic is None:
+        return finalized
+
+    warnings = list(finalized.warnings or [])
+    warnings.extend(synthetic.warnings)
+    meta = dict(finalized.meta_json)
+    meta["pageindex_path"] = "pageindex.json"
+    meta["warnings"] = warnings
+
+    pageindex_pages = build_pages_from_pageindex(finalized.content_md, synthetic.pageindex)
+    if pageindex_pages:
+        meta["pages"] = pageindex_pages
+        meta["page_count"] = len(pageindex_pages)
+
+    return NormalizedArtifacts(
+        content_md=finalized.content_md,
+        meta_json=meta,
+        pageindex_json=synthetic.pageindex,
+        warnings=warnings,
+        figure_files=finalized.figure_files,
     )
