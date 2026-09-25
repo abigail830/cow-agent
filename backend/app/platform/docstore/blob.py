@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from app.agent_specific.proposal.blob_client import blob_exists, blob_get, blob_put, blob_storage_enabled
+from app.platform.blob.client import blob_exists, blob_get, blob_put, blob_storage_enabled
 from app.platform.docstore.paths import (
     blob_figure_object_name,
     blob_parsed_object_name,

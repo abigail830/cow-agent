@@ -1,7 +1,11 @@
-"""Minimal Vercel Blob REST client (Python backend has no official SDK)."""
+"""Minimal Vercel Blob REST client for platform storage (attachments, artifacts, captures)."""
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
 import logging
 import time
 from typing import Any
@@ -210,3 +214,47 @@ def blob_delete_prefix(pathname_prefix: str) -> int:
         if blob_delete(pathname):
             deleted += 1
     return deleted
+
+
+def generate_client_upload_token(
+    pathname: str,
+    *,
+    maximum_size_in_bytes: int | None = None,
+    allowed_content_types: list[str] | None = None,
+    valid_until_ms: int | None = None,
+    add_random_suffix: bool = False,
+    allow_overwrite: bool = True,
+) -> str:
+    """Mint a browser client token compatible with @vercel/blob/client upload()."""
+    read_write_token = _resolve_blob_token()
+    if not read_write_token:
+        raise RuntimeError("BLOB_READ_WRITE_TOKEN is required for client uploads.")
+
+    parts = read_write_token.split("_")
+    store_id = parts[3] if len(parts) >= 4 and parts[3] else None
+    if not store_id:
+        raise RuntimeError("Invalid BLOB_READ_WRITE_TOKEN")
+
+    object_path = pathname.lstrip("/")
+    now_ms = int(time.time() * 1000)
+    payload_obj: dict[str, Any] = {
+        "pathname": object_path,
+        "validUntil": valid_until_ms or (now_ms + 60 * 60 * 1000),
+        "addRandomSuffix": add_random_suffix,
+        "allowOverwrite": allow_overwrite,
+    }
+    if maximum_size_in_bytes is not None:
+        payload_obj["maximumSizeInBytes"] = maximum_size_in_bytes
+    if allowed_content_types:
+        payload_obj["allowedContentTypes"] = allowed_content_types
+
+    payload_b64 = base64.b64encode(
+        json.dumps(payload_obj, separators=(",", ":")).encode("utf-8")
+    ).decode("ascii")
+    signature = hmac.new(
+        read_write_token.encode("utf-8"),
+        payload_b64.encode("ascii"),
+        hashlib.sha256,
+    ).hexdigest()
+    token_body = base64.b64encode(f"{signature}.{payload_b64}".encode("ascii")).decode("ascii")
+    return f"vercel_blob_client_{store_id}_{token_body}"

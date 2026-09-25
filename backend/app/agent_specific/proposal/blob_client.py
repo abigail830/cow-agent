@@ -1,1 +1,3 @@
-from app.agent_specific.proposal.storage.blob_client import *  # noqa: F403
+"""Deprecated import path — use app.platform.blob.client instead."""
+
+from app.platform.blob.client import *  # noqa: F403

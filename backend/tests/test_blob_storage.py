@@ -2,7 +2,7 @@ import uuid
 from unittest.mock import MagicMock
 
 from app.config import get_settings
-from app.agent_specific.proposal import blob_client
+from app.platform.blob import client as blob_client
 from app.shared.artifacts import storage
 
 

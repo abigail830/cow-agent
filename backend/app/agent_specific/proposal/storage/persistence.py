@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from app.agent_specific.proposal.storage.blob_client import blob_get, blob_put, blob_storage_enabled
+from app.platform.blob.client import blob_get, blob_put, blob_storage_enabled
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[4]
 ARTIFACTS_ROOT = _BACKEND_ROOT / "data" / "proposal-artifacts"

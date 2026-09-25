@@ -151,7 +151,15 @@ export const api = {
       method: 'POST',
     }),
 
-  submitAudioCapture: async (chatId: string, files: File[], title?: string | null) => {
+  getAudioCaptureUploadConfig: (chatId: string) =>
+    request<{
+      mode: 'blob' | 'multipart'
+      max_total_bytes: number
+      blob_upload_url?: string | null
+      blob_access?: string | null
+    }>(`/chats/${chatId}/captures/upload-config`),
+
+  submitAudioCaptureMultipart: async (chatId: string, files: File[], title?: string | null) => {
     const form = new FormData()
     for (const file of files) {
       form.append('files', file)
@@ -167,6 +175,56 @@ export const api = {
       throw new Error(text || res.statusText)
     }
     return res.json()
+  },
+
+  submitAudioCapture: async (chatId: string, files: File[], title?: string | null) => {
+    const config = await api.getAudioCaptureUploadConfig(chatId)
+    if (config.mode === 'multipart') {
+      return api.submitAudioCaptureMultipart(chatId, files, title)
+    }
+
+    const { upload } = await import('@vercel/blob/client')
+    const access = config.blob_access === 'public' ? 'public' : 'private'
+    const handleUploadUrl = config.blob_upload_url?.startsWith('http')
+      ? config.blob_upload_url
+      : `${API}${config.blob_upload_url ?? `/chats/${chatId}/captures/blob-upload`}`
+
+    const parts: Array<{
+      attachment_id: string
+      sort_order: number
+      filename: string
+      mime_type: string
+      size_bytes: number
+    }> = []
+
+    for (let sortOrder = 0; sortOrder < files.length; sortOrder += 1) {
+      const file = files[sortOrder]
+      if (!file) continue
+      const attachmentId = crypto.randomUUID()
+      const pathname = `chat-attachments/${chatId}/${attachmentId}`
+      await upload(pathname, file, {
+        access,
+        handleUploadUrl,
+        clientPayload: JSON.stringify({ chat_id: chatId, attachment_id: attachmentId }),
+        contentType: file.type || 'application/octet-stream',
+        multipart: file.size > 5 * 1024 * 1024,
+      })
+      parts.push({
+        attachment_id: attachmentId,
+        sort_order: sortOrder,
+        filename: file.name,
+        mime_type: file.type || 'application/octet-stream',
+        size_bytes: file.size,
+      })
+    }
+
+    return request(`/chats/${chatId}/captures/submit`, {
+      method: 'POST',
+      body: JSON.stringify({
+        title: title?.trim() || null,
+        parts,
+      }),
+    })
   },
 
   uploadChatAttachment: async (

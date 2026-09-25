@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from app.agent_specific.proposal.blob_client import blob_storage_enabled
+from app.platform.blob.client import blob_storage_enabled
 from app.platform.docstore.content_types import parsed_artifact_media_type
 
 _MANIFEST_VERSION = 1

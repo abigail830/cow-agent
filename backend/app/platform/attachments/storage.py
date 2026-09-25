@@ -6,7 +6,7 @@ import os
 import uuid
 from pathlib import Path
 
-from app.agent_specific.proposal.blob_client import blob_get, blob_put, blob_storage_enabled
+from app.platform.blob.client import blob_get, blob_put, blob_storage_enabled
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[3]
 INLINE_ATTACHMENTS_ROOT = _BACKEND_ROOT / "data" / "chat-attachments"

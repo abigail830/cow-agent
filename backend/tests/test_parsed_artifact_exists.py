@@ -38,7 +38,7 @@ def test_parsed_artifact_exists_uses_stat_not_full_read(monkeypatch, tmp_path: P
 def test_blob_exists_uses_head_not_get(monkeypatch):
     from unittest.mock import MagicMock
 
-    from app.agent_specific.proposal import blob_client
+    from app.platform.blob import client as blob_client
     from app.config import get_settings
 
     monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", "vercel_blob_rw_teststore_testsecret")

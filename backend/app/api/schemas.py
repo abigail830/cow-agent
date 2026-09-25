@@ -129,6 +129,26 @@ class AudioCapturePartOut(BaseModel):
     size_bytes: int
 
 
+class AudioCapturePartSubmitIn(BaseModel):
+    attachment_id: uuid.UUID
+    sort_order: int
+    filename: str
+    mime_type: str
+    size_bytes: int
+
+
+class AudioCaptureSubmitIn(BaseModel):
+    title: str | None = None
+    parts: list[AudioCapturePartSubmitIn]
+
+
+class AudioCaptureUploadConfigOut(BaseModel):
+    mode: str
+    max_total_bytes: int
+    blob_upload_url: str | None = None
+    blob_access: str | None = None
+
+
 class AudioCaptureHostOut(BaseModel):
     id: uuid.UUID
     parse_status: str

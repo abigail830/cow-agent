@@ -6,11 +6,7 @@ import logging
 import shutil
 import uuid
 
-from app.agent_specific.proposal.blob_client import (
-    blob_delete,
-    blob_delete_prefix,
-    blob_storage_enabled,
-)
+from app.platform.blob.client import blob_delete, blob_delete_prefix, blob_storage_enabled
 from app.db.models import ChatAttachment
 from app.platform.attachments.storage import (
     inline_attachment_blob_path,

@@ -2,7 +2,7 @@ import json
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, Request
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.schemas import (
     AttachmentOut,
     AudioCaptureOut,
+    AudioCaptureSubmitIn,
+    AudioCaptureUploadConfigOut,
     ChatCreate,
     ChatForkOut,
     ChatForkSourceOut,
@@ -32,7 +34,9 @@ from app.platform.auth.current_user import get_current_user, get_current_user_id
 from app.db.session import get_db
 from app.platform.attachments.api_out import attachment_out
 from app.platform.attachments.service import AttachmentService
+from app.platform.audio_capture.blob_upload import capture_upload_mode, handle_blob_upload_request
 from app.platform.audio_capture.service import AudioCaptureService
+from app.config import get_settings
 from app.platform.attachments.storage import load_inline_attachment
 from app.platform.docstore.blob import load_parsed_artifact
 from app.platform.docstore.figures import load_parsed_figure_resolved, normalize_figure_id
@@ -388,6 +392,64 @@ async def attachment_parse_events(
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
+@router.get("/{chat_id}/captures/upload-config", response_model=AudioCaptureUploadConfigOut)
+async def get_audio_capture_upload_config(
+    chat: Chat = Depends(get_owned_chat),
+) -> AudioCaptureUploadConfigOut:
+    settings = get_settings()
+    mode = capture_upload_mode()
+    blob_upload_url = f"/chats/{chat.id}/captures/blob-upload" if mode == "blob" else None
+    blob_access = settings.blob_access if mode == "blob" else None
+    return AudioCaptureUploadConfigOut(
+        mode=mode,
+        max_total_bytes=int(settings.audio_capture_max_total_bytes),
+        blob_upload_url=blob_upload_url,
+        blob_access=blob_access,
+    )
+
+
+@router.post("/{chat_id}/captures/blob-upload")
+async def create_audio_capture_blob_upload(
+    request: Request,
+    chat: Chat = Depends(get_owned_chat),
+) -> dict[str, Any]:
+    try:
+        body = await request.json()
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    try:
+        return handle_blob_upload_request(chat_id=chat.id, body=body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/{chat_id}/captures/submit", response_model=AudioCaptureOut, status_code=201)
+async def submit_audio_capture_from_blob(
+    payload: AudioCaptureSubmitIn,
+    chat: Chat = Depends(get_owned_chat),
+    db: AsyncSession = Depends(get_db),
+) -> AudioCaptureOut:
+    if capture_upload_mode() != "blob":
+        raise HTTPException(status_code=400, detail="Blob client upload is not enabled")
+    service = AudioCaptureService(db)
+    parts = [part.model_dump() for part in payload.parts]
+    try:
+        result = await service.submit_capture_from_blob_parts(
+            chat,
+            title=payload.title,
+            parts=parts,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Audio capture failed: {exc}") from exc
+    return AudioCaptureOut(**result)
+
+
 @router.post("/{chat_id}/captures", response_model=AudioCaptureOut, status_code=201)
 async def create_audio_capture(
     chat: Chat = Depends(get_owned_chat),
@@ -395,6 +457,11 @@ async def create_audio_capture(
     title: str | None = Form(default=None),
     files: list[UploadFile] = File(...),
 ) -> AudioCaptureOut:
+    if capture_upload_mode() == "blob":
+        raise HTTPException(
+            status_code=400,
+            detail="Use client blob upload and POST /captures/submit for large audio files",
+        )
     if not files:
         raise HTTPException(status_code=400, detail="At least one audio file is required")
     payloads: list[tuple[str, str, bytes]] = []
