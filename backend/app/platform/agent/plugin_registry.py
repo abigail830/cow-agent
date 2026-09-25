@@ -9,6 +9,7 @@ from app.agent_specific.viz.plugin import VIZ_TOOL_NAMES, VizCapabilityPlugin
 from app.agent_specific.yl_worker2.plugin import YlWorker2Plugin
 from app.platform.runtime.plugin import AgentPlugin
 from app.platform.doc_retrieval.plugin import DocRetrievalPlugin
+from app.platform.integrations.feishu.plugin import FeishuPlugin
 from app.shared.artifacts.plugin import ArtifactRuntimePlugin, DiagramArtifactPlugin, SandboxArtifactPlugin
 
 _ALL_PLUGINS: tuple[AgentPlugin, ...] = (
@@ -17,6 +18,7 @@ _ALL_PLUGINS: tuple[AgentPlugin, ...] = (
     DiagramArtifactPlugin(),
     SandboxArtifactPlugin(),
     DocRetrievalPlugin(),
+    FeishuPlugin(),
     YlWorker2Plugin(),
 )
 

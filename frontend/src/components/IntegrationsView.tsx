@@ -13,11 +13,13 @@ const PROVIDER_DOCS: Record<string, string> = {
   notion: 'https://developers.notion.com/docs/mcp',
   hubspot:
     'https://developers.hubspot.com/docs/apps/developer-platform/build-apps/integrate-with-the-remote-hubspot-mcp-server',
+  feishu: 'https://open.feishu.cn/document/sso/web-application-end-user-consent/guide',
 }
 
 function providerInitial(provider: string): string {
   if (provider === 'hybrid-search') return 'KB'
   if (provider === 'zhipu-web-search') return 'Z'
+  if (provider === 'feishu') return '飞'
   return provider.slice(0, 1).toUpperCase()
 }
 

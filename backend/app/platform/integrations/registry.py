@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.platform.integrations.providers.feishu import FeishuIntegrationProvider
 from app.platform.integrations.providers.hybrid_search import HybridSearchIntegrationProvider
 from app.platform.integrations.providers.hubspot import HubSpotIntegrationProvider
 from app.platform.integrations.providers.notion import NotionIntegrationProvider
@@ -11,6 +12,7 @@ AnyIntegrationProvider = IntegrationOAuthProvider | IntegrationApiKeyProvider
 _PROVIDERS: dict[str, AnyIntegrationProvider] = {
     NotionIntegrationProvider.id: NotionIntegrationProvider(),
     HubSpotIntegrationProvider.id: HubSpotIntegrationProvider(),
+    FeishuIntegrationProvider.id: FeishuIntegrationProvider(),
     HybridSearchIntegrationProvider.id: HybridSearchIntegrationProvider(),
     ZhipuWebSearchIntegrationProvider.id: ZhipuWebSearchIntegrationProvider(),
 }

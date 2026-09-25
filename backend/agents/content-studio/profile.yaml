@@ -27,6 +27,10 @@ allowed_tools:
   - notion_notion-fetch
   - notion_notion-create-pages
   - notion_notion-update-page
+  - feishu_list_chats
+  - feishu_list_messages
+  - feishu_get_doc_content
+  - feishu_list_calendar_events
   - sandbox_run_command
   - sandbox_read_file
   - sandbox_write_file

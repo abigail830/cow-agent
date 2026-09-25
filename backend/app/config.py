@@ -193,6 +193,16 @@ class Settings(BaseSettings):
     hubspot_mcp_client_secret: str | None = Field(default=None, validation_alias="HUBSPOT_MCP_CLIENT_SECRET")
     hubspot_mcp_redirect_uri: str | None = Field(default=None, validation_alias="HUBSPOT_MCP_REDIRECT_URI")
 
+    feishu_app_id: str | None = Field(default=None, validation_alias="FEISHU_APP_ID")
+    feishu_app_secret: str | None = Field(default=None, validation_alias="FEISHU_APP_SECRET")
+    feishu_oauth_redirect_uri: str | None = Field(default=None, validation_alias="FEISHU_OAUTH_REDIRECT_URI")
+    feishu_oauth_scope: str | None = Field(default=None, validation_alias="FEISHU_OAUTH_SCOPE")
+    feishu_api_base: str | None = Field(default=None, validation_alias="FEISHU_API_BASE")
+    feishu_oauth_authorize_base: str | None = Field(
+        default=None,
+        validation_alias="FEISHU_OAUTH_AUTHORIZE_BASE",
+    )
+
     integration_success_redirect: str | None = Field(
         default=None,
         validation_alias="INTEGRATION_SUCCESS_REDIRECT",
