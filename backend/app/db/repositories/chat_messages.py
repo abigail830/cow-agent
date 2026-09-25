@@ -52,6 +52,14 @@ class ChatMessageRepository:
         )
         return list(result.scalars().all())
 
+    async def list_user_messages_by_chat(self, chat_id: uuid.UUID) -> list[ChatMessage]:
+        result = await self._session.execute(
+            select(ChatMessage)
+            .where(ChatMessage.chat_id == chat_id, ChatMessage.role == "user")
+            .order_by(ChatMessage.sequence)
+        )
+        return list(result.scalars().all())
+
     async def get(self, message_id: uuid.UUID) -> ChatMessage | None:
         return await self._session.get(ChatMessage, message_id)
 

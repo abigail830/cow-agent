@@ -1613,6 +1613,15 @@ export function ChatPage() {
           }
         }
 
+        const userTurnCount = getAgentSession(sessionsRef.current, agentId).messages.filter(
+          (row) => row.role === 'user',
+        ).length
+        if (userTurnCount === 2) {
+          window.setTimeout(() => {
+            void refreshChatHistory(agentId)
+          }, 800)
+        }
+
         if (composer && !handle.previewFreshFromStream) {
           void fetchProposalPreview(agentId, activeChatId)
         }

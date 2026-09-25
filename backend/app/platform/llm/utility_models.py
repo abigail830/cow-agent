@@ -1,15 +1,20 @@
 from enum import Enum
 
 from agent_framework import Agent
-from agent_framework.openai import OpenAIChatClient
+from agent_framework.openai import OpenAIChatClient, OpenAIChatCompletionClient
 
 from app.config import Settings, get_settings
-from app.platform.llm.model_registry import _azure_responses_base_url
+from app.platform.llm.model_registry import _azure_responses_base_url, _openai_compatible_base_url
 
 
 class UtilityPurpose(str, Enum):
     CHAT_TITLE = "chat_title"
     HISTORY_COMPACTION = "history_compaction"
+
+
+def _uses_azure_responses_api(base_url: str) -> bool:
+    normalized = base_url.rstrip("/").lower()
+    return "cognitiveservices.azure.com" in normalized or ".openai.azure.com" in normalized
 
 
 class UtilityModelRegistry:
@@ -18,13 +23,24 @@ class UtilityModelRegistry:
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
 
-    def get_client(self, purpose: UtilityPurpose | None = None) -> OpenAIChatClient:
+    def get_client(
+        self,
+        purpose: UtilityPurpose | None = None,
+    ) -> OpenAIChatClient | OpenAIChatCompletionClient:
+        del purpose
         s = self._settings
-        return OpenAIChatClient(
+        base_url = s.utility_base_url()
+        if _uses_azure_responses_api(base_url):
+            return OpenAIChatClient(
+                model=s.utility_deployment(),
+                api_key=s.utility_api_key(),
+                base_url=_azure_responses_base_url(base_url),
+                api_version=s.utility_api_version(),
+            )
+        return OpenAIChatCompletionClient(
             model=s.utility_deployment(),
             api_key=s.utility_api_key(),
-            base_url=_azure_responses_base_url(s.utility_base_url()),
-            api_version=s.utility_api_version(),
+            base_url=_openai_compatible_base_url(base_url),
         )
 
     def _instructions_for(self, purpose: UtilityPurpose) -> str:
@@ -50,6 +66,7 @@ class UtilityModelRegistry:
             client=client,
             name=f"utility-{purpose.value}",
             instructions=self._instructions_for(purpose),
+            default_options={"max_tokens": max_tokens},
         )
         result = await agent.run(prompt)
         return (result.text or "").strip()
@@ -58,4 +75,5 @@ class UtilityModelRegistry:
         return await self.complete(
             UtilityPurpose.CHAT_TITLE,
             prompt="User: What is 2+2?\nAssistant: 4",
+            max_tokens=64,
         )

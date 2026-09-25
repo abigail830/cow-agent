@@ -38,6 +38,7 @@ from app.platform.attachments.materialize import (
     prior_full_attachment_ids_in_context,
 )
 from app.platform.memory.message_validate import message_from_body
+from app.platform.chat.title_service import maybe_schedule_chat_title_generation
 from app.platform.chat.user_message_commit import build_user_maf_message, persist_user_maf_message
 from app.platform.attachments.service import AttachmentService
 from app.platform.llm.chat_model import resolve_chat_model
@@ -427,6 +428,12 @@ class ChatRunService:
             payload_extensions=payload_extensions or None,
         )
         await self._db.commit()
+        if user_message is not None:
+            await maybe_schedule_chat_title_generation(
+                self._db,
+                chat_id=chat_id,
+                user_message_id=user_message.id,
+            )
         if turn_id is None or user_message is None:
             return []
         turn_messages = await self._messages.list_by_turn(chat_id, turn_id)
