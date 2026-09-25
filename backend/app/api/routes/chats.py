@@ -502,6 +502,19 @@ async def download_attachment_parsed_figure(
     )
 
 
+@router.post("/{chat_id}/warmup", status_code=204)
+async def warmup_chat_route(
+    chat: Chat = Depends(get_owned_chat),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    service = ChatRunService(db)
+    try:
+        await service.warmup_chat(chat)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
 @router.post("/{chat_id}/messages")
 async def post_message(
     body: MessageCreate,

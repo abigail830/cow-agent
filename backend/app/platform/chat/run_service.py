@@ -155,6 +155,34 @@ class ChatRunService:
         model_entry = await resolve_chat_model(self._db, chat)
         return model_entry.id, model_entry.provider
 
+    async def _mcp_pool_key(self, chat: Chat) -> McpPoolKey:
+        return McpPoolKey(
+            user_id=chat.user_id,
+            chat_id=chat.id,
+            agent_id=chat.agent_id,
+            config_fingerprint=await self._factory._mcp.config_fingerprint(
+                chat.agent_id,
+                user_id=chat.user_id,
+            ),
+        )
+
+    async def warmup_chat(self, chat: Chat) -> None:
+        """Pre-connect MCP tools for *chat* so the first run can pool-hit."""
+        await self._sessions.get_or_create(chat.id)
+        agent_row = await self._factory.get_agent_row(chat.agent_id)
+        pool = get_mcp_connection_pool()
+        pool_key = await self._mcp_pool_key(chat)
+
+        async def factory() -> list[Any]:
+            return await self._factory._mcp.resolve_for_agent(
+                chat.agent_id,
+                agent_config=agent_row.config,
+                user_id=chat.user_id,
+            )
+
+        handle = await pool.acquire(pool_key, factory)
+        await pool.release(handle)
+
     async def _build_pooled_bundle(
         self,
         chat: Chat,
@@ -167,15 +195,7 @@ class ChatRunService:
     ) -> Any:
         agent_row = await self._factory.get_agent_row(chat.agent_id)
         pool = get_mcp_connection_pool()
-        pool_key = McpPoolKey(
-            user_id=chat.user_id,
-            chat_id=chat.id,
-            agent_id=chat.agent_id,
-            config_fingerprint=await self._factory._mcp.config_fingerprint(
-                chat.agent_id,
-                user_id=chat.user_id,
-            ),
-        )
+        pool_key = await self._mcp_pool_key(chat)
 
         async def factory() -> list[Any]:
             return await self._factory._mcp.resolve_for_agent(

@@ -112,6 +112,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ agent_id: agentId }),
     }),
+  warmupChat: (chatId: string) =>
+    request<void>(`/chats/${encodeURIComponent(chatId)}/warmup`, {
+      method: 'POST',
+    }),
   forkChat: (chatId: string) =>
     request<ChatForkResult>(`/chats/${encodeURIComponent(chatId)}/fork`, {
       method: 'POST',

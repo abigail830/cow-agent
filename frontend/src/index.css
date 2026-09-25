@@ -3017,6 +3017,133 @@ body {
   color: var(--color-subtle);
 }
 
+.chat-standby-panel {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 16rem;
+  width: 100%;
+  padding: 2.5rem 0;
+}
+
+.chat-standby-inner {
+  display: flex;
+  width: 100%;
+  max-width: 42rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.125rem;
+  text-align: center;
+}
+
+.chat-standby-greeting {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--color-ink);
+}
+
+.chat-standby-description {
+  margin: 0;
+  width: 100%;
+  max-width: 38rem;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--color-muted);
+}
+
+.chat-standby-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  width: 100%;
+  max-width: 24rem;
+  margin-top: 0.75rem;
+}
+
+.chat-standby-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.625rem 1rem;
+  border-radius: 12px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.35;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.chat-standby-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.chat-standby-btn-primary {
+  flex-direction: row;
+  gap: 0.5rem;
+  border: 1px solid var(--color-brand-600);
+  background: var(--color-brand-500);
+  color: #fff;
+}
+
+.chat-standby-btn-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+}
+
+.chat-standby-btn-primary:not(:disabled):hover {
+  background: var(--color-brand-600);
+}
+
+.chat-standby-btn-secondary {
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
+}
+
+.chat-standby-btn-secondary:not(:disabled):hover {
+  border-color: var(--color-brand-300);
+  background: var(--color-brand-50);
+  color: var(--color-brand-700);
+}
+
+.chat-standby-btn-label {
+  font-weight: 500;
+}
+
+.chat-standby-btn-meta {
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--color-subtle);
+}
+
+.chat-standby-btn-secondary:not(:disabled):hover .chat-standby-btn-meta {
+  color: var(--color-brand-700);
+}
+
+.chat-warmup-status {
+  margin: 0 0 0.5rem;
+  padding: 0;
+  text-align: center;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--color-muted, #64748b);
+}
+
+.chat-composer-standby {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .panel-loading-state {
   display: flex;
   flex: 1;

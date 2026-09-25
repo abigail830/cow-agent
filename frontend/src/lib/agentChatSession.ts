@@ -6,11 +6,15 @@ import type { ProposalPreview } from '../types/proposalPreview'
 import type { FulfillmentForm } from '../types/fulfillmentForms'
 import type { ChatSummary, ContextUsage, Message } from '../types'
 
+export type ChatWarmupStatus = 'idle' | 'connecting' | 'ready' | 'failed'
+
 export type AgentChatSession = {
   agentId: string
   /** Whether loadChat has completed at least once for this agent. */
   initialized: boolean
   chatId: string | null
+  /** MCP preconnect state for the active chat (after "New conversation"). */
+  warmupStatus: ChatWarmupStatus
   messages: Message[]
   input: string
   pendingAttachments: PendingAttachment[]
@@ -43,6 +47,7 @@ export function createEmptyAgentSession(agentId: string): AgentChatSession {
     agentId,
     initialized: false,
     chatId: null,
+    warmupStatus: 'idle',
     messages: [],
     input: '',
     pendingAttachments: [],
