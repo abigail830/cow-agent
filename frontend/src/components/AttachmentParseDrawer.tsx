@@ -4,6 +4,7 @@ import type { ChatAttachmentListItem } from '../lib/attachmentUpload'
 import {
   PARSE_STAGE_ORDER,
   buildStageStatuses,
+  buildStageTelemetry,
   effectiveParseStatus,
   isImageAttachment,
   parseNotRequired,
@@ -11,6 +12,8 @@ import {
   parseProgressMessage,
   parseProgressMessageTone,
   parseStatusDisplayLabel,
+  stageTimingLabel,
+  stageTimingTitle,
   type ParseStageDisplayStatus,
   type ParseStageId,
 } from '../lib/attachmentParseProgress'
@@ -78,6 +81,7 @@ export function AttachmentParseDrawer({ attachment, onClose, onRetry }: Props) {
   const status = effectiveParseStatus(currentAttachment)
   const statusLabel = parseStatusDisplayLabel(currentAttachment)
   const stageStatuses = buildStageStatuses(currentAttachment)
+  const stageTelemetry = buildStageTelemetry(currentAttachment)
   const progressMessage = parseProgressMessage(currentAttachment)
   const progressTone = parseProgressMessageTone(currentAttachment)
   const notRequiredDetail = parseNotRequiredDetail(currentAttachment)
@@ -168,6 +172,9 @@ export function AttachmentParseDrawer({ attachment, onClose, onRetry }: Props) {
                 const stageStatus = stageStatuses.get(stageId) ?? 'pending'
                 const active = stageStatus === 'running'
                 const label = STAGE_LABELS[stageId]
+                const telemetry = stageTelemetry.get(stageId)
+                const timingLabel = stageTimingLabel(telemetry, stageStatus)
+                const timingTitle = stageTimingTitle(telemetry, stageStatus)
                 return (
                   <li key={stageId} className={stageNodeClass(stageStatus, active)}>
                     <span className="parse-pipeline-node-rail" aria-hidden>
@@ -175,10 +182,30 @@ export function AttachmentParseDrawer({ attachment, onClose, onRetry }: Props) {
                         <StageIcon status={stageStatus} />
                       </span>
                     </span>
-                    <div className="parse-pipeline-node-body">
+                    <div
+                      className={[
+                        'parse-pipeline-node-body',
+                        timingLabel ? 'parse-pipeline-node-body-has-timing' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
                       <span className="parse-pipeline-node-label">{label}</span>
                       <span className="parse-pipeline-node-id">{stageId}</span>
                       <span className="parse-pipeline-node-status">{STAGE_STATUS_LABELS[stageStatus]}</span>
+                      {timingLabel ? (
+                        <span
+                          className="parse-pipeline-node-timing"
+                          title={timingTitle ?? undefined}
+                          aria-label={
+                            stageStatus === 'running'
+                              ? `Elapsed ${timingLabel}`
+                              : `Duration ${timingLabel}`
+                          }
+                        >
+                          {stageStatus === 'running' ? `${timingLabel}…` : timingLabel}
+                        </span>
+                      ) : null}
                     </div>
                   </li>
                 )

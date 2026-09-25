@@ -18,6 +18,7 @@ import { parseStatusDisplayLabel } from '../lib/attachmentParseProgress'
 import { artifactCardSubtitle, isSidePanelArtifact } from '../lib/artifactKinds'
 import { downloadArtifactFile } from '../lib/artifactDownload'
 import { attachmentOriginalUrl } from '../lib/documentUrls'
+import { resolveParsedFigureSrc, rewriteParsedFigureRefs } from '../lib/parsedFigureRefs'
 import {
   layoutPreviewText,
   layoutTypeLabel,
@@ -66,16 +67,6 @@ const SOURCE_FILTER_OPTIONS: { value: DocumentSourceType | 'all'; label: string 
   { value: 'all', label: 'All sources' },
   { value: 'attachment', label: 'Uploads' },
   { value: 'artifact', label: 'Generated' },
-]
-
-const ARTIFACT_KIND_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: 'All kinds' },
-  { value: 'diagram_svg', label: 'Diagrams' },
-  { value: 'slide_deck', label: 'Slides' },
-  { value: 'content_document', label: 'Documents' },
-  { value: 'proposal_preview', label: 'Proposal preview' },
-  { value: 'proposal_document', label: 'Proposal export' },
-  { value: 'proposal_word', label: 'Proposal Word' },
 ]
 
 function formatFileSize(sizeBytes: number): string {
@@ -274,6 +265,14 @@ function DocumentPreviewPane({
   const [error, setError] = useState<string | null>(null)
 
   const downloadUrl = attachmentOriginalUrl(doc.chat_id, doc.id)
+  const resolveFigureSrc = useCallback(
+    (src: string | undefined) => resolveParsedFigureSrc(src, doc.chat_id, doc.id),
+    [doc.chat_id, doc.id],
+  )
+  const renderedParsedContent = useMemo(
+    () => (parsedContent != null ? rewriteParsedFigureRefs(parsedContent, doc.chat_id, doc.id) : null),
+    [parsedContent, doc.chat_id, doc.id],
+  )
 
   useEffect(() => {
     setTab(artifacts.content_md ? 'parsed' : 'original')
@@ -445,9 +444,10 @@ function DocumentPreviewPane({
               </div>
               {parsedView === 'rendered' ? (
                 <MarkdownContent
-                  content={parsedContent}
+                  content={renderedParsedContent ?? ''}
                   className="markdown-body artifact-markdown-body documents-preview-markdown"
                   allowHtml
+                  resolveImageSrc={resolveFigureSrc}
                 />
               ) : (
                 <pre className="documents-preview-text">{parsedContent}</pre>
@@ -608,7 +608,6 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
   const [source, setSource] = useState<DocumentSourceType | 'all'>('all')
   const [parseStatus, setParseStatus] = useState('')
   const [mimeType, setMimeType] = useState('')
-  const [artifactKind, setArtifactKind] = useState('')
   const [agentId, setAgentId] = useState('')
   const [agents, setAgents] = useState<Agent[]>([])
   const [selected, setSelected] = useState<DocumentItem | null>(null)
@@ -623,20 +622,18 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
   }, [searchInput])
 
   const showAttachmentFilters = source === 'all' || source === 'attachment'
-  const showArtifactFilters = source === 'all' || source === 'artifact'
 
   const filters = useMemo(
     () => ({
       q: debouncedQuery || undefined,
       parse_status: showAttachmentFilters && parseStatus ? parseStatus : undefined,
       mime_type: showAttachmentFilters && mimeType ? mimeType : undefined,
-      artifact_kind: showArtifactFilters && artifactKind ? artifactKind : undefined,
       agent_id: agentId || undefined,
       source,
       limit: 100,
       offset: 0,
     }),
-    [agentId, artifactKind, debouncedQuery, mimeType, parseStatus, showArtifactFilters, showAttachmentFilters, source],
+    [agentId, debouncedQuery, mimeType, parseStatus, showAttachmentFilters, source],
   )
 
   useEffect(() => {
@@ -822,20 +819,6 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
                 ))}
               </select>
             ) : null}
-            {showArtifactFilters ? (
-              <select
-                className="documents-filter-select"
-                value={artifactKind}
-                aria-label="Filter by artifact kind"
-                onChange={(event) => setArtifactKind(event.target.value)}
-              >
-                {ARTIFACT_KIND_OPTIONS.map((option) => (
-                  <option key={option.value || 'all-kinds'} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            ) : null}
           </div>
 
           {error ? <div className="documents-drawer-error">{error}</div> : null}
@@ -854,7 +837,7 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
                     ? `${total} document${total === 1 ? '' : 's'}`
                     : `${documents.length} of ${total}`}
                 </p>
-                <div className="documents-table">
+                <div className={`documents-table${selected ? ' documents-table-preview-open' : ''}`}>
                   <div className="documents-table-head" aria-hidden="true">
                     <span className="documents-col documents-col-agent">Agent</span>
                     <span className="documents-col documents-col-session">Session</span>
@@ -862,7 +845,9 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
                     <span className="documents-col documents-col-file">File</span>
                     <span className="documents-col documents-col-size">Size</span>
                     <span className="documents-col documents-col-date">Date</span>
-                    <span className="documents-col documents-col-status">Status</span>
+                    {!selected ? (
+                      <span className="documents-col documents-col-status">Status</span>
+                    ) : null}
                   </div>
                   <ul className="documents-table-list">
                     {documents.map((doc) => (
@@ -913,21 +898,23 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
                           <span className="documents-col documents-col-date">
                             {doc.created_at ? formatAttachmentTimestamp(doc.created_at) : '—'}
                           </span>
-                          <span className="documents-col documents-col-status">
-                            {documentStatusBadges(doc).map((badge) => (
-                              <span
-                                key={badge}
-                                className={
-                                  !isArtifactDocument(doc) &&
-                                  badge === parseStatusDisplayLabel(doc as Parameters<typeof parseStatusDisplayLabel>[0])
-                                    ? parseStatusClass(doc.parse_status ?? undefined)
-                                    : 'documents-status-badge documents-status-badge-extra'
-                                }
-                              >
-                                {badge}
-                              </span>
-                            ))}
-                          </span>
+                          {!selected ? (
+                            <span className="documents-col documents-col-status">
+                              {documentStatusBadges(doc).map((badge) => (
+                                <span
+                                  key={badge}
+                                  className={
+                                    !isArtifactDocument(doc) &&
+                                    badge === parseStatusDisplayLabel(doc as Parameters<typeof parseStatusDisplayLabel>[0])
+                                      ? parseStatusClass(doc.parse_status ?? undefined)
+                                      : 'documents-status-badge documents-status-badge-extra'
+                                  }
+                                >
+                                  {badge}
+                                </span>
+                              ))}
+                            </span>
+                          ) : null}
                         </button>
                       </li>
                     ))}

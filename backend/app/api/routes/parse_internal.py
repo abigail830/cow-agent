@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
@@ -11,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.platform.attachments.storage import load_inline_attachment
-from app.platform.docstore.blob import load_parsed_figure, save_parsed_artifact, save_parsed_figure
+from app.platform.docstore.blob import save_parsed_artifact, save_parsed_figure
+from app.platform.docstore.figures import load_parsed_figure_resolved, normalize_figure_id
 from app.platform.docstore.repository import DocstoreRepository
 from app.platform.parse_pipeline.job_builder import hash_run_token
 from app.platform.parse_pipeline.repository import ParseJobRepository
@@ -32,8 +32,6 @@ _ARTIFACT_CONTENT_TYPES = {
     "pageindex_json": "application/json",
 }
 
-_FIGURE_ID_RE = re.compile(r"^f\d+$")
-_FIGURE_EXTENSIONS = {"jpeg", "jpg", "png", "gif", "webp"}
 _MIME_TO_EXT = {
     "image/jpeg": "jpeg",
     "image/png": "png",
@@ -44,12 +42,10 @@ _MIME_TO_EXT = {
 
 def _normalize_figure_id(raw: str) -> str:
     """Accept f1 or legacy f1.jpeg path segments; API route uses bare figure id."""
-    figure_id = raw.strip()
-    if "." in figure_id:
-        figure_id = figure_id.rsplit(".", 1)[0]
-    if not _FIGURE_ID_RE.match(figure_id):
-        raise HTTPException(status_code=400, detail="invalid figure_id")
-    return figure_id
+    try:
+        return normalize_figure_id(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid figure_id") from exc
 
 
 def _extension_from_content_type(content_type: str | None) -> str:
@@ -218,19 +214,13 @@ async def get_figure(
     row = await jobs.get_run_for_attachment_token(attachment_id, hash_run_token(token))
     if row is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    last_error: FileNotFoundError | None = None
-    for extension in _FIGURE_EXTENSIONS:
-        try:
-            data = load_parsed_figure(row.chat_id, attachment_id, figure_id, extension)
-        except FileNotFoundError as exc:
-            last_error = exc
-            continue
-        media_type = next(
-            (mime for mime, ext in _MIME_TO_EXT.items() if ext == extension or (extension == "jpg" and ext == "jpeg")),
-            "application/octet-stream",
-        )
-        return Response(content=data, media_type=media_type)
-    raise HTTPException(status_code=404, detail="figure not found") from last_error
+    try:
+        data, media_type = load_parsed_figure_resolved(row.chat_id, attachment_id, figure_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid figure_id") from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="figure not found") from exc
+    return Response(content=data, media_type=media_type)
 
 
 @router.post("/webhook")

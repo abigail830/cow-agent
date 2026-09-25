@@ -33,6 +33,7 @@ from app.platform.attachments.api_out import attachment_out
 from app.platform.attachments.service import AttachmentService
 from app.platform.attachments.storage import load_inline_attachment
 from app.platform.docstore.blob import load_parsed_artifact
+from app.platform.docstore.figures import load_parsed_figure_resolved, normalize_figure_id
 from app.platform.docstore.content_types import VALID_PARSED_ARTIFACT_KEYS, parsed_artifact_media_type
 from app.platform.chat.run_service import ChatRunService, list_chat_messages, list_chat_timeline
 from app.platform.chat.fork_service import fork_chat
@@ -465,6 +466,35 @@ async def download_attachment_parsed(
     return Response(
         content=data,
         media_type=parsed_artifact_media_type(artifact_key),
+        headers={
+            "Content-Length": str(len(data)),
+            "Cache-Control": "private, no-store",
+        },
+    )
+
+
+@router.get("/{chat_id}/attachments/{attachment_id}/parsed/figures/{figure_id}")
+async def download_attachment_parsed_figure(
+    attachment_id: uuid.UUID,
+    figure_id: str,
+    chat: Chat = Depends(get_owned_chat),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    try:
+        normalized_figure_id = normalize_figure_id(figure_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid figure id") from exc
+    repo = AttachmentRepository(db)
+    row = await repo.get(attachment_id)
+    if row is None or row.chat_id != chat.id:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    try:
+        data, media_type = load_parsed_figure_resolved(chat.id, attachment_id, normalized_figure_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Figure not found") from exc
+    return Response(
+        content=data,
+        media_type=media_type,
         headers={
             "Content-Length": str(len(data)),
             "Cache-Control": "private, no-store",

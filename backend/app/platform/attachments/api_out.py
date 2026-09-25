@@ -20,6 +20,8 @@ def attachment_out(chat_id: uuid.UUID, row: dict[str, Any]) -> AttachmentOut:
                 ParseStageOut(
                     stage_id=s.get("stage_id") if isinstance(s, dict) else None,
                     status=s.get("status") if isinstance(s, dict) else None,
+                    started_at=s.get("started_at") if isinstance(s, dict) else None,
+                    finished_at=s.get("finished_at") if isinstance(s, dict) else None,
                 )
                 for s in stages_raw
             ]

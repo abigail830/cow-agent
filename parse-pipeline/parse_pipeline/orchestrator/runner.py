@@ -9,7 +9,7 @@ from typing import Any, Callable
 from parse_pipeline.config import Settings, get_settings
 from parse_pipeline.job_store.base import JobRecord
 from parse_pipeline.job_store.factory import get_job_store
-from parse_pipeline.normalize.artifacts import NormalizedArtifacts, artifacts_to_bytes, normalize_text_artifacts
+from parse_pipeline.normalize.artifacts import NormalizedArtifacts, normalize_text_artifacts
 from parse_pipeline.normalize.finalize import finalize_normalized_artifacts, finalize_office_markitdown_artifacts
 from parse_pipeline.orchestrator.errors import job_error_from_exception
 from parse_pipeline.providers.local.markitdown_office import extract_docx_markdown
@@ -21,7 +21,7 @@ from parse_pipeline.quality.docx_probe import probe_docx_bytes
 from parse_pipeline.schemas.job import JobArtifacts, JobError, JobProgress, JobStatus, PipelineId
 from parse_pipeline.schemas.stages import StageId, StageStatus
 from parse_pipeline.schemas.storage import StorageSpec
-from parse_pipeline.storage.io import fetch_bytes, parse_storage_spec, write_artifact, write_figure
+from parse_pipeline.storage.io import fetch_bytes, parse_storage_spec, write_normalized_artifacts
 from parse_pipeline.webhooks import sender
 
 logger = logging.getLogger(__name__)
@@ -437,30 +437,21 @@ class JobRunner:
 
     async def _stage_write(self, record: JobRecord, spec: StorageSpec, normalized: NormalizedArtifacts) -> None:
         await self._begin_stage(record, StageId.WRITE)
-        content_b, meta_b, pageindex_b = artifacts_to_bytes(normalized)
-        wrote_content = await write_artifact(spec, "content_md", content_b)
-        wrote_meta = await write_artifact(spec, "meta_json", meta_b)
-        wrote_pageindex = False
-        if pageindex_b is not None:
-            wrote_pageindex = await write_artifact(spec, "pageindex_json", pageindex_b)
-        figure_writes = 0
-        for figure_id, (data, mime_type, ext) in normalized.figure_files.items():
-            if await write_figure(spec, figure_id, data, mime_type, ext):
-                figure_writes += 1
+        write_result = await write_normalized_artifacts(spec, normalized)
         record.artifacts = JobArtifacts(
-            content_md=wrote_content,
-            meta_json=wrote_meta,
-            pageindex_json=wrote_pageindex,
-            ready=wrote_content and wrote_meta,
+            content_md=write_result.wrote_content,
+            meta_json=write_result.wrote_meta,
+            pageindex_json=write_result.wrote_pageindex,
+            ready=write_result.wrote_content and write_result.wrote_meta,
         )
         await self._finish_stage(
             record,
             StageId.WRITE,
             outputs={
-                "content_md": wrote_content,
-                "meta_json": wrote_meta,
-                "pageindex_json": wrote_pageindex,
-                "figure_writes": figure_writes,
+                "content_md": write_result.wrote_content,
+                "meta_json": write_result.wrote_meta,
+                "pageindex_json": write_result.wrote_pageindex,
+                "figure_writes": write_result.figure_writes,
             },
         )
 

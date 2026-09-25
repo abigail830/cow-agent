@@ -52,6 +52,8 @@ def _stage_snapshot_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         {
             "stage_id": s.get("stage_id"),
             "status": s.get("status"),
+            "started_at": s.get("started_at"),
+            "finished_at": s.get("finished_at"),
         }
         for s in stages
         if isinstance(s, dict)

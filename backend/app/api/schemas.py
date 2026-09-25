@@ -112,6 +112,8 @@ class MessageCreate(BaseModel):
 class ParseStageOut(BaseModel):
     stage_id: str | None = None
     status: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
 
 
 class ParseProgressOut(BaseModel):

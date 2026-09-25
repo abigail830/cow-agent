@@ -18,3 +18,13 @@ export function attachmentParsedUrl(
 ): string {
   return resolveApiPath(`/chats/${chatId}/attachments/${attachmentId}/parsed/${artifactKey}`)
 }
+
+export function attachmentParsedFigureUrl(
+  chatId: string,
+  attachmentId: string,
+  figureId: string,
+): string {
+  return resolveApiPath(
+    `/chats/${chatId}/attachments/${attachmentId}/parsed/figures/${figureId}`,
+  )
+}

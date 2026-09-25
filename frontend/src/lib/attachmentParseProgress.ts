@@ -1,4 +1,4 @@
-import type { AttachmentParseStatus, ChatAttachment } from '../types'
+import type { AttachmentParseStatus, ChatAttachment, ParseStageSnapshot } from '../types'
 
 /** Primary parse status refresh interval (polling; works across multi-instance backend). */
 export const ATTACHMENT_PARSE_POLL_MS = 3000
@@ -84,6 +84,89 @@ function normalizeStageStatus(raw: string | null | undefined): ParseStageDisplay
 
 function allStagesExplicitlySucceeded(stageMap: Map<string, ParseStageDisplayStatus>): boolean {
   return PARSE_STAGE_ORDER.every((stageId) => stageMap.get(stageId) === 'succeeded')
+}
+
+function parseIsoTime(value: string | null | undefined): number | null {
+  if (!value) return null
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+export function formatStageDurationMs(ms: number): string {
+  const safeMs = Math.max(0, ms)
+  if (safeMs < 100) return '<0.1s'
+  if (safeMs < 60_000) return `${(safeMs / 1000).toFixed(safeMs < 1000 ? 1 : 0)}s`
+  const minutes = Math.floor(safeMs / 60_000)
+  const seconds = Math.round((safeMs % 60_000) / 1000)
+  return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`
+}
+
+function formatLocalTimestamp(value: string | null | undefined): string | null {
+  const parsed = parseIsoTime(value)
+  if (parsed == null) return null
+  return new Date(parsed).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
+export function buildStageTelemetry(
+  attachment: ChatAttachment,
+): Map<ParseStageId, ParseStageSnapshot> {
+  const map = new Map<ParseStageId, ParseStageSnapshot>()
+  for (const stage of attachment.parse_progress?.stages ?? []) {
+    const stageId = stage.stage_id as ParseStageId | null | undefined
+    if (stageId && PARSE_STAGE_ORDER.includes(stageId)) {
+      map.set(stageId, stage)
+    }
+  }
+  return map
+}
+
+export function stageTimingLabel(
+  stage: ParseStageSnapshot | undefined,
+  displayStatus: ParseStageDisplayStatus,
+  nowMs: number = Date.now(),
+): string | null {
+  if (!stage) return null
+  const startedAt = parseIsoTime(stage.started_at)
+  const finishedAt = parseIsoTime(stage.finished_at)
+
+  if (displayStatus === 'running' && startedAt != null) {
+    return formatStageDurationMs(nowMs - startedAt)
+  }
+
+  if (
+    (displayStatus === 'succeeded' || displayStatus === 'failed' || displayStatus === 'skipped') &&
+    startedAt != null &&
+    finishedAt != null
+  ) {
+    return formatStageDurationMs(finishedAt - startedAt)
+  }
+
+  return null
+}
+
+export function stageTimingTitle(
+  stage: ParseStageSnapshot | undefined,
+  displayStatus: ParseStageDisplayStatus,
+): string | null {
+  if (!stage) return null
+  const started = formatLocalTimestamp(stage.started_at)
+  const finished = formatLocalTimestamp(stage.finished_at)
+  if (!started && !finished) return null
+
+  if (displayStatus === 'running' && started) {
+    return `Started ${started}`
+  }
+  if (started && finished) {
+    return `Started ${started} · Finished ${finished}`
+  }
+  if (started) {
+    return `Started ${started}`
+  }
+  return finished ? `Finished ${finished}` : null
 }
 
 export function buildStageStatuses(

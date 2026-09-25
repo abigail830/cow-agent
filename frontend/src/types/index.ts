@@ -85,6 +85,8 @@ export type AttachmentParseStatus = 'pending' | 'running' | 'ready' | 'failed' |
 export interface ParseStageSnapshot {
   stage_id?: string | null
   status?: string | null
+  started_at?: string | null
+  finished_at?: string | null
 }
 
 export interface AttachmentParseProgress {

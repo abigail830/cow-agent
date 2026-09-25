@@ -1,7 +1,7 @@
 from app.platform.attachments.kinds import AttachmentKind
 from app.platform.docstore.gate import assert_parse_ready
 from app.platform.parse_pipeline.router import PipelineRoute, resolve_pipeline
-from app.platform.parse_pipeline.webhook import verify_webhook_signature
+from app.platform.parse_pipeline.webhook import _stage_snapshot_from_payload, verify_webhook_signature
 
 
 def test_resolve_pipeline_text():
@@ -49,3 +49,32 @@ def test_assert_parse_ready_blocks_pending():
 
     with pytest.raises(ValueError, match="still parsing"):
         assert_parse_ready([_Row("notes.md", "pending")])
+
+
+def test_stage_snapshot_preserves_stage_timestamps():
+    snapshot = _stage_snapshot_from_payload(
+        {
+            "current_stage": "parse_wait",
+            "progress": {"message": "Waiting for parser"},
+            "stages": [
+                {
+                    "stage_id": "fetch",
+                    "status": "succeeded",
+                    "started_at": "2026-09-25T10:00:00Z",
+                    "finished_at": "2026-09-25T10:00:01Z",
+                },
+                {
+                    "stage_id": "parse_wait",
+                    "status": "running",
+                    "started_at": "2026-09-25T10:00:05Z",
+                    "finished_at": None,
+                },
+            ],
+        }
+    )
+    assert snapshot["current_stage"] == "parse_wait"
+    assert snapshot["message"] == "Waiting for parser"
+    assert snapshot["stages"][0]["started_at"] == "2026-09-25T10:00:00Z"
+    assert snapshot["stages"][0]["finished_at"] == "2026-09-25T10:00:01Z"
+    assert snapshot["stages"][1]["started_at"] == "2026-09-25T10:00:05Z"
+    assert snapshot["stages"][1]["finished_at"] is None
