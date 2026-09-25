@@ -261,6 +261,18 @@ class Settings(BaseSettings):
         default="auto",
         validation_alias="PARSE_PIPELINE_DISPATCH",
     )
+    parse_pipeline_service_url: str | None = Field(
+        default="http://127.0.0.1:8091",
+        validation_alias="PARSE_PIPELINE_SERVICE_URL",
+    )
+    parse_pipeline_service_api_key: str | None = Field(
+        default=None,
+        validation_alias="PARSE_PIPELINE_SERVICE_API_KEY",
+    )
+    parse_pipeline_service_caller_id: str = Field(
+        default="agent-platform",
+        validation_alias="PARSE_PIPELINE_SERVICE_CALLER_ID",
+    )
     office_markitdown_enabled: bool = Field(
         default=True,
         validation_alias="OFFICE_MARKITDOWN_ENABLED",

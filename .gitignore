@@ -33,6 +33,8 @@ backend/.venv/
 backend/.run/
 backend/data/
 frontend/.run/
+parse-pipeline/.venv/
+parse-pipeline/.run/
 
 # IDE & OS
 .cursor/

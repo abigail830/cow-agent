@@ -1,4 +1,4 @@
-"""Platform client for parse-pipeline worker (GHA / inline dispatch + webhooks)."""
+"""Platform client for parse-pipeline worker (HTTP service / GHA / legacy inline)."""
 
 from app.platform.parse_pipeline.enqueue import enqueue_parse_job
 

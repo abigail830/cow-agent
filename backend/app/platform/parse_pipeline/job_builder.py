@@ -32,22 +32,15 @@ def build_job_payload(
     pipeline_id: str,
     job_id: str,
     webhook_secret: str,
-    use_file_urls: bool,
+    use_internal_http: bool,
 ) -> tuple[dict, str]:
     settings = get_settings()
     run_token = _new_run_token()
     public_base = (settings.parse_pipeline_public_base_url or "").strip()
 
-    if use_file_urls or not public_base:
-        storage = build_file_storage_spec(
-            chat_id=row.chat_id,
-            attachment_id=row.id,
-            filename=row.filename,
-            mime_type=row.mime_type,
-            size_bytes=row.size_bytes,
-            content_hash=row.content_hash,
-        )
-    else:
+    if use_internal_http:
+        if not public_base:
+            raise ValueError("PARSE_PIPELINE_PUBLIC_BASE_URL is required for HTTP storage")
         storage = build_internal_storage_spec(
             public_base_url=public_base,
             attachment_id=row.id,
@@ -57,10 +50,17 @@ def build_job_payload(
             content_hash=row.content_hash,
             run_token=run_token,
         )
-
-    webhook_url = None
-    if public_base:
         webhook_url = f"{public_base.rstrip('/')}{settings.parse_pipeline_webhook_path}"
+    else:
+        storage = build_file_storage_spec(
+            chat_id=row.chat_id,
+            attachment_id=row.id,
+            filename=row.filename,
+            mime_type=row.mime_type,
+            size_bytes=row.size_bytes,
+            content_hash=row.content_hash,
+        )
+        webhook_url = None
 
     idempotency_key = None
     if row.content_hash:

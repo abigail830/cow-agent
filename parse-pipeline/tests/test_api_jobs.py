@@ -62,6 +62,28 @@ def test_create_and_get_text_job(client: TestClient, tmp_path: Path) -> None:
     assert len(body["stages"]) == 8
 
 
+def test_create_job_honors_platform_job_id(client: TestClient, tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    source = FIXTURES / "sample.md"
+    platform_job_id = "job_platform_fixed_id"
+    payload = {
+        "job_id": platform_job_id,
+        "pipeline_id": "text_standard",
+        "storage": {
+            "read": {"url": source.as_uri(), "filename": "sample.md"},
+            "write": {
+                "content_md": {"url": (out_dir / "content.md").as_uri(), "method": "PUT"},
+                "meta_json": {"url": (out_dir / "meta.json").as_uri(), "method": "PUT"},
+            },
+        },
+    }
+    headers = {"Authorization": "Bearer test_dev_key", "X-Parse-Caller-Id": "test"}
+    create_resp = client.post("/v1/jobs", json=payload, headers=headers)
+    assert create_resp.status_code == 202
+    assert create_resp.json()["job_id"] == platform_job_id
+
+
 def test_auth_required(client: TestClient) -> None:
     response = client.post("/v1/jobs", json={"pipeline_id": "text_standard", "storage": {}})
     assert response.status_code == 401

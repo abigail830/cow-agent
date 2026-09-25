@@ -6,8 +6,12 @@ export PLATFORM_BACKEND_HOST="${PLATFORM_BACKEND_HOST:-127.0.0.1}"
 export PLATFORM_BACKEND_PORT="${PLATFORM_BACKEND_PORT:-8000}"
 export PLATFORM_FRONTEND_HOST="${PLATFORM_FRONTEND_HOST:-127.0.0.1}"
 export PLATFORM_FRONTEND_PORT="${PLATFORM_FRONTEND_PORT:-5173}"
+export PLATFORM_PARSE_PIPELINE_HOST="${PLATFORM_PARSE_PIPELINE_HOST:-127.0.0.1}"
+export PLATFORM_PARSE_PIPELINE_PORT="${PLATFORM_PARSE_PIPELINE_PORT:-8091}"
 
 # 兼容旧变量名（platform start 脚本仍使用 HOST / PORT / FRONTEND_*）
+export PARSE_PIPELINE_HOST="${PARSE_PIPELINE_HOST:-$PLATFORM_PARSE_PIPELINE_HOST}"
+export PARSE_PIPELINE_PORT="${PARSE_PIPELINE_PORT:-$PLATFORM_PARSE_PIPELINE_PORT}"
 export HOST="${HOST:-$PLATFORM_BACKEND_HOST}"
 export PORT="${PORT:-$PLATFORM_BACKEND_PORT}"
 export FRONTEND_HOST="${FRONTEND_HOST:-$PLATFORM_FRONTEND_HOST}"
@@ -31,7 +35,8 @@ _assert_distinct_ports() {
 validate_platform_ports() {
   _assert_distinct_ports "platform port map" \
     "$PLATFORM_BACKEND_PORT" \
-    "$PLATFORM_FRONTEND_PORT"
+    "$PLATFORM_FRONTEND_PORT" \
+    "$PLATFORM_PARSE_PIPELINE_PORT"
 }
 
 port_owner_hint() {
@@ -39,6 +44,7 @@ port_owner_hint() {
   case "$port" in
     "$PLATFORM_BACKEND_PORT") echo "platform backend (uvicorn)" ;;
     "$PLATFORM_FRONTEND_PORT") echo "platform frontend (vite)" ;;
+    "$PLATFORM_PARSE_PIPELINE_PORT") echo "parse-pipeline (HTTP worker)" ;;
     *) echo "unknown process" ;;
   esac
 }

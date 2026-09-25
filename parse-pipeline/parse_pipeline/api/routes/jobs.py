@@ -35,7 +35,7 @@ async def create_job(
         if existing is not None:
             return SubmitJobResponse(job_id=existing.job_id, status=existing.status)
 
-    job_id = f"job_{uuid.uuid4().hex[:26]}"
+    job_id = (body.job_id or "").strip() or f"job_{uuid.uuid4().hex[:26]}"
     record = JobRecord(
         job_id=job_id,
         caller_id=caller_id,

@@ -13,8 +13,10 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env
 pytest
-parse-pipeline serve
+parse-pipeline serve   # worker on :8091; platform submits POST /v1/jobs + webhooks
 ```
+
+Platform local dev: see `backend/scripts/setup_parse_inline.sh` — backend uses **service** dispatch (HTTP storage + webhook), same as a standalone deploy without GHA.
 
 ## API
 

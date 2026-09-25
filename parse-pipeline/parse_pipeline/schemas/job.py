@@ -62,6 +62,7 @@ class JobCallbacks(BaseModel):
 
 class SubmitJobRequest(BaseModel):
     schema_version: Literal["1.0"] = "1.0"
+    job_id: str | None = None
     idempotency_key: str | None = None
     pipeline_id: PipelineId | str
     storage: dict[str, Any]

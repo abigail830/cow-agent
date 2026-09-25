@@ -6,6 +6,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/scripts/dev-ports.sh"
 validate_platform_ports
 
+echo "==> Starting parse-pipeline..."
+"$ROOT/parse-pipeline/scripts/start.sh"
+
+echo ""
 echo "==> Starting backend..."
 "$ROOT/backend/scripts/start.sh"
 
@@ -27,6 +31,7 @@ echo "==> Starting frontend..."
 
 echo ""
 echo "Platform is up."
-echo "  Frontend:  http://${FRONTEND_HOST}:${FRONTEND_PORT}"
-echo "  Backend:   http://${HOST}:${PORT}"
-echo "  Swagger:   http://${HOST}:${PORT}/docs"
+echo "  Frontend:        http://${FRONTEND_HOST}:${FRONTEND_PORT}"
+echo "  Backend:         http://${HOST}:${PORT}"
+echo "  Swagger:         http://${HOST}:${PORT}/docs"
+echo "  Parse pipeline:  http://${PARSE_PIPELINE_HOST}:${PARSE_PIPELINE_PORT}"
