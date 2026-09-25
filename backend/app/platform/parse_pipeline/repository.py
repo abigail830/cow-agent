@@ -84,6 +84,24 @@ class ParseJobRepository:
         row.status = status
         await self._session.flush()
 
+    def _is_run_token_valid(self, row: ParseJobRun | None) -> bool:
+        if row is None:
+            return False
+        exp = row.expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        return exp >= datetime.now(timezone.utc)
+
+    def payload_allows_attachment(self, row: ParseJobRun, attachment_id: uuid.UUID) -> bool:
+        if row.attachment_id == attachment_id:
+            return True
+        payload = row.job_payload_json or {}
+        capture = (payload.get("source") or {}).get("capture") or {}
+        for part in capture.get("parts") or []:
+            if isinstance(part, dict) and str(part.get("attachment_id")) == str(attachment_id):
+                return True
+        return False
+
     async def get_run_for_attachment_token(
         self,
         attachment_id: uuid.UUID,
@@ -99,14 +117,27 @@ class ParseJobRepository:
             .limit(1)
         )
         row = result.scalar_one_or_none()
-        if row is None:
-            return None
-        exp = row.expires_at
-        if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=timezone.utc)
-        if exp < datetime.now(timezone.utc):
+        if not self._is_run_token_valid(row):
             return None
         return row
+
+    async def get_run_for_related_attachment_token(
+        self,
+        attachment_id: uuid.UUID,
+        token_hash: str,
+    ) -> ParseJobRun | None:
+        direct = await self.get_run_for_attachment_token(attachment_id, token_hash)
+        if direct is not None:
+            return direct
+        result = await self._session.execute(
+            select(ParseJobRun)
+            .where(ParseJobRun.run_token_hash == token_hash)
+            .order_by(ParseJobRun.created_at.desc())
+        )
+        for row in result.scalars():
+            if self._is_run_token_valid(row) and self.payload_allows_attachment(row, attachment_id):
+                return row
+        return None
 
     async def delete_for_attachment(self, attachment_id: uuid.UUID) -> None:
         job_ids = list(

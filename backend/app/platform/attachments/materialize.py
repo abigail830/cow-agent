@@ -333,6 +333,7 @@ def should_hydrate_parsed_document(
         AttachmentKind.SHEET,
         AttachmentKind.PDF,
         AttachmentKind.OFFICE,
+        AttachmentKind.AUDIO,
     )
     if settings.document_hydrate_unified:
         return kind in hydrate_kinds

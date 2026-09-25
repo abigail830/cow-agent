@@ -157,6 +157,9 @@ class AttachmentRepository:
         attachment_id: uuid.UUID | None = None,
         content_hash: str | None = None,
         gist: str | None = None,
+        capture_id: uuid.UUID | None = None,
+        attachment_role: str | None = None,
+        parse_status: str | None = None,
     ) -> ChatAttachment:
         row = ChatAttachment(
             id=attachment_id or uuid.uuid4(),
@@ -169,7 +172,11 @@ class AttachmentRepository:
             size_bytes=size_bytes,
             content_hash=content_hash,
             gist=gist,
+            capture_id=capture_id,
+            attachment_role=attachment_role,
         )
+        if parse_status is not None:
+            row.parse_status = parse_status
         self._session.add(row)
         await self._session.flush()
         return row

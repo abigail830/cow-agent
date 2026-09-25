@@ -12,6 +12,10 @@ export function isContentDocumentArtifact(spec: ArtifactSpec): boolean {
   return spec.kind === 'content_document'
 }
 
+export function isAudioTranscriptArtifact(spec: ArtifactSpec): boolean {
+  return spec.kind === 'audio_transcript'
+}
+
 /** Download-first chat artifacts rendered as inline cowork-style cards. */
 export function isInlineDownloadArtifact(spec: ArtifactSpec): boolean {
   return spec.kind === 'proposal_word' || spec.kind === 'proposal_document'
@@ -29,6 +33,12 @@ function contentDocumentFilename(spec: ArtifactSpec): string {
 
 /** Markdown content_document that can open as a rendered preview in the side panel. */
 export function isMarkdownPreviewableArtifact(spec: ArtifactSpec): boolean {
+  if (isAudioTranscriptArtifact(spec)) {
+    return (
+      spec.job_status === 'ready' &&
+      (Boolean(spec.content?.trim()) || Boolean(spec.download_url?.trim() || spec.preview_url?.trim()))
+    )
+  }
   if (!isContentDocumentArtifact(spec)) return false
   const format = contentDocumentFormat(spec)
   const name = contentDocumentFilename(spec)
@@ -56,7 +66,8 @@ export function isSidePanelArtifact(spec: ArtifactSpec): boolean {
     isDiagramArtifact(spec) ||
     isSlideDeckArtifact(spec) ||
     isUdocPreviewableArtifact(spec) ||
-    isMarkdownPreviewableArtifact(spec)
+    isMarkdownPreviewableArtifact(spec) ||
+    (isAudioTranscriptArtifact(spec) && isMarkdownPreviewableArtifact(spec))
   )
 }
 
@@ -87,6 +98,10 @@ export function artifactCardSubtitle(spec: ArtifactSpec): string {
   const formatLabel = FORMAT_LABELS[spec.format] ?? spec.format.toUpperCase()
   if (isSlideDeckArtifact(spec)) return `Slides · ${formatLabel}`
   if (isDiagramArtifact(spec)) return `Diagram · ${formatLabel}`
+  if (isAudioTranscriptArtifact(spec)) {
+    const status = spec.job_status === 'running' ? 'Transcribing' : spec.job_status === 'failed' ? 'Failed' : 'Transcript'
+    return `Audio · ${status}`
+  }
   if (isContentDocumentArtifact(spec)) return `Document · ${formatLabel}`
   if (spec.kind === 'proposal_preview') return 'Proposal · Preview'
   if (spec.kind.startsWith('proposal_')) return `Proposal · ${formatLabel}`

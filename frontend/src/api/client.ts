@@ -151,6 +151,24 @@ export const api = {
       method: 'POST',
     }),
 
+  submitAudioCapture: async (chatId: string, files: File[], title?: string | null) => {
+    const form = new FormData()
+    for (const file of files) {
+      form.append('files', file)
+    }
+    if (title?.trim()) form.append('title', title.trim())
+    const res = await fetch(`${API}/chats/${chatId}/captures`, {
+      ...defaultFetchInit,
+      method: 'POST',
+      body: form,
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(text || res.statusText)
+    }
+    return res.json()
+  },
+
   uploadChatAttachment: async (
     chatId: string,
     file: File,

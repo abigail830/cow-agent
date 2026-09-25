@@ -51,6 +51,8 @@ async def enqueue_parse_job(
     row: ChatAttachment,
     *,
     pipeline_id: str,
+    job_payload: dict | None = None,
+    run_token: str | None = None,
 ) -> ChatAttachment:
     settings = get_settings()
     job_id = new_job_id()
@@ -68,13 +70,27 @@ async def enqueue_parse_job(
             "See backend/scripts/setup_parse_inline.sh"
         )
 
-    payload, run_token = build_job_payload(
-        row,
-        pipeline_id=pipeline_id,
-        job_id=job_id,
-        webhook_secret=webhook_secret,
-        use_internal_http=use_internal_http,
-    )
+    if job_payload is None:
+        payload, resolved_run_token = build_job_payload(
+            row,
+            pipeline_id=pipeline_id,
+            job_id=job_id,
+            webhook_secret=webhook_secret,
+            use_internal_http=use_internal_http,
+        )
+    else:
+        payload = dict(job_payload)
+        payload["job_id"] = job_id
+        payload.setdefault("callbacks", {})["webhook_secret"] = webhook_secret
+        auth_header = (
+            ((payload.get("storage") or {}).get("read") or {}).get("headers") or {}
+        ).get("Authorization", "")
+        resolved_run_token = run_token or (
+            auth_header.split(" ", 1)[1] if auth_header.startswith("Bearer ") else ""
+        )
+        if not resolved_run_token:
+            raise ValueError("run_token is required when submitting a prebuilt job payload")
+    run_token = resolved_run_token
 
     jobs = ParseJobRepository(session)
     await jobs.create_run(

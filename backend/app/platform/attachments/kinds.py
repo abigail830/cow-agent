@@ -14,6 +14,7 @@ class AttachmentKind(str, Enum):
     SHEET = "sheet"
     TEXT = "text"
     OFFICE = "office"
+    AUDIO = "audio"
 
 
 _IMAGE_EXTS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"})
@@ -22,6 +23,7 @@ _SHEET_EXTS = frozenset({".xls", ".xlsx", ".csv"})
 _TEXT_EXTS = frozenset({".txt", ".md", ".json"})
 _PPT_EXTS = frozenset({".ppt", ".pptx"})
 _WORD_EXTS = frozenset({".doc", ".docx"})
+_AUDIO_EXTS = frozenset({".mp3", ".wav", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".webm"})
 
 _IMAGE_MIMES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
 _PDF_MIMES = frozenset({"application/pdf"})
@@ -43,6 +45,22 @@ _WORD_MIMES = frozenset(
     {
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+)
+_AUDIO_MIMES = frozenset(
+    {
+        "audio/mpeg",
+        "audio/mp3",
+        "audio/wav",
+        "audio/x-wav",
+        "audio/mp4",
+        "audio/m4a",
+        "audio/x-m4a",
+        "audio/flac",
+        "audio/aac",
+        "audio/ogg",
+        "audio/opus",
+        "audio/webm",
     }
 )
 
@@ -72,8 +90,12 @@ def classify_attachment(*, filename: str, mime_type: str | None) -> AttachmentKi
         return AttachmentKind.SHEET
     if ext in _TEXT_EXTS or mime in _TEXT_MIMES:
         return AttachmentKind.TEXT
+    if ext in _AUDIO_EXTS or mime in _AUDIO_MIMES:
+        return AttachmentKind.AUDIO
     if mime.startswith("image/"):
         return AttachmentKind.IMAGE
+    if mime.startswith("audio/"):
+        return AttachmentKind.AUDIO
     raise ValueError(f"Unsupported file type: {mime or filename}")
 
 

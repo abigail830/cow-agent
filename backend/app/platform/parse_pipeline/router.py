@@ -28,4 +28,6 @@ def resolve_pipeline(kind: AttachmentKind) -> PipelineResolution:
         return PipelineResolution(action="parse", pipeline_id="sheet_standard")
     if kind == AttachmentKind.PDF:
         return PipelineResolution(action="parse", pipeline_id="pdf_standard")
+    if kind == AttachmentKind.AUDIO:
+        return PipelineResolution(action="parse", pipeline_id="audio_transcription_standard")
     return PipelineResolution(action=PipelineRoute.REJECT.value)

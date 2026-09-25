@@ -35,6 +35,12 @@ class Settings(BaseSettings):
 
     office_markitdown_enabled: bool = Field(default=True, alias="OFFICE_MARKITDOWN_ENABLED")
 
+    dashscope_api_key: str | None = Field(default=None, alias="DASHSCOPE_API_KEY")
+    asr_provider: str = Field(default="qwen3-asr-flash-filetrans", alias="ASR_PROVIDER")
+    asr_fallback_provider: str = Field(default="fun-asr", alias="ASR_FALLBACK_PROVIDER")
+    asr_poll_interval_sec: float = Field(default=5.0, alias="ASR_POLL_INTERVAL_SEC")
+    asr_poll_timeout_sec: float = Field(default=7200.0, alias="ASR_POLL_TIMEOUT_SEC")
+
     webhook_max_retries: int = Field(default=1, alias="WEBHOOK_MAX_RETRIES")
     webhook_timeout_sec: float = Field(default=10.0, alias="WEBHOOK_TIMEOUT_SEC")
 

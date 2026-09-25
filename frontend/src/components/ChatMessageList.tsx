@@ -24,6 +24,7 @@ type Props = {
   proposalPanelOpen?: boolean
   expandedArtifactId?: string | null
   onExpandArtifact?: (spec: ArtifactSpec) => void
+  onViewParsePipeline?: (attachmentId: string) => void
   fulfillmentChatId?: string | null
   fulfillmentForms?: FulfillmentForm[]
   fulfillmentFormsLoading?: boolean
@@ -72,6 +73,7 @@ function renderBlock(
   proposalPanelOpen?: boolean,
   expandedArtifactId?: string | null,
   onExpandArtifact?: (spec: ArtifactSpec) => void,
+  onViewParsePipeline?: (attachmentId: string) => void,
 ) {
   if (block.kind === 'bubble') {
     return <MessageBubble message={block.message} />
@@ -90,6 +92,7 @@ function renderBlock(
           spec={block.spec}
           expanded={isArtifactExpanded(block.spec, proposalPanelOpen, expandedArtifactId)}
           onExpand={onExpandArtifact}
+          onViewParsePipeline={onViewParsePipeline}
         />
       </div>
     )
@@ -108,6 +111,7 @@ export function ChatMessageList({
   proposalPanelOpen = false,
   expandedArtifactId = null,
   onExpandArtifact,
+  onViewParsePipeline,
   fulfillmentChatId = null,
   fulfillmentForms = [],
   fulfillmentFormsLoading = false,
@@ -131,7 +135,13 @@ export function ChatMessageList({
     <div className="chat-timeline">
       {blocks.map((block, index) => {
         const key = block.kind === 'bubble' ? block.message.id : `${block.kind}-${block.id}-${index}`
-        const node = renderBlock(block, proposalPanelOpen, expandedArtifactId, onExpandArtifact)
+        const node = renderBlock(
+          block,
+          proposalPanelOpen,
+          expandedArtifactId,
+          onExpandArtifact,
+          onViewParsePipeline,
+        )
         const turnCopy = assistantCopyByIndex.get(index)
         const showActions = Boolean(turnCopy)
 

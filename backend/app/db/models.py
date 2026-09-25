@@ -227,9 +227,56 @@ class ChatAttachment(Base):
     parse_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     parse_stage_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     parsed_artifact_manifest: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    capture_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("audio_captures.id", ondelete="SET NULL"), nullable=True
+    )
+    attachment_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     chat: Mapped["Chat"] = relationship(back_populates="attachments")
+    capture: Mapped["AudioCapture | None"] = relationship(back_populates="parts", foreign_keys=[capture_id])
+
+
+class AudioCapture(Base):
+    __tablename__ = "audio_captures"
+    __table_args__ = (Index("idx_audio_captures_chat_id", "chat_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    chat_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chats.id", ondelete="CASCADE"), nullable=False
+    )
+    host_attachment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chat_attachments.id", ondelete="CASCADE"), nullable=False
+    )
+    input_message_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True
+    )
+    output_annotation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chat_ui_annotations.id", ondelete="SET NULL"), nullable=True
+    )
+    parse_job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="pending")
+    context_snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    chat: Mapped["Chat"] = relationship(back_populates="audio_captures")
+    host_attachment: Mapped["ChatAttachment"] = relationship(foreign_keys=[host_attachment_id])
+    parts: Mapped[list["ChatAttachment"]] = relationship(
+        back_populates="capture",
+        foreign_keys="ChatAttachment.capture_id",
+    )
+
+
+# Re-open Chat relationship after AudioCapture is defined.
+Chat.audio_captures = relationship(  # type: ignore[attr-defined]
+    "AudioCapture", back_populates="chat", cascade="all, delete-orphan"
+)
 
 
 class ParseJobEvent(Base):

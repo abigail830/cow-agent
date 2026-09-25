@@ -8,7 +8,7 @@ import {
   type ClipboardEvent,
   type DragEvent,
 } from 'react'
-import { Paperclip } from 'lucide-react'
+import { Mic, Paperclip } from 'lucide-react'
 import { ContextUsageIndicator } from '../components/ContextUsageIndicator'
 import { KbScopePopover } from '../components/KbScopePopover'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -30,6 +30,7 @@ import { useArtifactPanel } from '../hooks/useArtifactPanel'
 import { AttachmentMentionPopup } from '../components/AttachmentMentionPopup'
 import { ComposerMentionInput } from '../components/ComposerMentionInput'
 import { AttachmentParseDrawer } from '../components/AttachmentParseDrawer'
+import { TranscribeAudioPanel } from '../components/TranscribeAudioPanel'
 import { ComposerStagedChips } from '../components/ComposerStagedChips'
 import {
   clearForkBanner,
@@ -107,6 +108,8 @@ import type { Agent, ChatAttachment, ChatSummary, Message, ModelOption } from '.
 const SIDEBAR_COLLAPSED_KEY = 'agent-platform:sidebar-collapsed'
 const PROPOSAL_COMPOSER_SLUG = 'proposal-composer'
 const YL_WORKER2_SLUG = 'yl-worker2'
+const AUDIO_CAPTURE_MAX_TOTAL_BYTES = 80 * 1024 * 1024
+const AUDIO_CAPTURE_POLL_MS = 5000
 
 function findStoredChatSummary(agentId: string, rows: ChatSummary[]): ChatSummary | null {
   const storedId = getStoredChatId(agentId)
@@ -216,6 +219,8 @@ export function ChatPage() {
   const [chatAttachments, setChatAttachments] = useState<ChatAttachmentListItem[]>([])
   const [chatAttachmentsLoading, setChatAttachmentsLoading] = useState(false)
   const [parseDrawerAttachment, setParseDrawerAttachment] = useState<ChatAttachmentListItem | null>(null)
+  const [transcribePanelOpen, setTranscribePanelOpen] = useState(false)
+  const [captureSubmitting, setCaptureSubmitting] = useState(false)
   const [stagedAttachmentIds, setStagedAttachmentIds] = useState<string[]>([])
   const [composerDragOver, setComposerDragOver] = useState(false)
   const [mentionTrigger, setMentionTrigger] = useState<MentionTrigger | null>(null)
@@ -1061,6 +1066,25 @@ export function ChatPage() {
 
   const shouldPollParseProgress = hasParsingAttachments || parseDrawerNeedsPoll
 
+  const hasRunningAudioTranscript = useMemo(
+    () =>
+      messages.some((message) => {
+        const spec = message.metadata?.spec
+        if (!spec || typeof spec !== 'object') return false
+        return (spec as ArtifactSpec).kind === 'audio_transcript' && (spec as ArtifactSpec).job_status === 'running'
+      }),
+    [messages],
+  )
+
+  useEffect(() => {
+    if (!chatId || !selectedId || !hasRunningAudioTranscript) return
+    const timer = window.setInterval(() => {
+      void reloadMessagesAfterStream(selectedId, chatId)
+      void loadChatAttachments(chatId, { silent: true })
+    }, AUDIO_CAPTURE_POLL_MS)
+    return () => window.clearInterval(timer)
+  }, [chatId, hasRunningAudioTranscript, loadChatAttachments, reloadMessagesAfterStream, selectedId])
+
   useEffect(() => {
     if (!chatId || !shouldPollParseProgress) return
     void loadChatAttachments(chatId, { silent: true })
@@ -1202,6 +1226,45 @@ export function ChatPage() {
       })
     },
     [],
+  )
+
+  const handleViewParsePipeline = useCallback(
+    (attachmentId: string) => {
+      const attachment = chatAttachments.find((row) => row.id === attachmentId)
+      if (attachment) {
+        setParseDrawerAttachment(attachment)
+        return
+      }
+      if (!chatId) return
+      setParseDrawerAttachment({
+        id: attachmentId,
+        chat_id: chatId,
+        filename: 'Audio transcript',
+        mime_type: 'text/markdown',
+        size_bytes: 0,
+        provider: 'platform',
+        provider_file_id: attachmentId,
+        created_at: null,
+        parse_status: 'running',
+      })
+    },
+    [chatAttachments, chatId],
+  )
+
+  const handleSubmitAudioCapture = useCallback(
+    async (files: File[], title: string | null) => {
+      if (!chatId || !selectedId) return
+      setCaptureSubmitting(true)
+      try {
+        await api.submitAudioCapture(chatId, files, title)
+        await reloadMessagesAfterStream(selectedId, chatId)
+        await loadChatAttachments(chatId, { silent: true })
+        patchSession(selectedId, { error: null })
+      } finally {
+        setCaptureSubmitting(false)
+      }
+    },
+    [chatId, loadChatAttachments, patchSession, reloadMessagesAfterStream, selectedId],
   )
 
   const handleRetryAttachmentParse = useCallback(
@@ -2243,6 +2306,7 @@ export function ChatPage() {
                           proposalPanelOpen={isProposalComposer && !proposalPanelCollapsed}
                           expandedArtifactId={expandedArtifact?.artifact_id ?? null}
                           onExpandArtifact={handleExpandArtifact}
+                          onViewParsePipeline={handleViewParsePipeline}
                           fulfillmentChatId={isYlWorker2 ? chatId : null}
                           fulfillmentForms={isYlWorker2 ? fulfillmentForms : []}
                           fulfillmentFormsLoading={isYlWorker2 ? fulfillmentFormsLoading : false}
@@ -2265,11 +2329,36 @@ export function ChatPage() {
                   </p>
                 )}
 
+                {warmupStatus === 'connecting' && !isStandby ? (
+                  <div className="chat-composer-warmup">
+                    <div className="chat-content-column">
+                      <p className="chat-warmup-status">Connecting tools…</p>
+                    </div>
+                  </div>
+                ) : null}
+
                 <div className="chat-composer-wrap">
                   <div className="chat-content-column">
-                    {warmupStatus === 'connecting' && !isStandby ? (
-                      <p className="chat-warmup-status">Connecting tools…</p>
+                    {!isStandby && chatId ? (
+                      <div className="chat-composer-tools">
+                        <button
+                          type="button"
+                          className="chat-transcribe-audio-btn"
+                          disabled={loading || chatSessionLoading || captureSubmitting}
+                          onClick={() => setTranscribePanelOpen(true)}
+                        >
+                          <Mic size={14} aria-hidden />
+                          <span>Transcribe audio</span>
+                        </button>
+                      </div>
                     ) : null}
+                    <TranscribeAudioPanel
+                      open={transcribePanelOpen}
+                      maxTotalBytes={AUDIO_CAPTURE_MAX_TOTAL_BYTES}
+                      submitting={captureSubmitting}
+                      onClose={() => setTranscribePanelOpen(false)}
+                      onSubmit={handleSubmitAudioCapture}
+                    />
                     <div
                       className={`chat-composer${composerDragOver ? ' chat-composer-drag-over' : ''}${isStandby ? ' chat-composer-standby' : ''}`}
                       onDragOver={isStandby ? undefined : handleComposerDragOver}

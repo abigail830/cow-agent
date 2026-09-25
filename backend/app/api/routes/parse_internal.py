@@ -26,6 +26,10 @@ class RunStatusBody(BaseModel):
     error: dict[str, str] | None = None
     message: str | None = None
 
+
+class AsrMintBody(BaseModel):
+    attachment_ids: list[uuid.UUID] = Field(default_factory=list)
+
 _ARTIFACT_CONTENT_TYPES = {
     "content_md": "text/markdown; charset=utf-8",
     "meta_json": "application/json",
@@ -126,7 +130,7 @@ async def get_original_file(
 
     token = _extract_bearer(authorization)
     jobs = ParseJobRepository(db)
-    row = await jobs.get_run_for_attachment_token(attachment_id, hash_run_token(token))
+    row = await jobs.get_run_for_related_attachment_token(attachment_id, hash_run_token(token))
     if row is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     try:
@@ -148,7 +152,7 @@ async def put_artifact(
         raise HTTPException(status_code=400, detail=f"unsupported artifact: {artifact_key}")
     token = _extract_bearer(authorization)
     jobs = ParseJobRepository(db)
-    row = await jobs.get_run_for_attachment_token(attachment_id, hash_run_token(token))
+    row = await jobs.get_run_for_related_attachment_token(attachment_id, hash_run_token(token))
     if row is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     data = await request.body()
@@ -221,6 +225,36 @@ async def get_figure(
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="figure not found") from exc
     return Response(content=data, media_type=media_type)
+
+
+@router.post("/run/{job_id}/asr-files/mint")
+async def mint_asr_files(
+    job_id: str,
+    body: AsrMintBody,
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    from app.platform.audio_capture.signed_urls import mint_asr_file_token, public_asr_file_url
+
+    token = _extract_bearer(authorization)
+    jobs = ParseJobRepository(db)
+    run_row = await jobs.get_run_by_token_hash(job_id, hash_run_token(token))
+    if run_row is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+    urls: list[dict[str, str | int]] = []
+    for attachment_id in body.attachment_ids:
+        if not jobs.payload_allows_attachment(run_row, attachment_id):
+            raise HTTPException(status_code=403, detail=f"attachment not in job: {attachment_id}")
+        _, expires_at = mint_asr_file_token(chat_id=run_row.chat_id, attachment_id=attachment_id)
+        urls.append(
+            {
+                "attachment_id": str(attachment_id),
+                "url": public_asr_file_url(chat_id=run_row.chat_id, attachment_id=attachment_id),
+                "expires_at": expires_at,
+            }
+        )
+    return {"urls": urls}
 
 
 @router.post("/webhook")

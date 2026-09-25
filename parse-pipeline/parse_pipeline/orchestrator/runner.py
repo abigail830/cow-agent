@@ -66,7 +66,11 @@ class JobRunner:
         filename = record.source.get("filename") or spec.read.filename or "document"
         pipeline_id = record.pipeline_id
 
-        file_bytes = await self._stage_fetch(record, spec)
+        if pipeline_id == PipelineId.AUDIO_TRANSCRIPTION_STANDARD.value:
+            await self._skip_stage(record, StageId.FETCH, reason="capture_parts_via_asr")
+            file_bytes = b""
+        else:
+            file_bytes = await self._stage_fetch(record, spec)
         await self._maybe_skip_analyze(record, pipeline_id)
 
         normalized = await self._parse_stages(record, pipeline_id, file_bytes, filename)
@@ -108,6 +112,8 @@ class JobRunner:
             reason = "local_text_no_analyze"
         elif pipeline_id == PipelineId.SHEET_STANDARD.value:
             reason = "local_sheet_no_analyze"
+        elif pipeline_id == PipelineId.AUDIO_TRANSCRIPTION_STANDARD.value:
+            reason = "audio_asr_v1"
         await self._skip_stage(record, StageId.ANALYZE, reason=reason)
 
     async def _parse_stages(
@@ -128,7 +134,159 @@ class JobRunner:
             PipelineId.DOCUMENT_MIND_GENERIC.value,
         }:
             return await self._parse_document_mind(record, file_bytes, filename, pipeline_id)
+        if pipeline_id == PipelineId.AUDIO_TRANSCRIPTION_STANDARD.value:
+            return await self._parse_audio(record, spec=parse_storage_spec(record.storage_spec))
         raise ValueError(f"unsupported pipeline_id: {pipeline_id}")
+
+    def _run_token_from_storage(self, record: JobRecord) -> str:
+        read = (record.storage_spec or {}).get("read") or {}
+        auth = (read.get("headers") or {}).get("Authorization") or ""
+        if auth.lower().startswith("bearer "):
+            return auth.split(" ", 1)[1].strip()
+        raise RuntimeError("missing run token in storage spec")
+
+    def _internal_parse_base_url(self, record: JobRecord) -> str:
+        read_url = ((record.storage_spec or {}).get("read") or {}).get("url") or ""
+        marker = "/internal/parse/v1"
+        idx = read_url.find(marker)
+        if idx < 0:
+            raise RuntimeError(f"invalid internal parse read url: {read_url}")
+        return read_url[: idx + len(marker)]
+
+    async def _parse_audio(self, record: JobRecord, *, spec: StorageSpec) -> NormalizedArtifacts:
+        import httpx
+
+        from parse_pipeline.providers.dashscope.asr import (
+            AsrTranscriptPart,
+            DashScopeAsrClient,
+            merge_transcript_markdown,
+        )
+
+        if not self.settings.dashscope_api_key:
+            raise RuntimeError("DASHSCOPE_API_KEY is required for audio transcription")
+
+        capture = (record.source or {}).get("capture") or {}
+        parts = sorted(
+            [part for part in (capture.get("parts") or []) if isinstance(part, dict)],
+            key=lambda item: int(item.get("sort_order") or 0),
+        )
+        if not parts:
+            raise RuntimeError("audio capture job missing source.capture.parts")
+
+        asr_opts = (record.options or {}).get("asr") or {}
+        provider = str(asr_opts.get("provider") or self.settings.asr_provider)
+        fallback = asr_opts.get("fallback_provider") or self.settings.asr_fallback_provider
+        context_text = asr_opts.get("context_text")
+
+        run_token = self._run_token_from_storage(record)
+        base_url = self._internal_parse_base_url(record)
+        mint_url = f"{base_url}/run/{record.job_id}/asr-files/mint"
+        attachment_ids = [str(part.get("attachment_id")) for part in parts if part.get("attachment_id")]
+
+        await self._begin_stage(record, StageId.PARSE_SUBMIT)
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                mint_url,
+                json={"attachment_ids": attachment_ids},
+                headers={"Authorization": f"Bearer {run_token}"},
+            )
+            response.raise_for_status()
+            minted = response.json()
+        url_map = {
+            str(item.get("attachment_id")): str(item.get("url"))
+            for item in (minted.get("urls") or [])
+            if isinstance(item, dict)
+        }
+        await self._finish_stage(
+            record,
+            StageId.PARSE_SUBMIT,
+            outputs={"provider_id": provider, "part_count": len(parts), "minted_urls": len(url_map)},
+        )
+
+        client = DashScopeAsrClient(
+            api_key=self.settings.dashscope_api_key,
+            provider=provider,
+            fallback_provider=str(fallback) if fallback else None,
+            poll_interval_sec=float(self.settings.asr_poll_interval_sec),
+            poll_timeout_sec=float(self.settings.asr_poll_timeout_sec),
+        )
+
+        await self._begin_stage(record, StageId.PARSE_WAIT)
+        transcript_parts: list[AsrTranscriptPart] = []
+        poll_state: dict[str, Any] = {}
+
+        for part in parts:
+            attachment_id = str(part.get("attachment_id") or "")
+            file_url = url_map.get(attachment_id)
+            if not file_url:
+                raise RuntimeError(f"missing signed URL for attachment {attachment_id}")
+            filename = str(part.get("filename") or attachment_id)
+
+            async def _on_poll(data: dict[str, Any], *, current_file: str = filename) -> None:
+                poll_state["attachment_id"] = attachment_id
+                poll_state["filename"] = current_file
+                poll_state["external_status"] = (data.get("output") or {}).get("task_status") or data.get("task_status")
+                record.progress = JobProgress(message=f"Transcribing {current_file}: {poll_state.get('external_status')}")
+                await self.store.save_job(record)
+                await self._update_stage_outputs(record, StageId.PARSE_WAIT, outputs=dict(poll_state))
+
+            text, provider_used = await client.transcribe_file_url(
+                file_url=file_url,
+                context_text=context_text,
+                on_poll=_on_poll,
+            )
+            transcript_parts.append(
+                AsrTranscriptPart(
+                    attachment_id=attachment_id,
+                    filename=filename,
+                    sort_order=int(part.get("sort_order") or 0),
+                    text=text,
+                    provider_id=provider_used,
+                    external_job_id=str(poll_state.get("external_job_id") or ""),
+                )
+            )
+
+        await self._finish_stage(
+            record,
+            StageId.PARSE_WAIT,
+            outputs={"provider_id": provider, "part_count": len(transcript_parts)},
+        )
+
+        await self._begin_stage(record, StageId.PARSE_COLLECT)
+        title = str(record.source.get("filename") or "Audio transcript").removesuffix(".md")
+        merged = merge_transcript_markdown(title=title, parts=transcript_parts)
+        await self._finish_stage(
+            record,
+            StageId.PARSE_COLLECT,
+            outputs={
+                "provider_id": provider,
+                "part_count": len(transcript_parts),
+                "line_count": merged.count("\n") + 1,
+            },
+        )
+        record.provider_id = provider
+        artifacts = normalize_text_artifacts(
+            content=merged,
+            job_id=record.job_id,
+            pipeline_id=record.pipeline_id,
+            parse_engine="dashscope_asr",
+            provider_id=provider,
+            warnings=[],
+        )
+        meta = dict(artifacts.meta_json)
+        meta["audio_capture"] = {
+            "parts": [
+                {
+                    "attachment_id": part.attachment_id,
+                    "filename": part.filename,
+                    "sort_order": part.sort_order,
+                    "provider_id": part.provider_id,
+                }
+                for part in transcript_parts
+            ]
+        }
+        artifacts.meta_json = meta
+        return artifacts
 
     async def _parse_local_text(self, record: JobRecord, file_bytes: bytes) -> NormalizedArtifacts:
         await self._skip_stage(record, StageId.PARSE_SUBMIT, reason="sync_local")

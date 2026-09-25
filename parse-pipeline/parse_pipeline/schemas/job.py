@@ -22,6 +22,7 @@ class PipelineId(StrEnum):
     OFFICE_STANDARD = "office_standard"
     SHEET_STANDARD = "sheet_standard"
     DOCUMENT_MIND_GENERIC = "document_mind_generic"
+    AUDIO_TRANSCRIPTION_STANDARD = "audio_transcription_standard"
 
 
 class DocumentMindOptions(BaseModel):
@@ -35,11 +36,19 @@ class OfficeOptions(BaseModel):
     markitdown_enabled: bool | None = None
 
 
+class AsrOptions(BaseModel):
+    provider: str = "qwen3-asr-flash-filetrans"
+    fallback_provider: str | None = "fun-asr"
+    context_text: str | None = None
+    enable_words: bool = False
+
+
 class JobOptions(BaseModel):
     max_pages: int | None = 50
     table_max_rows_per_sheet: int = 2000
     office: OfficeOptions = Field(default_factory=OfficeOptions)
     document_mind: DocumentMindOptions = Field(default_factory=DocumentMindOptions)
+    asr: AsrOptions = Field(default_factory=AsrOptions)
 
 
 class JobSource(BaseModel):

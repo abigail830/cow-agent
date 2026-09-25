@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import secrets
 import uuid
+from typing import Any
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 
@@ -33,6 +34,8 @@ def build_job_payload(
     job_id: str,
     webhook_secret: str,
     use_internal_http: bool,
+    source_extra: dict | None = None,
+    options_extra: dict | None = None,
 ) -> tuple[dict, str]:
     settings = get_settings()
     run_token = _new_run_token()
@@ -80,6 +83,7 @@ def build_job_payload(
             "mime_type": row.mime_type,
             "size_bytes": row.size_bytes,
             "content_hash": row.content_hash,
+            **(source_extra or {}),
         },
         "options": {
             "office": {
@@ -89,7 +93,8 @@ def build_job_payload(
                 "llm_enhancement": True,
                 "enhancement_mode": "VLM",
                 "output_formats": ["markdown", "visualLayoutInfo"],
-            }
+            },
+            **(options_extra or {}),
         },
         "callbacks": {
             "webhook_url": webhook_url,
@@ -112,3 +117,43 @@ def new_job_id() -> str:
 
 def new_webhook_secret() -> str:
     return _new_webhook_secret()
+
+
+def build_capture_job_payload(
+    host_row: ChatAttachment,
+    *,
+    capture_id: uuid.UUID,
+    parts: list[dict],
+    pipeline_id: str,
+    asr_context: str | None,
+    job_id: str | None = None,
+    webhook_secret: str | None = None,
+    use_internal_http: bool = True,
+) -> tuple[dict, str]:
+    settings = get_settings()
+    resolved_job_id = job_id or _new_job_id()
+    resolved_webhook_secret = webhook_secret or _new_webhook_secret()
+    source_extra = {
+        "capture": {
+            "capture_id": str(capture_id),
+            "parts": parts,
+        }
+    }
+    options_extra = {
+        "asr": {
+            "provider": settings.asr_provider,
+            "fallback_provider": settings.asr_fallback_provider,
+            "context_text": asr_context,
+            "enable_words": False,
+        }
+    }
+    payload, run_token = build_job_payload(
+        host_row,
+        pipeline_id=pipeline_id,
+        job_id=resolved_job_id,
+        webhook_secret=resolved_webhook_secret,
+        use_internal_http=use_internal_http,
+        source_extra=source_extra,
+        options_extra=options_extra,
+    )
+    return payload, run_token

@@ -3,19 +3,32 @@ import { DiagramArtifactCard } from './DiagramArtifactCard'
 import { SlideDeckArtifactCard } from './SlideDeckArtifactCard'
 import { InlineDownloadArtifactCard } from './InlineDownloadArtifactCard'
 import {
+  isAudioTranscriptArtifact,
   isContentDocumentArtifact,
   isDiagramArtifact,
   isInlineDownloadArtifact,
   isSlideDeckArtifact,
 } from '../lib/artifactKinds'
+import { AudioTranscriptArtifactCard } from './AudioTranscriptArtifactCard'
 
 type Props = {
   spec: ArtifactSpec
   expanded?: boolean
   onExpand?: (spec: ArtifactSpec) => void
+  onViewParsePipeline?: (attachmentId: string) => void
 }
 
-export function ArtifactBubble({ spec, expanded = false, onExpand }: Props) {
+export function ArtifactBubble({ spec, expanded = false, onExpand, onViewParsePipeline }: Props) {
+  if (isAudioTranscriptArtifact(spec)) {
+    return (
+      <AudioTranscriptArtifactCard
+        spec={spec}
+        expanded={expanded}
+        onExpand={onExpand}
+        onViewPipeline={onViewParsePipeline}
+      />
+    )
+  }
   if (isDiagramArtifact(spec)) {
     return <DiagramArtifactCard spec={spec} expanded={expanded} onExpand={onExpand} />
   }

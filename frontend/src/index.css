@@ -2783,9 +2783,227 @@ body {
   padding: 0.75rem 0;
 }
 
+.chat-composer-warmup {
+  padding: 0.5rem 0 0;
+}
+
+.chat-composer-warmup .chat-warmup-status {
+  margin-bottom: 0;
+}
+
 .chat-composer-wrap {
   border-top: 1px solid var(--color-border);
   padding: 0.75rem 0;
+}
+
+.chat-composer-tools {
+  display: flex;
+  margin-bottom: 0.5rem;
+}
+
+.chat-transcribe-audio-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface-raised, #fff);
+  color: var(--color-ink);
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+}
+
+.chat-transcribe-audio-btn:hover:not(:disabled) {
+  border-color: var(--color-brand-300);
+  color: var(--color-brand-700);
+  background: #fff;
+}
+
+.chat-transcribe-audio-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.transcribe-audio-panel {
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-raised, #fff);
+  padding: 0.75rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.transcribe-audio-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.transcribe-audio-panel-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.transcribe-audio-panel-close {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-subtle);
+}
+
+.transcribe-audio-panel-close:hover {
+  color: var(--color-ink);
+}
+
+.transcribe-audio-panel-desc,
+.transcribe-audio-panel-total {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.transcribe-audio-panel-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 12px;
+  margin: 0.5rem 0;
+}
+
+.transcribe-audio-panel-label input {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.4rem 0.55rem;
+  font-size: 13px;
+  background: #fff;
+  color: var(--color-ink);
+}
+
+.transcribe-audio-panel-label input::placeholder {
+  color: var(--color-subtle);
+}
+
+.transcribe-audio-dropzone {
+  border: 1px dashed color-mix(in oklab, var(--color-border) 85%, var(--color-brand-200));
+  border-radius: 10px;
+  padding: 1rem;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-muted);
+  background: var(--cover-paper);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.transcribe-audio-dropzone:hover {
+  background: color-mix(in oklab, var(--cover-paper) 55%, #fff);
+  border-color: color-mix(in oklab, var(--color-brand-300) 45%, var(--color-border));
+}
+
+.transcribe-audio-file-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.transcribe-audio-file-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  font-size: 12px;
+  background: #fff;
+}
+
+.transcribe-audio-file-item-dragging {
+  opacity: 0.65;
+}
+
+.transcribe-audio-file-grip {
+  color: var(--color-subtle);
+  cursor: grab;
+}
+
+.transcribe-audio-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transcribe-audio-file-size {
+  color: var(--color-muted);
+}
+
+.transcribe-audio-file-remove {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-subtle);
+}
+
+.transcribe-audio-file-remove:hover:not(:disabled) {
+  color: var(--color-ink);
+}
+
+.transcribe-audio-panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.transcribe-audio-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-brand-600);
+  color: #fff;
+  font-size: 12px;
+  padding: 0.45rem 0.85rem;
+  cursor: pointer;
+}
+
+.transcribe-audio-submit-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.transcribe-audio-panel-error {
+  margin: 0.5rem 0 0;
+  font-size: 12px;
+  color: #b42318;
+}
+
+.audio-transcript-artifact-hint {
+  margin: 0.25rem 0 0;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.audio-transcript-artifact-hint-error {
+  color: #b42318;
+}
+
+.audio-transcript-artifact-card-running {
+  border-color: color-mix(in srgb, var(--color-brand-500, #6366f1) 35%, var(--color-border));
+}
+
+.audio-transcript-artifact-spinner {
+  margin-left: 0.25rem;
 }
 
 .chat-error-bar {

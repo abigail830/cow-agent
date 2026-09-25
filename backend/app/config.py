@@ -288,6 +288,23 @@ class Settings(BaseSettings):
         validation_alias="OFFICE_MARKITDOWN_ENABLED",
     )
 
+    audio_capture_max_total_bytes: int = Field(
+        default=83_886_080,
+        validation_alias="AUDIO_CAPTURE_MAX_TOTAL_BYTES",
+    )
+    asr_provider: str = Field(
+        default="qwen3-asr-flash-filetrans",
+        validation_alias="ASR_PROVIDER",
+    )
+    asr_fallback_provider: str = Field(
+        default="fun-asr",
+        validation_alias="ASR_FALLBACK_PROVIDER",
+    )
+    asr_signed_url_ttl_sec: int = Field(
+        default=3600,
+        validation_alias="ASR_SIGNED_URL_TTL_SEC",
+    )
+
     github_token: str | None = Field(default=None, validation_alias="GITHUB_TOKEN")
     github_repo: str | None = Field(default=None, validation_alias="GITHUB_REPO")
     github_workflow_file: str = Field(

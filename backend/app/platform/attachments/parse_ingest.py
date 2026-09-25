@@ -7,7 +7,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import ChatAttachment
-from app.platform.attachments.kinds import AttachmentKind
+from app.platform.attachments.kinds import AttachmentKind, classify_attachment
 from app.platform.docstore.models import PARSE_READY_STATUSES, ParseStatus
 from app.platform.docstore.repository import DocstoreRepository
 from app.platform.parse_pipeline.enqueue import enqueue_parse_job

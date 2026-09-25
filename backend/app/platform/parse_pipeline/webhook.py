@@ -135,5 +135,15 @@ async def apply_webhook_event(
         "parse_error_message": row.parse_error_message,
         "parse_progress": snapshot,
     }
+    from app.platform.audio_capture.webhook import sync_capture_from_parse_webhook
+
+    await sync_capture_from_parse_webhook(
+        session,
+        attachment_id=run_row.attachment_id,
+        parse_status=parse_status,
+        error_code=str(error_code) if error_code else None,
+        error_message=str(error_message) if error_message else None,
+    )
+
     publish_attachment_parse_updated(str(row.chat_id), out)
     return out

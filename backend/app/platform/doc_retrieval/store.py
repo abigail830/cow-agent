@@ -145,4 +145,5 @@ def is_document_kind(kind: str) -> bool:
         AttachmentKind.SHEET.value,
         AttachmentKind.PDF.value,
         AttachmentKind.OFFICE.value,
+        AttachmentKind.AUDIO.value,
     }

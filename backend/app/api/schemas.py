@@ -122,6 +122,39 @@ class ParseProgressOut(BaseModel):
     stages: list[ParseStageOut] | None = None
 
 
+class AudioCapturePartOut(BaseModel):
+    attachment_id: uuid.UUID
+    filename: str
+    mime_type: str
+    size_bytes: int
+
+
+class AudioCaptureHostOut(BaseModel):
+    id: uuid.UUID
+    parse_status: str
+    parse_stage_snapshot: dict[str, Any] | None = None
+
+
+class AudioCaptureOut(BaseModel):
+    id: uuid.UUID
+    chat_id: uuid.UUID
+    title: str | None = None
+    status: str
+    parse_job_id: str | None = None
+    host_attachment_id: uuid.UUID
+    input_message_id: uuid.UUID | None = None
+    output_annotation_id: uuid.UUID | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    context_snapshot: dict[str, Any] = Field(default_factory=dict)
+    created_at: str | None = None
+    updated_at: str | None = None
+    host_attachment: AudioCaptureHostOut | None = None
+    parts: list[AudioCapturePartOut] = Field(default_factory=list)
+    download_url: str | None = None
+    preview_url: str | None = None
+
+
 class AttachmentOut(BaseModel):
     id: uuid.UUID
     chat_id: uuid.UUID

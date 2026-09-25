@@ -5,6 +5,8 @@ export type ArtifactKind =
   | 'diagram_svg'
   | 'slide_deck'
   | 'content_document'
+  | 'audio_transcript'
+export type AudioTranscriptJobStatus = 'running' | 'ready' | 'failed'
 export type ArtifactFormat = 'markdown' | 'docx' | 'svg' | 'slidev' | 'html' | 'pdf' | 'pptx'
 
 export type ArtifactSpec = {
@@ -22,4 +24,7 @@ export type ArtifactSpec = {
   preview_url?: string | null
   preview_truncated?: boolean
   source?: string | null
+  job_status?: AudioTranscriptJobStatus
+  attachment_id?: string
+  capture_id?: string
 }

@@ -2,13 +2,14 @@ import json
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import (
     AttachmentOut,
+    AudioCaptureOut,
     ChatCreate,
     ChatForkOut,
     ChatForkSourceOut,
@@ -31,6 +32,7 @@ from app.platform.auth.current_user import get_current_user, get_current_user_id
 from app.db.session import get_db
 from app.platform.attachments.api_out import attachment_out
 from app.platform.attachments.service import AttachmentService
+from app.platform.audio_capture.service import AudioCaptureService
 from app.platform.attachments.storage import load_inline_attachment
 from app.platform.docstore.blob import load_parsed_artifact
 from app.platform.docstore.figures import load_parsed_figure_resolved, normalize_figure_id
@@ -384,6 +386,61 @@ async def attachment_parse_events(
             yield f"event: attachment.parse_updated\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.post("/{chat_id}/captures", response_model=AudioCaptureOut, status_code=201)
+async def create_audio_capture(
+    chat: Chat = Depends(get_owned_chat),
+    db: AsyncSession = Depends(get_db),
+    title: str | None = Form(default=None),
+    files: list[UploadFile] = File(...),
+) -> AudioCaptureOut:
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one audio file is required")
+    payloads: list[tuple[str, str, bytes]] = []
+    for upload in files:
+        if not upload.filename:
+            raise HTTPException(status_code=400, detail="Filename is required")
+        data = await upload.read()
+        payloads.append((upload.filename, upload.content_type or "application/octet-stream", data))
+    service = AudioCaptureService(db)
+    try:
+        result = await service.submit_capture(chat, title=title, files=payloads)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Audio capture failed: {exc}") from exc
+    return AudioCaptureOut(**result)
+
+
+@router.get("/{chat_id}/captures/{capture_id}", response_model=AudioCaptureOut)
+async def get_audio_capture(
+    capture_id: uuid.UUID,
+    chat: Chat = Depends(get_owned_chat),
+    db: AsyncSession = Depends(get_db),
+) -> AudioCaptureOut:
+    service = AudioCaptureService(db)
+    try:
+        result = await service.get_capture(chat.id, capture_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return AudioCaptureOut(**result)
+
+
+@router.post("/{chat_id}/captures/{capture_id}/retry", response_model=AudioCaptureOut)
+async def retry_audio_capture(
+    capture_id: uuid.UUID,
+    chat: Chat = Depends(get_owned_chat),
+    db: AsyncSession = Depends(get_db),
+) -> AudioCaptureOut:
+    service = AudioCaptureService(db)
+    try:
+        result = await service.retry_capture(chat.id, capture_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Audio capture retry failed: {exc}") from exc
+    return AudioCaptureOut(**result)
 
 
 @router.post("/{chat_id}/attachments/{attachment_id}/parse/retry", response_model=AttachmentOut)
