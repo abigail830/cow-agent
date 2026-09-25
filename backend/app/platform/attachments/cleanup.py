@@ -25,7 +25,10 @@ _CHAT_BLOB_PREFIXES = (
 
 
 def attachment_uses_platform_storage(row: ChatAttachment) -> bool:
-    return row.provider == "inline" or is_inline_provider_file_id(row.provider_file_id)
+    return (
+        row.provider in {"inline", "platform"}
+        or is_inline_provider_file_id(row.provider_file_id)
+    )
 
 
 def blob_paths_for_attachment(row: ChatAttachment) -> list[str]:

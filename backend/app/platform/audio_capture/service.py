@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any
 
@@ -14,7 +15,7 @@ from app.db.repositories.attachments import AttachmentRepository
 from app.db.repositories.audio_captures import AudioCaptureRepository
 from app.db.repositories.chat_messages import ChatMessageRepository
 from app.db.repositories.chat_ui_annotations import ChatUiAnnotationRepository
-from app.platform.blob.client import blob_exists, blob_storage_enabled
+from app.platform.blob.client import blob_exists_async, blob_storage_enabled
 from app.platform.attachments.hash import sha256_hex
 from app.platform.attachments.kinds import AttachmentKind, classify_attachment
 from app.platform.attachments.storage import (
@@ -157,7 +158,7 @@ class AudioCaptureService:
         part_filenames: list[str] = []
         for sort_order, (filename, mime_type, data) in enumerate(files):
             part_id = uuid.uuid4()
-            save_inline_attachment(chat.id, part_id, data)
+            await asyncio.to_thread(save_inline_attachment, chat.id, part_id, data)
             part_row = await self._attachments.insert(
                 chat_id=chat.id,
                 provider="platform",
@@ -246,7 +247,7 @@ class AudioCaptureService:
         for part in ordered:
             attachment_id = uuid.UUID(str(part["attachment_id"]))
             pathname = inline_attachment_blob_path(chat.id, attachment_id)
-            if not blob_exists(pathname):
+            if not await blob_exists_async(pathname):
                 raise ValueError(f"Uploaded file not found: {part['filename']}")
 
         asr_context = await load_asr_context_for_chat(self._session, chat.id)

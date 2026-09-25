@@ -135,10 +135,7 @@ def _blob_object_url(pathname: str) -> str:
     return f"https://{store_id}.{access}.blob.vercel-storage.com/{object_path}"
 
 
-def blob_exists(pathname: str) -> bool:
-    url = _blob_object_url(pathname)
-    with httpx.Client(timeout=10.0) as client:
-        response = client.head(url, headers=_auth_headers())
+def _blob_exists_from_response(response: httpx.Response, *, pathname: str) -> bool:
     if response.status_code == 404:
         return False
     if response.status_code >= 400:
@@ -146,6 +143,21 @@ def blob_exists(pathname: str) -> bool:
         logger.warning("Vercel Blob head failed (%s): %s", response.status_code, detail)
         return False
     return True
+
+
+def blob_exists(pathname: str) -> bool:
+    url = _blob_object_url(pathname)
+    with httpx.Client(timeout=10.0) as client:
+        response = client.head(url, headers=_auth_headers())
+    return _blob_exists_from_response(response, pathname=pathname)
+
+
+async def blob_exists_async(pathname: str) -> bool:
+    """Async HEAD check — use from AsyncSession routes instead of sync blob_exists()."""
+    url = _blob_object_url(pathname)
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.head(url, headers=_auth_headers())
+    return _blob_exists_from_response(response, pathname=pathname)
 
 
 def blob_get(pathname: str) -> bytes | None:
