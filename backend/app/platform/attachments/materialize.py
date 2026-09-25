@@ -328,11 +328,17 @@ def should_hydrate_parsed_document(
                 return False
         except (ValueError, FileNotFoundError):
             return False
+    hydrate_kinds = (
+        AttachmentKind.TEXT,
+        AttachmentKind.SHEET,
+        AttachmentKind.PDF,
+        AttachmentKind.OFFICE,
+    )
     if settings.document_hydrate_unified:
-        return kind in (AttachmentKind.TEXT, AttachmentKind.SHEET, AttachmentKind.PDF)
+        return kind in hydrate_kinds
     if kind == AttachmentKind.PDF and caps.pdf_file_id:
         return False
-    return kind in (AttachmentKind.TEXT, AttachmentKind.SHEET, AttachmentKind.PDF)
+    return kind in hydrate_kinds
 
 
 def _has_usable_file_id(item: Any, *, provider: str | None) -> bool:

@@ -19,10 +19,10 @@ export type AttachmentLimits = {
 }
 
 export const SUPPORTED_ATTACHMENT_ACCEPT =
-  '.pdf,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.xls,.xlsx'
+  '.pdf,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.xls,.xlsx,.doc,.docx,.ppt,.pptx'
 
 export const SUPPORTED_ATTACHMENT_LABEL =
-  'PDF, text, CSV, JSON, images (PNG/JPEG/GIF/WebP), Excel'
+  'PDF, Word, PowerPoint, text, CSV, JSON, images (PNG/JPEG/GIF/WebP), Excel'
 
 const SUPPORTED_ATTACHMENT_EXTENSIONS = new Set(
   SUPPORTED_ATTACHMENT_ACCEPT.split(',').map((ext) => ext.trim().toLowerCase()).filter(Boolean),
@@ -40,6 +40,10 @@ const SUPPORTED_ATTACHMENT_MIMES = new Set([
   'image/webp',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ])
 
 const MIME_TO_EXTENSION: Record<string, string> = {

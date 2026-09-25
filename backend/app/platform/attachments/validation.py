@@ -4,11 +4,7 @@ from __future__ import annotations
 
 from app.config import Settings
 from app.platform.attachments.limits import attachment_limits
-from app.platform.attachments.kinds import (
-    AttachmentKind,
-    classify_attachment,
-    office_reject_message,
-)
+from app.platform.attachments.kinds import AttachmentKind, classify_attachment
 
 ALLOWED_MIME_TYPES = frozenset(
     {
@@ -23,6 +19,10 @@ ALLOWED_MIME_TYPES = frozenset(
         "image/webp",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/vnd.ms-excel",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     }
 )
 
@@ -39,6 +39,10 @@ SUPPORTED_ATTACHMENT_EXTENSIONS = (
     ".webp",
     ".xls",
     ".xlsx",
+    ".doc",
+    ".docx",
+    ".ppt",
+    ".pptx",
 )
 
 
@@ -65,8 +69,6 @@ def validate_attachment_file(
         kind = classify_attachment(filename=filename, mime_type=mime_type)
     except ValueError as exc:
         raise ValueError(str(exc)) from exc
-    if kind == AttachmentKind.OFFICE:
-        raise ValueError(office_reject_message(filename=filename, mime_type=mime_type))
     if kind == AttachmentKind.PDF and page_count is not None and page_count > max_pages_per_file:
         raise ValueError(
             f"PDF 超过单文件 {max_pages_per_file} 页上限（当前 {page_count} 页）"

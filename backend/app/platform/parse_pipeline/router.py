@@ -21,7 +21,7 @@ def resolve_pipeline(kind: AttachmentKind) -> PipelineResolution:
     if kind == AttachmentKind.IMAGE:
         return PipelineResolution(action=PipelineRoute.SKIP.value)
     if kind == AttachmentKind.OFFICE:
-        return PipelineResolution(action=PipelineRoute.REJECT.value)
+        return PipelineResolution(action="parse", pipeline_id="office_standard")
     if kind == AttachmentKind.TEXT:
         return PipelineResolution(action="parse", pipeline_id="text_standard")
     if kind == AttachmentKind.SHEET:

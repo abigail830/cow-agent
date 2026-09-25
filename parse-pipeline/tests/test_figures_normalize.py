@@ -4,8 +4,46 @@ from unittest.mock import MagicMock, patch
 
 from parse_pipeline.normalize.artifacts import normalize_text_artifacts
 from parse_pipeline.normalize.finalize import finalize_normalized_artifacts
-from parse_pipeline.normalize.figures import mirror_markdown_figures
+from parse_pipeline.normalize.figures import _FIGURE_MAX_BYTES, mirror_markdown_figures
 from parse_pipeline.normalize.pageindex_pages import build_pages_from_pageindex
+
+
+_TINY_PNG_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
+)
+
+
+def test_mirror_markdown_figures_rewrites_data_uri_png() -> None:
+    content = f"Intro\n\n![dot](data:image/png;base64,{_TINY_PNG_BASE64})\n\nDone"
+    result = mirror_markdown_figures(content)
+
+    assert "figure:f1" in result.content_md
+    assert "base64" not in result.content_md
+    assert len(result.figures) == 1
+    assert result.figures[0].figure_id == "f1"
+    assert result.figures[0].extension == "png"
+    assert result.figures[0].mime_type == "image/png"
+    assert not result.warnings
+
+
+def test_mirror_markdown_figures_preserves_relative_paths() -> None:
+    content = "See ![local](./img.png) and ![asset](assets/chart.png)"
+    result = mirror_markdown_figures(content)
+
+    assert result.content_md == content
+    assert result.figures == ()
+    assert not result.warnings
+
+
+def test_mirror_markdown_figures_warns_on_oversized_data_uri() -> None:
+    oversized = "A" * ((_FIGURE_MAX_BYTES // 3) * 4 + 4)
+    content = f"![big](data:image/png;base64,{oversized})"
+    result = mirror_markdown_figures(content)
+
+    assert "figure:f1" not in result.content_md
+    assert "base64" in result.content_md
+    assert result.figures == ()
+    assert any("figure_data_uri_failed" in warning for warning in result.warnings)
 
 
 def test_mirror_markdown_figures_rewrites_remote_urls() -> None:

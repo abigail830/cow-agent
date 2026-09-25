@@ -8,9 +8,30 @@ type Props = {
   disabled?: boolean
 }
 
+type KbListCacheEntry = {
+  at: number
+  connected: boolean
+  message: string | null
+  items: KnowledgeBaseItem[]
+}
+
+const KB_LIST_CACHE_TTL_MS = 60_000
+const PERSIST_DEBOUNCE_MS = 280
+const kbListCache = new Map<string, KbListCacheEntry>()
+
+function formatKbMeta(item: KnowledgeBaseItem): string | null {
+  const parts = [
+    item.type,
+    typeof item.item_count === 'number' ? `${item.item_count} docs` : null,
+  ].filter(Boolean)
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
 export function KbScopePopover({ agentId, disabled = false }: Props) {
   const panelId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
+  const persistTimerRef = useRef<number | null>(null)
+  const persistSeqRef = useRef(0)
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -19,22 +40,56 @@ export function KbScopePopover({ agentId, disabled = false }: Props) {
   const [message, setMessage] = useState<string | null>(null)
   const [items, setItems] = useState<KnowledgeBaseItem[]>([])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const result = await api.listAgentKnowledgeBases(agentId)
-      setConnected(result.connected)
-      setMessage(result.message ?? null)
-      setItems(result.items)
-    } catch (err) {
-      setConnected(false)
-      setItems([])
-      setError(err instanceof Error ? err.message : 'Failed to load knowledge bases')
-    } finally {
-      setLoading(false)
-    }
-  }, [agentId])
+  const applyCacheEntry = useCallback((entry: KbListCacheEntry) => {
+    setConnected(entry.connected)
+    setMessage(entry.message)
+    setItems(entry.items)
+  }, [])
+
+  const load = useCallback(
+    async (opts?: { force?: boolean; silent?: boolean }) => {
+      const cached = kbListCache.get(agentId)
+      const cacheFresh = cached != null && Date.now() - cached.at < KB_LIST_CACHE_TTL_MS
+
+      if (cached && !opts?.force) {
+        applyCacheEntry(cached)
+        if (cacheFresh) {
+          setLoading(false)
+          return
+        }
+      }
+
+      if (!opts?.silent && !cached) {
+        setLoading(true)
+      }
+      setError(null)
+      try {
+        const result = await api.listAgentKnowledgeBases(agentId)
+        const entry: KbListCacheEntry = {
+          at: Date.now(),
+          connected: result.connected,
+          message: result.message ?? null,
+          items: result.items,
+        }
+        kbListCache.set(agentId, entry)
+        applyCacheEntry(entry)
+      } catch (err) {
+        setConnected(false)
+        setItems([])
+        setError(err instanceof Error ? err.message : 'Failed to load knowledge bases')
+      } finally {
+        setLoading(false)
+      }
+    },
+    [agentId, applyCacheEntry],
+  )
+
+  useEffect(() => {
+    setItems([])
+    setConnected(false)
+    setMessage(null)
+    void load({ silent: true })
+  }, [agentId, load])
 
   useEffect(() => {
     if (!open) return
@@ -59,28 +114,70 @@ export function KbScopePopover({ agentId, disabled = false }: Props) {
     }
   }, [open])
 
-  const persist = async (nextItems: KnowledgeBaseItem[]) => {
-    setSaving(true)
-    setError(null)
-    const disabledIds = nextItems.filter((item) => !item.enabled).map((item) => item.id)
-    try {
-      await api.putAgentKbPreferences(agentId, disabledIds)
+  useEffect(
+    () => () => {
+      if (persistTimerRef.current != null) {
+        window.clearTimeout(persistTimerRef.current)
+      }
+    },
+    [],
+  )
+
+  const flushPersist = useCallback(
+    async (nextItems: KnowledgeBaseItem[]) => {
+      const seq = ++persistSeqRef.current
+      setSaving(true)
+      setError(null)
+      const disabledIds = nextItems.filter((item) => !item.enabled).map((item) => item.id)
+      try {
+        await api.putAgentKbPreferences(agentId, disabledIds)
+        if (seq !== persistSeqRef.current) return
+        const cached = kbListCache.get(agentId)
+        if (cached) {
+          kbListCache.set(agentId, { ...cached, at: Date.now(), items: nextItems })
+        }
+      } catch (err) {
+        if (seq !== persistSeqRef.current) return
+        setError(err instanceof Error ? err.message : 'Failed to save preference')
+        await load({ force: true })
+      } finally {
+        if (seq === persistSeqRef.current) {
+          setSaving(false)
+        }
+      }
+    },
+    [agentId, load],
+  )
+
+  const schedulePersist = useCallback(
+    (nextItems: KnowledgeBaseItem[], options?: { immediate?: boolean }) => {
       setItems(nextItems)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save preference')
-      await load()
-    } finally {
-      setSaving(false)
-    }
-  }
+      if (persistTimerRef.current != null) {
+        window.clearTimeout(persistTimerRef.current)
+        persistTimerRef.current = null
+      }
+      if (options?.immediate) {
+        void flushPersist(nextItems)
+        return
+      }
+      persistTimerRef.current = window.setTimeout(() => {
+        persistTimerRef.current = null
+        void flushPersist(nextItems)
+      }, PERSIST_DEBOUNCE_MS)
+    },
+    [flushPersist],
+  )
 
   const toggleOne = (id: string, enabled: boolean) => {
     const next = items.map((item) => (item.id === id ? { ...item, enabled } : item))
-    void persist(next)
+    schedulePersist(next)
   }
 
   const setAll = (enabled: boolean) => {
-    void persist(items.map((item) => ({ ...item, enabled })))
+    schedulePersist(
+      items.map((item) => ({ ...item, enabled })),
+      { immediate: true },
+    )
   }
 
   const enabledCount = items.filter((item) => item.enabled).length
@@ -106,52 +203,48 @@ export function KbScopePopover({ agentId, disabled = false }: Props) {
             <div className="kb-scope-popover-title">Knowledge bases</div>
             {connected && items.length > 0 ? (
               <div className="kb-scope-popover-actions">
-                <button type="button" onClick={() => setAll(true)} disabled={saving || loading}>
+                <button type="button" onClick={() => setAll(true)} disabled={loading}>
                   All on
                 </button>
-                <button type="button" onClick={() => setAll(false)} disabled={saving || loading}>
+                <button type="button" onClick={() => setAll(false)} disabled={loading}>
                   All off
                 </button>
               </div>
             ) : null}
           </div>
-          {loading ? <p className="kb-scope-popover-status">Loading…</p> : null}
+          {loading && items.length === 0 ? <p className="kb-scope-popover-status">Loading…</p> : null}
           {!loading && error ? <p className="kb-scope-popover-error">{error}</p> : null}
-          {!loading && !error && !connected ? (
+          {!error && !connected && !(loading && items.length === 0) ? (
             <p className="kb-scope-popover-status">
               {message || 'Connect Hybrid Search in Integrations to list knowledge bases.'}
             </p>
           ) : null}
-          {!loading && !error && connected && items.length === 0 ? (
+          {!error && connected && items.length === 0 && !loading ? (
             <p className="kb-scope-popover-status">{message || 'No knowledge bases visible for this key.'}</p>
           ) : null}
-          {!loading && connected && items.length > 0 ? (
+          {connected && items.length > 0 ? (
             <ul className="kb-scope-popover-list">
-              {items.map((item) => (
-                <li key={item.id}>
-                  <label className="kb-scope-popover-item">
-                    <input
-                      type="checkbox"
-                      checked={item.enabled}
-                      disabled={saving}
-                      onChange={(event) => toggleOne(item.id, event.target.checked)}
-                    />
-                    <span className="kb-scope-popover-item-text">
-                      <span className="kb-scope-popover-item-name">{item.name}</span>
-                      {item.type || typeof item.item_count === 'number' ? (
-                        <span className="kb-scope-popover-item-meta">
-                          {[item.type, typeof item.item_count === 'number' ? `${item.item_count} docs` : null]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </span>
-                      ) : null}
-                    </span>
-                  </label>
-                </li>
-              ))}
+              {items.map((item) => {
+                const meta = formatKbMeta(item)
+                return (
+                  <li key={item.id}>
+                    <label className="kb-scope-popover-item">
+                      <input
+                        type="checkbox"
+                        checked={item.enabled}
+                        onChange={(event) => toggleOne(item.id, event.target.checked)}
+                      />
+                      <span className="kb-scope-popover-item-text">
+                        <span className="kb-scope-popover-item-name">{item.name}</span>
+                        {meta ? <span className="kb-scope-popover-item-meta">{meta}</span> : null}
+                      </span>
+                    </label>
+                  </li>
+                )
+              })}
             </ul>
           ) : null}
-          {saving ? <p className="kb-scope-popover-status">Saving…</p> : null}
+          {saving ? <p className="kb-scope-popover-status kb-scope-popover-saving">Saving…</p> : null}
         </div>
       ) : null}
     </div>

@@ -15,9 +15,10 @@ def test_resolve_pipeline_image_skip():
     assert r.action == PipelineRoute.SKIP.value
 
 
-def test_resolve_pipeline_office_reject():
+def test_resolve_pipeline_office():
     r = resolve_pipeline(AttachmentKind.OFFICE)
-    assert r.action == PipelineRoute.REJECT.value
+    assert r.action == "parse"
+    assert r.pipeline_id == "office_standard"
 
 
 def test_webhook_signature_roundtrip():

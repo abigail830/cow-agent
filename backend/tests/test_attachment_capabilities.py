@@ -37,11 +37,15 @@ def test_classify_and_office_reject():
     assert office_reject_message(filename="doc.docx", mime_type="") == OFFICE_REJECT_WORD
 
 
-def test_validate_rejects_ppt_and_word():
-    with pytest.raises(ValueError, match="PowerPoint"):
+def test_validate_accepts_office():
+    assert (
         validate_attachment_file(filename="deck.pptx", mime_type="", size_bytes=100)
-    with pytest.raises(ValueError, match="Word"):
+        == AttachmentKind.OFFICE
+    )
+    assert (
         validate_attachment_file(filename="doc.docx", mime_type="", size_bytes=100)
+        == AttachmentKind.OFFICE
+    )
 
 
 def test_validate_rejects_pdf_over_50_pages():

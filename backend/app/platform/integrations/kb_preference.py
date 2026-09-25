@@ -16,9 +16,9 @@ from app.platform.memory.long_term.repository import MemoryRepository, MemorySco
 
 logger = logging.getLogger(__name__)
 
-# Short TTL cache so chat turns don't pay OpenKMS RTT on every AgentFactory.build.
-_VISIBLE_IDS_CACHE: dict[uuid.UUID, tuple[float, list[str]]] = {}
-_VISIBLE_IDS_TTL_SECONDS = 60.0
+# Short TTL cache so UI + chat turns don't pay OpenKMS RTT on every list/toggle.
+_VISIBLE_ITEMS_CACHE: dict[uuid.UUID, tuple[float, list[dict[str, Any]]]] = {}
+_VISIBLE_ITEMS_TTL_SECONDS = 60.0
 
 # Stable marker for the platform-managed agent-memory bullet (upsert by this substring).
 KB_SCOPE_MEMORY_MARKER = "Enabled hybrid-search knowledge bases (platform-managed)"
@@ -54,8 +54,6 @@ async def set_disabled_kb_ids(
     disabled_kb_ids: list[str],
 ) -> list[str]:
     cleaned = await KbPreferenceRepository(db).upsert_disabled_ids(user_id, agent_id, disabled_kb_ids)
-    # Preference change may alter which ids are enabled — drop cache so next scoped run refreshes.
-    _VISIBLE_IDS_CACHE.pop(user_id, None)
     return cleaned
 
 
@@ -66,9 +64,27 @@ def enabled_kb_ids(*, visible_ids: list[str], disabled_ids: list[str]) -> list[s
 
 def invalidate_visible_kb_cache(user_id: uuid.UUID | None = None) -> None:
     if user_id is None:
-        _VISIBLE_IDS_CACHE.clear()
+        _VISIBLE_ITEMS_CACHE.clear()
         return
-    _VISIBLE_IDS_CACHE.pop(user_id, None)
+    _VISIBLE_ITEMS_CACHE.pop(user_id, None)
+
+
+async def fetch_visible_knowledge_bases_cached(
+    *,
+    user_id: uuid.UUID,
+    api_key: str,
+    force_refresh: bool = False,
+) -> list[dict[str, Any]]:
+    """List visible KBs from OpenKMS with a per-user TTL cache."""
+    now = time.monotonic()
+    if not force_refresh:
+        cached = _VISIBLE_ITEMS_CACHE.get(user_id)
+        if cached is not None and (now - cached[0]) < _VISIBLE_ITEMS_TTL_SECONDS:
+            return list(cached[1])
+
+    items = await list_visible_knowledge_bases(api_key=api_key)
+    _VISIBLE_ITEMS_CACHE[user_id] = (now, items)
+    return items
 
 
 async def resolve_enabled_kb_ids_for_run(
@@ -89,18 +105,11 @@ async def resolve_enabled_kb_ids_for_run(
     if not api_key:
         return None
 
-    now = time.monotonic()
-    cached = _VISIBLE_IDS_CACHE.get(user_id)
-    if cached is not None and (now - cached[0]) < _VISIBLE_IDS_TTL_SECONDS:
-        visible = cached[1]
-    else:
-        try:
-            items: list[dict[str, Any]] = await list_visible_knowledge_bases(api_key=api_key)
-        except HybridSearchKbClientError:
-            return None
-        visible = [str(item.get("id") or "").strip() for item in items if item.get("id")]
-        _VISIBLE_IDS_CACHE[user_id] = (now, visible)
-
+    try:
+        items = await fetch_visible_knowledge_bases_cached(user_id=user_id, api_key=api_key)
+    except HybridSearchKbClientError:
+        return None
+    visible = [str(item.get("id") or "").strip() for item in items if item.get("id")]
     return enabled_kb_ids(visible_ids=visible, disabled_ids=disabled)
 
 
@@ -176,7 +185,7 @@ async def sync_enabled_kbs_to_agent_memory(
         return
 
     try:
-        items = await list_visible_knowledge_bases(api_key=api_key)
+        items = await fetch_visible_knowledge_bases_cached(user_id=user_id, api_key=api_key)
     except HybridSearchKbClientError as exc:
         logger.warning(
             "Skipping KB-scope memory sync for user=%s agent=%s: %s",

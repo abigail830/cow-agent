@@ -16,9 +16,10 @@ from app.db.models import AgentModel, User
 from app.db.session import get_db
 from app.platform.auth.current_user import get_current_user
 from app.platform.agent.profile_loader import discover_agent_profiles
-from app.platform.integrations.kb_client import HybridSearchKbClientError, list_visible_knowledge_bases
+from app.platform.integrations.kb_client import HybridSearchKbClientError
 from app.platform.integrations.kb_preference import (
     agent_supports_kb_scope,
+    fetch_visible_knowledge_bases_cached,
     get_disabled_kb_ids,
     set_disabled_kb_ids,
     sync_enabled_kbs_to_agent_memory,
@@ -150,7 +151,7 @@ async def list_agent_knowledge_bases(
         )
 
     try:
-        raw_items = await list_visible_knowledge_bases(api_key=api_key)
+        raw_items = await fetch_visible_knowledge_bases_cached(user_id=user.id, api_key=api_key)
     except HybridSearchKbClientError as exc:
         status = exc.status_code or 502
         if status in {401, 403}:
