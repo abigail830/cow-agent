@@ -144,4 +144,5 @@ def is_document_kind(kind: str) -> bool:
         AttachmentKind.TEXT.value,
         AttachmentKind.SHEET.value,
         AttachmentKind.PDF.value,
+        AttachmentKind.OFFICE.value,
     }

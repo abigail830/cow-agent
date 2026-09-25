@@ -89,3 +89,35 @@ def test_attachment_tools_with_context():
             read_result = attachment_read_tool(att_id, page=1)
             assert read_result["status"] == "ok"
             assert "keyword" in read_result["content"]
+
+
+def test_attachment_tools_support_office_kind():
+    chat_id = uuid.uuid4()
+    att_id = str(uuid.uuid4())
+    library = {
+        att_id: ChatAttachmentIndexEntry(
+            attachment_id=att_id,
+            filename="proposal.docx",
+            mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            kind="office",
+            parse_status="ready",
+            line_count=50,
+            page_count=8,
+            figure_count=3,
+            section_titles=("Executive Summary",),
+        )
+    }
+    init_doc_retrieval_context(chat_id=chat_id, library=library)
+    content = "Executive summary\nkeyword in proposal\n"
+    meta = {
+        "line_count": 2,
+        "pages": [{"page": 1, "line_start": 1, "line_end": 2}],
+        "sections": [{"id": "s1", "title": "Executive Summary", "line_start": 1, "line_end": 2}],
+    }
+    with patch("app.platform.doc_retrieval.tools.load_content_md", return_value=content):
+        with patch("app.platform.doc_retrieval.tools.cached_meta", return_value=meta):
+            grep_result = attachment_grep_tool(att_id, "keyword")
+            assert grep_result["status"] == "ok"
+            read_result = attachment_read_tool(att_id, line_start=1, line_end=2)
+            assert read_result["status"] == "ok"
+            assert "keyword" in read_result["content"]
