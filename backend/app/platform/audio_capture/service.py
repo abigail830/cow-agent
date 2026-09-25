@@ -15,7 +15,7 @@ from app.db.repositories.attachments import AttachmentRepository
 from app.db.repositories.audio_captures import AudioCaptureRepository
 from app.db.repositories.chat_messages import ChatMessageRepository
 from app.db.repositories.chat_ui_annotations import ChatUiAnnotationRepository
-from app.platform.blob.client import blob_exists_async, blob_storage_enabled
+from app.platform.blob.client import blob_exists, blob_storage_enabled
 from app.platform.attachments.hash import sha256_hex
 from app.platform.attachments.kinds import AttachmentKind, classify_attachment
 from app.platform.attachments.storage import (
@@ -129,7 +129,8 @@ class AudioCaptureService:
         files: list[tuple[str, str, bytes]],
     ) -> dict[str, Any]:
         _validate_capture_files(files)
-        asr_context = await load_asr_context_for_chat(self._session, chat.id)
+        chat_id = chat.id
+        asr_context = await load_asr_context_for_chat(self._session, chat_id)
         display_title = _display_title(title, part_count=len(files))
 
         host_id = uuid.uuid4()
@@ -244,13 +245,15 @@ class AudioCaptureService:
         ordered = sorted(parts, key=lambda part: int(part["sort_order"]))
         _validate_capture_part_specs(ordered)
 
+        chat_id = chat.id
         for part in ordered:
             attachment_id = uuid.UUID(str(part["attachment_id"]))
-            pathname = inline_attachment_blob_path(chat.id, attachment_id)
-            if not await blob_exists_async(pathname):
+            pathname = inline_attachment_blob_path(chat_id, attachment_id)
+            exists = await asyncio.to_thread(blob_exists, pathname)
+            if not exists:
                 raise ValueError(f"Uploaded file not found: {part['filename']}")
 
-        asr_context = await load_asr_context_for_chat(self._session, chat.id)
+        asr_context = await load_asr_context_for_chat(self._session, chat_id)
         display_title = _display_title(title, part_count=len(ordered))
 
         host_id = uuid.uuid4()

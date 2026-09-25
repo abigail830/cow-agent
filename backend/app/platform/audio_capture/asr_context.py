@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any
 
@@ -42,7 +43,7 @@ async def load_asr_context_for_chat(session: AsyncSession, chat_id: uuid.UUID) -
     if not agent_dir.is_dir():
         return None
     try:
-        profile = load_agent_profile(agent_dir)
+        profile = await asyncio.to_thread(load_agent_profile, agent_dir)
     except ValueError:
         return None
     return asr_context_from_profile_extra(profile.extra_config)

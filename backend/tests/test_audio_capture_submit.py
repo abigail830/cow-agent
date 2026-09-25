@@ -15,22 +15,19 @@ async def test_submit_capture_from_blob_parts_uses_async_blob_exists(monkeypatch
     part_id = uuid.uuid4()
     chat = SimpleNamespace(id=chat_id)
 
-    sync_called = False
-    async_called = False
+    blob_check_called = False
 
     def fake_blob_exists(_pathname: str) -> bool:
-        nonlocal sync_called
-        sync_called = True
+        nonlocal blob_check_called
+        blob_check_called = True
         return True
 
-    async def fake_blob_exists_async(_pathname: str) -> bool:
-        nonlocal async_called
-        async_called = True
-        return True
+    async def fake_to_thread(func, /, *args, **kwargs):
+        return func(*args, **kwargs)
 
     monkeypatch.setattr("app.platform.audio_capture.service.blob_storage_enabled", lambda: True)
-    monkeypatch.setattr("app.platform.audio_capture.service.blob_exists_async", fake_blob_exists_async)
-    monkeypatch.setattr("app.platform.blob.client.blob_exists", fake_blob_exists)
+    monkeypatch.setattr("app.platform.audio_capture.service.asyncio.to_thread", fake_to_thread)
+    monkeypatch.setattr("app.platform.audio_capture.service.blob_exists", fake_blob_exists)
     monkeypatch.setattr(
         "app.platform.audio_capture.service.load_asr_context_for_chat",
         AsyncMock(return_value=None),
@@ -132,6 +129,5 @@ async def test_submit_capture_from_blob_parts_uses_async_blob_exists(monkeypatch
         ],
     )
 
-    assert async_called is True
-    assert sync_called is False
+    assert blob_check_called is True
     assert result["status"] == "running"
