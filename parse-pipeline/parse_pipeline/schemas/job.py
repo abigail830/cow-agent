@@ -37,10 +37,14 @@ class OfficeOptions(BaseModel):
 
 
 class AsrOptions(BaseModel):
-    provider: str = "qwen3-asr-flash-filetrans"
-    fallback_provider: str | None = "fun-asr"
+    provider: str = "qwen-audio-3.1-asr-flash-filetrans"
+    fallback_providers: list[str] = Field(
+        default_factory=lambda: ["qwen-audio-3.0-asr-flash-filetrans", "fun-asr"]
+    )
     context_text: str | None = None
     enable_words: bool = False
+    diarization_enabled: bool = True
+    speaker_count: int | None = None
 
 
 class JobOptions(BaseModel):

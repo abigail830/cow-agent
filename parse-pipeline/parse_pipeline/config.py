@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,8 +36,18 @@ class Settings(BaseSettings):
     office_markitdown_enabled: bool = Field(default=True, alias="OFFICE_MARKITDOWN_ENABLED")
 
     dashscope_api_key: str | None = Field(default=None, alias="DASHSCOPE_API_KEY")
-    asr_provider: str = Field(default="qwen3-asr-flash-filetrans", alias="ASR_PROVIDER")
-    asr_fallback_provider: str = Field(default="fun-asr", alias="ASR_FALLBACK_PROVIDER")
+    asr_provider: str = Field(default="qwen-audio-3.1-asr-flash-filetrans", alias="ASR_PROVIDER")
+    asr_fallback_providers: list[str] = Field(
+        default_factory=lambda: ["qwen-audio-3.0-asr-flash-filetrans", "fun-asr"],
+        validation_alias=AliasChoices("ASR_FALLBACK_PROVIDERS", "ASR_FALLBACK_PROVIDER"),
+    )
+
+    @field_validator("asr_fallback_providers", mode="before")
+    @classmethod
+    def _parse_asr_fallback_providers(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [part.strip() for part in value.split(",") if part.strip()]
+        return value
     asr_poll_interval_sec: float = Field(default=5.0, alias="ASR_POLL_INTERVAL_SEC")
     asr_poll_timeout_sec: float = Field(default=7200.0, alias="ASR_POLL_TIMEOUT_SEC")
 

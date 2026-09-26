@@ -175,8 +175,13 @@ class JobRunner:
 
         asr_opts = (record.options or {}).get("asr") or {}
         provider = str(asr_opts.get("provider") or self.settings.asr_provider)
-        fallback = asr_opts.get("fallback_provider") or self.settings.asr_fallback_provider
+        fallback_providers = asr_opts.get("fallback_providers")
+        if not fallback_providers:
+            legacy_fallback = asr_opts.get("fallback_provider")
+            fallback_providers = [legacy_fallback] if legacy_fallback else list(self.settings.asr_fallback_providers)
         context_text = asr_opts.get("context_text")
+        diarization_enabled = bool(asr_opts.get("diarization_enabled", True))
+        speaker_count = asr_opts.get("speaker_count")
 
         run_token = self._run_token_from_storage(record)
         base_url = self._internal_parse_base_url(record)
@@ -206,7 +211,7 @@ class JobRunner:
         client = DashScopeAsrClient(
             api_key=self.settings.dashscope_api_key,
             provider=provider,
-            fallback_provider=str(fallback) if fallback else None,
+            fallback_providers=[str(item) for item in fallback_providers if item],
             poll_interval_sec=float(self.settings.asr_poll_interval_sec),
             poll_timeout_sec=float(self.settings.asr_poll_timeout_sec),
         )
@@ -233,6 +238,8 @@ class JobRunner:
             text, provider_used = await client.transcribe_file_url(
                 file_url=file_url,
                 context_text=context_text,
+                diarization_enabled=diarization_enabled,
+                speaker_count=int(speaker_count) if speaker_count is not None else None,
                 on_poll=_on_poll,
             )
             transcript_parts.append(

@@ -142,9 +142,11 @@ def build_capture_job_payload(
     options_extra = {
         "asr": {
             "provider": settings.asr_provider,
-            "fallback_provider": settings.asr_fallback_provider,
+            "fallback_providers": list(settings.asr_fallback_providers),
             "context_text": asr_context,
             "enable_words": False,
+            "diarization_enabled": settings.asr_diarization_enabled,
+            "speaker_count": settings.asr_speaker_count,
         }
     }
     payload, run_token = build_job_payload(

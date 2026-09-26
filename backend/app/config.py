@@ -6,7 +6,7 @@ from typing import Annotated, Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from dotenv import load_dotenv
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -293,12 +293,27 @@ class Settings(BaseSettings):
         validation_alias="AUDIO_CAPTURE_MAX_TOTAL_BYTES",
     )
     asr_provider: str = Field(
-        default="qwen3-asr-flash-filetrans",
+        default="qwen-audio-3.1-asr-flash-filetrans",
         validation_alias="ASR_PROVIDER",
     )
-    asr_fallback_provider: str = Field(
-        default="fun-asr",
-        validation_alias="ASR_FALLBACK_PROVIDER",
+    asr_fallback_providers: list[str] = Field(
+        default_factory=lambda: ["qwen-audio-3.0-asr-flash-filetrans", "fun-asr"],
+        validation_alias=AliasChoices("ASR_FALLBACK_PROVIDERS", "ASR_FALLBACK_PROVIDER"),
+    )
+
+    @field_validator("asr_fallback_providers", mode="before")
+    @classmethod
+    def parse_asr_fallback_providers(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [part.strip() for part in value.split(",") if part.strip()]
+        return value
+    asr_diarization_enabled: bool = Field(
+        default=True,
+        validation_alias="ASR_DIARIZATION_ENABLED",
+    )
+    asr_speaker_count: int | None = Field(
+        default=None,
+        validation_alias="ASR_SPEAKER_COUNT",
     )
     asr_signed_url_ttl_sec: int = Field(
         default=3600,
