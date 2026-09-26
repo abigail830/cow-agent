@@ -1,9 +1,10 @@
 import type { ArtifactSpec } from '../types/artifact'
 import type { ChatAttachment, ChatAttachmentListItem, Message } from '../types'
 import { isAudioTranscriptArtifact } from './artifactKinds'
+import { attachmentParsedUrl } from './documentUrls'
 
 function parsedContentUrl(chatId: string, attachmentId: string): string {
-  return `/api/v1/chats/${chatId}/attachments/${attachmentId}/parsed/content.md`
+  return attachmentParsedUrl(chatId, attachmentId, 'content_md')
 }
 
 function stageSucceeded(status: string | null | undefined): boolean {
@@ -56,8 +57,8 @@ export function syncAudioTranscriptMessagesFromAttachments(
     const updatedSpec: ArtifactSpec = {
       ...typed,
       job_status: 'ready',
-      download_url: typed.download_url ?? downloadUrl,
-      preview_url: typed.preview_url ?? downloadUrl,
+      download_url: downloadUrl,
+      preview_url: downloadUrl,
     }
     return {
       ...message,

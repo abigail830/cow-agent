@@ -72,7 +72,7 @@ async def sync_capture_from_parse_webhook(
         return
 
     title = capture.title or "Audio transcript"
-    download_url = f"/api/v1/chats/{capture.chat_id}/attachments/{attachment_id}/parsed/content.md"
+    download_url = f"/api/v1/chats/{capture.chat_id}/attachments/{attachment_id}/parsed/content_md"
     spec = artifact_spec(
         capture_id=capture.id,
         host_attachment_id=attachment_id,
@@ -115,9 +115,11 @@ async def reconcile_audio_transcript_artifacts_for_chat(
             parse_status=attachment.parse_status or ParseStatus.RUNNING.value,
             attachment=attachment,
         )
-        if job_status == "ready" and spec.get("job_status") == "ready":
+        spec_url = str(spec.get("download_url") or "")
+        stale_url = "/parsed/content.md" in spec_url
+        if job_status == "ready" and spec.get("job_status") == "ready" and not stale_url:
             continue
-        if job_status == spec.get("job_status"):
+        if job_status == spec.get("job_status") and not stale_url:
             continue
         await sync_capture_from_parse_webhook(
             session,

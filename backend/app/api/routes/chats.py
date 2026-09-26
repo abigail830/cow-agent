@@ -577,6 +577,9 @@ async def download_attachment_parsed(
     chat: Chat = Depends(get_owned_chat),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
+    # Legacy URLs used filename-style keys (content.md) instead of storage keys (content_md).
+    _LEGACY_PARSED_KEYS = {"content.md": "content_md", "meta.json": "meta_json", "pageindex.json": "pageindex_json"}
+    artifact_key = _LEGACY_PARSED_KEYS.get(artifact_key, artifact_key)
     if artifact_key not in VALID_PARSED_ARTIFACT_KEYS:
         raise HTTPException(status_code=400, detail="Invalid parsed artifact key")
     repo = AttachmentRepository(db)

@@ -406,7 +406,7 @@ class AudioCaptureService:
         preview_url = None
         if host is not None:
             base = f"/api/v1/chats/{capture.chat_id}/attachments/{host.id}"
-            download_url = f"{base}/parsed/content.md"
+            download_url = f"{base}/parsed/content_md"
             preview_url = download_url
 
         return {
