@@ -137,6 +137,7 @@ async def _sync_inline_artifacts_to_docstore(
 
     write_specs = (job_payload.get("storage") or {}).get("write") or {}
     docstore = DocstoreRepository(session)
+    batch_records: list[tuple[str, int, str]] = []
 
     for artifact_key in ("content_md", "meta_json", "pageindex_json"):
         target = write_specs.get(artifact_key)
@@ -154,12 +155,13 @@ async def _sync_inline_artifacts_to_docstore(
             data,
             content_type=content_type,
         )
-        await docstore.record_parsed_artifact(
+        batch_records.append((artifact_key, len(data), content_type))
+
+    if batch_records:
+        await docstore.record_parsed_artifacts_batch(
             attachment_id,
             chat_id=chat_id,
-            artifact_key=artifact_key,
-            size_bytes=len(data),
-            content_type=content_type,
+            artifacts=batch_records,
         )
 
     content_target = write_specs.get("content_md")

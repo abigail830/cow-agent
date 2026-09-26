@@ -85,6 +85,33 @@ async def write_artifact(
     return True
 
 
+async def write_artifacts_batch_http(
+    batch_target: WriteTarget,
+    *,
+    content_b: bytes,
+    meta_b: bytes,
+    pageindex_b: bytes | None,
+    client: httpx.AsyncClient,
+) -> tuple[bool, bool, bool]:
+    """One platform request: parallel blob writes server-side, single manifest transaction."""
+    files: list[tuple[str, tuple[str, bytes, str]]] = [
+        ("content_md", ("content.md", content_b, "text/markdown; charset=utf-8")),
+        ("meta_json", ("meta.json", meta_b, "application/json")),
+    ]
+    if pageindex_b is not None:
+        files.append(("pageindex_json", ("pageindex.json", pageindex_b, "application/json")))
+    headers = {k: v for k, v in (batch_target.headers or {}).items() if k.lower() != "content-type"}
+    response = await client.request(
+        batch_target.method,
+        batch_target.url,
+        files=files,
+        headers=headers,
+    )
+    response.raise_for_status()
+    wrote_pageindex = pageindex_b is not None
+    return True, True, wrote_pageindex
+
+
 def _figure_write_url(content_target: WriteTarget, figure_id: str, ext: str) -> str:
     url = content_target.url
     parsed = urlparse(url)
@@ -113,7 +140,7 @@ async def write_figure(
         return False
     target = WriteTarget(
         url=_figure_write_url(content_target, figure_id, ext),
-        method=content_target.method,
+        method="PUT",
         content_type=mime_type,
         headers=content_target.headers,
     )
@@ -131,25 +158,43 @@ class WriteBatchResult:
 
 async def write_normalized_artifacts(spec: StorageSpec, normalized: NormalizedArtifacts) -> WriteBatchResult:
     content_b, meta_b, pageindex_b = artifacts_to_bytes(normalized)
+    batch_target = spec.write.get("artifacts_batch")
+    content_target = spec.write.get("content_md")
+    use_http_batch = (
+        batch_target is not None
+        and urlparse(batch_target.url).scheme in {"http", "https"}
+    )
+
     async with http_put_client() as client:
-        artifact_tasks: list[asyncio.Task[bool]] = [
-            asyncio.create_task(write_artifact(spec, "content_md", content_b, client=client)),
-            asyncio.create_task(write_artifact(spec, "meta_json", meta_b, client=client)),
-        ]
-        if pageindex_b is not None:
-            artifact_tasks.append(
-                asyncio.create_task(write_artifact(spec, "pageindex_json", pageindex_b, client=client)),
+        if use_http_batch:
+            assert batch_target is not None
+            wrote_content, wrote_meta, wrote_pageindex = await write_artifacts_batch_http(
+                batch_target,
+                content_b=content_b,
+                meta_b=meta_b,
+                pageindex_b=pageindex_b,
+                client=client,
             )
-        artifact_results = await asyncio.gather(*artifact_tasks)
-        wrote_content = artifact_results[0]
-        wrote_meta = artifact_results[1]
-        wrote_pageindex = artifact_results[2] if pageindex_b is not None else False
+        else:
+            artifact_tasks: list[asyncio.Task[bool]] = [
+                asyncio.create_task(write_artifact(spec, "content_md", content_b, client=client)),
+                asyncio.create_task(write_artifact(spec, "meta_json", meta_b, client=client)),
+            ]
+            if pageindex_b is not None:
+                artifact_tasks.append(
+                    asyncio.create_task(write_artifact(spec, "pageindex_json", pageindex_b, client=client)),
+                )
+            artifact_results = await asyncio.gather(*artifact_tasks)
+            wrote_content = artifact_results[0]
+            wrote_meta = artifact_results[1]
+            wrote_pageindex = artifact_results[2] if pageindex_b is not None else False
 
         figure_tasks = [
             asyncio.create_task(write_figure(spec, figure_id, data, mime_type, ext, client=client))
             for figure_id, (data, mime_type, ext) in normalized.figure_files.items()
         ]
         figure_results = await asyncio.gather(*figure_tasks) if figure_tasks else []
+
     return WriteBatchResult(
         wrote_content=wrote_content,
         wrote_meta=wrote_meta,

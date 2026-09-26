@@ -166,7 +166,7 @@ class Settings(BaseSettings):
         validation_alias="ATTACHMENT_GIST_MAX_INPUT_CHARS",
     )
     attachment_gist_max_output_tokens: int = Field(
-        default=256,
+        default=2048,
         validation_alias="ATTACHMENT_GIST_MAX_OUTPUT_TOKENS",
     )
     # Diagram rendering (agents/napkin-architect)

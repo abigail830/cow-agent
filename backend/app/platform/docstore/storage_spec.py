@@ -37,6 +37,11 @@ def build_internal_storage_spec(
             **({"sha256": content_hash} if content_hash else {}),
         },
         "write": {
+            "artifacts_batch": {
+                "url": f"{file_base}/artifacts/batch",
+                "method": "PUT",
+                "headers": auth_headers,
+            },
             "content_md": {
                 "url": f"{file_base}/artifacts/content_md",
                 "method": "PUT",

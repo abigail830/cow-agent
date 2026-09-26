@@ -23,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 TITLE_LLM_APPLIED_KEY = "title_llm_applied"
 TITLE_FINALIZED_KEY = "title_finalized"  # legacy: was set on schedule before LLM success
-TITLE_MAX_CHARS = 60
+TITLE_MAX_CHARS = 12
 USER_SNIPPET_MAX = 400
-ASSISTANT_SNIPPET_MAX = 250
+ASSISTANT_SNIPPET_MAX = 1200
 
 _inflight: set[uuid.UUID] = set()
 
@@ -209,6 +209,7 @@ async def generate_chat_title(
             UtilityPurpose.CHAT_TITLE,
             prompt=prompt,
             max_tokens=64,
+            temperature=0.2,
         )
         normalized = normalize_title(title)
         if not normalized:

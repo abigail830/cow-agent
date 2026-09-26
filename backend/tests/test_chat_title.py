@@ -237,7 +237,7 @@ async def test_generate_chat_title_persists_normalized_title() -> None:
     factory = MagicMock(return_value=session_cm)
 
     utility = AsyncMock()
-    utility.complete = AsyncMock(return_value="BVI Proposal for Demo Ltd")
+    utility.complete = AsyncMock(return_value="BVI Proposal")
 
     with (
         patch("app.platform.chat.title_service.get_async_session_factory", return_value=factory),
@@ -245,7 +245,7 @@ async def test_generate_chat_title_persists_normalized_title() -> None:
     ):
         await generate_chat_title(chat_id, turn_ids=(turn1, turn2))
 
-    assert chat.title == "BVI Proposal for Demo Ltd"
+    assert chat.title == "BVI Proposal"
     utility.complete.assert_awaited_once()
     session.commit.assert_awaited_once()
 

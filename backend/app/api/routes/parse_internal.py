@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +13,7 @@ from app.db.session import get_db
 from app.platform.attachments.storage import load_inline_attachment
 from app.platform.docstore.blob import save_parsed_artifact, save_parsed_figure
 from app.platform.docstore.figures import load_parsed_figure_resolved, normalize_figure_id
-from app.platform.docstore.repository import DocstoreRepository
+from app.platform.docstore.repository import DocstoreRepository, ParsedArtifactRecord
 from app.platform.parse_pipeline.job_builder import hash_run_token
 from app.platform.parse_pipeline.repository import ParseJobRepository
 from app.platform.parse_pipeline.status_report import report_parse_run_status
@@ -138,6 +139,70 @@ async def get_original_file(
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="original not found") from exc
     return Response(content=data, media_type="application/octet-stream")
+
+
+@router.put("/files/{attachment_id}/artifacts/batch")
+async def put_artifacts_batch(
+    attachment_id: uuid.UUID,
+    content_md: UploadFile = File(...),
+    meta_json: UploadFile = File(...),
+    pageindex_json: UploadFile | None = File(default=None),
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """Upload normalized artifacts in one request; manifest updated atomically."""
+    token = _extract_bearer(authorization)
+    jobs = ParseJobRepository(db)
+    run_row = await jobs.get_run_for_related_attachment_token(attachment_id, hash_run_token(token))
+    if run_row is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+    content_data = await content_md.read()
+    meta_data = await meta_json.read()
+    pageindex_data = await pageindex_json.read() if pageindex_json is not None else None
+
+    chat_id = run_row.chat_id
+
+    async def _save_blob(key: str, data: bytes, content_type: str) -> ParsedArtifactRecord:
+        await asyncio.to_thread(
+            save_parsed_artifact,
+            chat_id,
+            attachment_id,
+            key,
+            data,
+            content_type=content_type,
+        )
+        return (key, len(data), content_type)
+
+    blob_tasks = [
+        _save_blob("content_md", content_data, _ARTIFACT_CONTENT_TYPES["content_md"]),
+        _save_blob("meta_json", meta_data, _ARTIFACT_CONTENT_TYPES["meta_json"]),
+    ]
+    if pageindex_data is not None:
+        blob_tasks.append(
+            _save_blob("pageindex_json", pageindex_data, _ARTIFACT_CONTENT_TYPES["pageindex_json"]),
+        )
+    artifact_records = await asyncio.gather(*blob_tasks)
+
+    docstore = DocstoreRepository(db)
+    updated = await docstore.record_parsed_artifacts_batch(
+        attachment_id,
+        chat_id=chat_id,
+        artifacts=list(artifact_records),
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="attachment not found")
+
+    from app.platform.audio_capture.webhook import maybe_finalize_capture_after_parsed_artifact
+
+    await maybe_finalize_capture_after_parsed_artifact(
+        db,
+        attachment_id=attachment_id,
+        artifact_key="meta_json",
+    )
+    await db.commit()
+    written = [key for key, _, _ in artifact_records]
+    return {"status": "ok", "artifacts": written}
 
 
 @router.put("/files/{attachment_id}/artifacts/{artifact_key}")

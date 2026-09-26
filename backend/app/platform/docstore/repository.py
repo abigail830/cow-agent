@@ -3,11 +3,14 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import ChatAttachment
 from app.platform.docstore.manifest import merge_parsed_artifact_record
 from app.platform.docstore.models import ParseStatus
+
+ParsedArtifactRecord = tuple[str, int, str]  # artifact_key, size_bytes, content_type
 
 
 class DocstoreRepository:
@@ -69,7 +72,12 @@ class DocstoreRepository:
         size_bytes: int,
         content_type: str,
     ) -> ChatAttachment | None:
-        row = await self._session.get(ChatAttachment, attachment_id)
+        result = await self._session.execute(
+            select(ChatAttachment)
+            .where(ChatAttachment.id == attachment_id)
+            .with_for_update()
+        )
+        row = result.scalar_one_or_none()
         if row is None or row.chat_id != chat_id:
             return None
         row.parsed_artifact_manifest = merge_parsed_artifact_record(
@@ -80,6 +88,38 @@ class DocstoreRepository:
             size_bytes=size_bytes,
             content_type=content_type,
         )
+        await self._session.flush()
+        return row
+
+    async def record_parsed_artifacts_batch(
+        self,
+        attachment_id: uuid.UUID,
+        *,
+        chat_id: uuid.UUID,
+        artifacts: list[ParsedArtifactRecord],
+    ) -> ChatAttachment | None:
+        """Merge all parsed artifact keys in one locked transaction (no lost updates)."""
+        if not artifacts:
+            return None
+        result = await self._session.execute(
+            select(ChatAttachment)
+            .where(ChatAttachment.id == attachment_id)
+            .with_for_update()
+        )
+        row = result.scalar_one_or_none()
+        if row is None or row.chat_id != chat_id:
+            return None
+        manifest = row.parsed_artifact_manifest
+        for artifact_key, size_bytes, content_type in artifacts:
+            manifest = merge_parsed_artifact_record(
+                manifest,
+                chat_id=chat_id,
+                attachment_id=attachment_id,
+                artifact_key=artifact_key,
+                size_bytes=size_bytes,
+                content_type=content_type,
+            )
+        row.parsed_artifact_manifest = manifest
         await self._session.flush()
         return row
 
