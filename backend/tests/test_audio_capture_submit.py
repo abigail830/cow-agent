@@ -17,17 +17,16 @@ async def test_submit_capture_from_blob_parts_uses_async_blob_exists(monkeypatch
 
     blob_check_called = False
 
-    def fake_blob_exists(_pathname: str) -> bool:
+    async def fake_blob_exists_async(_pathname: str) -> bool:
         nonlocal blob_check_called
         blob_check_called = True
         return True
 
-    async def fake_to_thread(func, /, *args, **kwargs):
-        return func(*args, **kwargs)
-
     monkeypatch.setattr("app.platform.audio_capture.service.blob_storage_enabled", lambda: True)
-    monkeypatch.setattr("app.platform.audio_capture.service.asyncio.to_thread", fake_to_thread)
-    monkeypatch.setattr("app.platform.audio_capture.service.blob_exists", fake_blob_exists)
+    monkeypatch.setattr(
+        "app.platform.audio_capture.service.blob_exists_async",
+        fake_blob_exists_async,
+    )
     monkeypatch.setattr(
         "app.platform.audio_capture.service.load_asr_context_for_chat",
         AsyncMock(return_value=None),
@@ -107,6 +106,9 @@ async def test_submit_capture_from_blob_parts_uses_async_blob_exists(monkeypatch
             return None
 
         async def commit(self) -> None:
+            return None
+
+        async def refresh(self, _obj) -> None:
             return None
 
     service = AudioCaptureService(_Session())  # type: ignore[arg-type]

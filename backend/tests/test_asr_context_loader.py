@@ -37,3 +37,6 @@ async def test_load_asr_context_uses_to_thread_for_profile(monkeypatch, tmp_path
 
     assert result == "hotword"
     assert len(to_thread_calls) == 1
+    from app.platform.audio_capture.asr_context import _load_asr_context_profile
+
+    assert to_thread_calls[0] is _load_asr_context_profile

@@ -15,7 +15,7 @@ from app.db.repositories.attachments import AttachmentRepository
 from app.db.repositories.audio_captures import AudioCaptureRepository
 from app.db.repositories.chat_messages import ChatMessageRepository
 from app.db.repositories.chat_ui_annotations import ChatUiAnnotationRepository
-from app.platform.blob.client import blob_exists, blob_storage_enabled
+from app.platform.blob.client import blob_exists_async, blob_storage_enabled
 from app.platform.attachments.hash import sha256_hex
 from app.platform.attachments.kinds import AttachmentKind, classify_attachment
 from app.platform.attachments.storage import (
@@ -249,7 +249,7 @@ class AudioCaptureService:
         for part in ordered:
             attachment_id = uuid.UUID(str(part["attachment_id"]))
             pathname = inline_attachment_blob_path(chat_id, attachment_id)
-            exists = await asyncio.to_thread(blob_exists, pathname)
+            exists = await blob_exists_async(pathname)
             if not exists:
                 raise ValueError(f"Uploaded file not found: {part['filename']}")
 
@@ -362,7 +362,11 @@ class AudioCaptureService:
         capture = await self._captures.get_for_chat(chat_id, capture_id)
         if capture is None:
             raise ValueError("Capture not found")
+        # flush/commit can expire column attrs; sync reads in _serialize_capture need refresh first.
+        await self._session.refresh(capture)
         host = await self._attachments.get(capture.host_attachment_id)
+        if host is not None:
+            await self._session.refresh(host)
         parts = await self._captures.list_parts(capture.id)
         return self._serialize_capture(capture, host=host, parts=parts)
 

@@ -39,7 +39,9 @@ export function TranscribeAudioPanel({
   const [files, setFiles] = useState<TranscribeAudioDraftFile[]>([])
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [localSubmitting, setLocalSubmitting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const isSubmitting = submitting || localSubmitting
 
   const totalBytes = files.reduce((sum, item) => sum + item.file.size, 0)
 
@@ -59,19 +61,20 @@ export function TranscribeAudioPanel({
   const handleDropZone = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
       event.preventDefault()
-      if (submitting) return
+      if (isSubmitting) return
       addFiles(event.dataTransfer.files)
     },
-    [addFiles, submitting],
+    [addFiles, isSubmitting],
   )
 
   async function handleSubmit() {
-    if (!files.length || submitting) return
+    if (!files.length || isSubmitting) return
     if (totalBytes > maxTotalBytes) {
       setError(`Total size exceeds ${formatSize(maxTotalBytes)}`)
       return
     }
     setError(null)
+    setLocalSubmitting(true)
     try {
       await onSubmit(
         files.map((item) => item.file),
@@ -82,6 +85,8 @@ export function TranscribeAudioPanel({
       onClose()
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : 'Submit failed')
+    } finally {
+      setLocalSubmitting(false)
     }
   }
 
@@ -94,7 +99,13 @@ export function TranscribeAudioPanel({
           <Mic size={16} aria-hidden />
           <strong>Transcribe audio</strong>
         </div>
-        <button type="button" className="transcribe-audio-panel-close" onClick={onClose} aria-label="Close">
+        <button
+          type="button"
+          className="transcribe-audio-panel-close"
+          disabled={isSubmitting}
+          onClick={onClose}
+          aria-label="Close"
+        >
           <X size={16} />
         </button>
       </div>
@@ -106,37 +117,41 @@ export function TranscribeAudioPanel({
         <input
           type="text"
           value={title}
-          disabled={submitting}
+          disabled={isSubmitting}
           placeholder="Meeting notes"
           onChange={(event) => setTitle(event.target.value)}
         />
       </label>
-      <div
-        className="transcribe-audio-dropzone"
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={handleDropZone}
-        onClick={() => inputRef.current?.click()}
-      >
-        Drop audio files here or click to browse
-      </div>
-      <input
-        ref={inputRef}
-        type="file"
-        multiple
-        accept="audio/*,.mp3,.wav,.m4a,.flac,.aac,.ogg,.opus,.webm"
-        className="hidden"
-        onChange={(event) => {
-          if (event.target.files) addFiles(event.target.files)
-          event.target.value = ''
-        }}
-      />
+      {!isSubmitting ? (
+        <>
+          <div
+            className="transcribe-audio-dropzone"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={handleDropZone}
+            onClick={() => inputRef.current?.click()}
+          >
+            Drop audio files here or click to browse
+          </div>
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            accept="audio/*,.mp3,.wav,.m4a,.flac,.aac,.ogg,.opus,.webm"
+            className="hidden"
+            onChange={(event) => {
+              if (event.target.files) addFiles(event.target.files)
+              event.target.value = ''
+            }}
+          />
+        </>
+      ) : null}
       {files.length ? (
         <ul className="transcribe-audio-file-list">
           {files.map((item, index) => (
             <li
               key={item.id}
               className={`transcribe-audio-file-item${dragIndex === index ? ' transcribe-audio-file-item-dragging' : ''}`}
-              draggable={!submitting}
+              draggable={!isSubmitting}
               onDragStart={() => setDragIndex(index)}
               onDragOver={(event) => event.preventDefault()}
               onDrop={() => {
@@ -152,7 +167,7 @@ export function TranscribeAudioPanel({
               <button
                 type="button"
                 className="transcribe-audio-file-remove"
-                disabled={submitting}
+                disabled={isSubmitting}
                 aria-label={`Remove ${item.file.name}`}
                 onClick={() => setFiles((current) => current.filter((row) => row.id !== item.id))}
               >
@@ -169,11 +184,11 @@ export function TranscribeAudioPanel({
         <button
           type="button"
           className="transcribe-audio-submit-btn"
-          disabled={submitting || !files.length || totalBytes > maxTotalBytes}
+          disabled={isSubmitting || !files.length || totalBytes > maxTotalBytes}
           onClick={() => void handleSubmit()}
         >
-          {submitting ? <LoadingSpinner size="sm" /> : null}
-          <span>{submitting ? 'Submitting…' : 'Start transcription'}</span>
+          {isSubmitting ? <LoadingSpinner size="sm" /> : null}
+          <span>{isSubmitting ? 'Submitting…' : 'Start transcription'}</span>
         </button>
       </div>
       {error ? <p className="transcribe-audio-panel-error">{error}</p> : null}

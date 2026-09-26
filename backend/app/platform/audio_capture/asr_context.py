@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,6 +33,12 @@ def asr_context_from_profile_extra(extra_config: dict[str, Any]) -> str | None:
     return _normalize_asr_context(extra_config.get("asr_context"))
 
 
+def _load_asr_context_profile(agent_dir: Path) -> Any:
+    if not agent_dir.is_dir():
+        return None
+    return load_agent_profile(agent_dir)
+
+
 async def load_asr_context_for_chat(session: AsyncSession, chat_id: uuid.UUID) -> str | None:
     chat = await session.get(Chat, chat_id)
     if chat is None:
@@ -40,10 +47,10 @@ async def load_asr_context_for_chat(session: AsyncSession, chat_id: uuid.UUID) -
     if agent is None or not agent.slug:
         return None
     agent_dir = AGENTS_ROOT / agent.slug
-    if not agent_dir.is_dir():
-        return None
     try:
-        profile = await asyncio.to_thread(load_agent_profile, agent_dir)
+        profile = await asyncio.to_thread(_load_asr_context_profile, agent_dir)
     except ValueError:
+        return None
+    if profile is None:
         return None
     return asr_context_from_profile_extra(profile.extra_config)
