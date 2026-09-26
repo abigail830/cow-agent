@@ -158,6 +158,7 @@ jobs:
         env:
           DOCUMENT_MIND_ACCESS_KEY_ID: ${{ secrets.DOCUMENT_MIND_ACCESS_KEY_ID }}
           DOCUMENT_MIND_ACCESS_KEY_SECRET: ${{ secrets.DOCUMENT_MIND_ACCESS_KEY_SECRET }}
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           JOB_JSON: ${{ runner.temp }}/job.json
         run: parse-pipeline run-job --job-file "$JOB_JSON" --caller-id gha
 

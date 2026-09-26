@@ -25,7 +25,10 @@ type Props = {
   expandedArtifactId?: string | null
   onExpandArtifact?: (spec: ArtifactSpec) => void
   onViewParsePipeline?: (attachmentId: string) => void
-  onRetryAudioTranscript?: (attachmentId: string) => Promise<void>
+  onRetryAudioTranscript?: (params: {
+    attachmentId: string
+    captureId?: string | null
+  }) => Promise<void>
   fulfillmentChatId?: string | null
   fulfillmentForms?: FulfillmentForm[]
   fulfillmentFormsLoading?: boolean
@@ -75,7 +78,10 @@ function renderBlock(
   expandedArtifactId?: string | null,
   onExpandArtifact?: (spec: ArtifactSpec) => void,
   onViewParsePipeline?: (attachmentId: string) => void,
-  onRetryAudioTranscript?: (attachmentId: string) => Promise<void>,
+  onRetryAudioTranscript?: (params: {
+    attachmentId: string
+    captureId?: string | null
+  }) => Promise<void>,
 ) {
   if (block.kind === 'bubble') {
     return <MessageBubble message={block.message} />

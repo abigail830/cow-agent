@@ -1295,27 +1295,53 @@ export function ChatPage() {
   )
 
   const handleRetryAudioTranscript = useCallback(
-    async (attachmentId: string) => {
+    async ({
+      attachmentId,
+      captureId,
+    }: {
+      attachmentId: string
+      captureId?: string | null
+    }) => {
       if (!chatId || !selectedId) return
-      const attachment = chatAttachments.find((row) => row.id === attachmentId)
-      const target: ChatAttachmentListItem =
-        attachment ??
-        ({
-          id: attachmentId,
-          chat_id: chatId,
-          filename: 'Audio transcript',
-          mime_type: 'text/markdown',
-          size_bytes: 0,
-          provider: 'platform',
-          provider_file_id: attachmentId,
-          created_at: null,
-          parse_status: 'failed',
-        } satisfies ChatAttachmentListItem)
-      await handleRetryAttachmentParse(target)
-      await reloadMessagesAfterStream(selectedId, chatId)
-      await loadChatAttachments(chatId, { silent: true })
+      try {
+        if (captureId) {
+          await api.retryAudioCapture(chatId, captureId)
+        } else {
+          const attachment = chatAttachments.find((row) => row.id === attachmentId)
+          const target: ChatAttachmentListItem =
+            attachment ??
+            ({
+              id: attachmentId,
+              chat_id: chatId,
+              filename: 'Audio transcript',
+              mime_type: 'text/markdown',
+              size_bytes: 0,
+              provider: 'platform',
+              provider_file_id: attachmentId,
+              created_at: null,
+              parse_status: 'failed',
+            } satisfies ChatAttachmentListItem)
+          await handleRetryAttachmentParse(target)
+        }
+        await reloadMessagesAfterStream(selectedId, chatId)
+        await loadChatAttachments(chatId, { silent: true })
+        patchSession(selectedId, { error: null })
+      } catch (e) {
+        patchSession(selectedId, {
+          error: formatApiError(e, 'Failed to retry transcription'),
+        })
+        throw e
+      }
     },
-    [chatAttachments, chatId, handleRetryAttachmentParse, loadChatAttachments, reloadMessagesAfterStream, selectedId],
+    [
+      chatAttachments,
+      chatId,
+      handleRetryAttachmentParse,
+      loadChatAttachments,
+      patchSession,
+      reloadMessagesAfterStream,
+      selectedId,
+    ],
   )
 
   const uploadToLibrary = useCallback(

@@ -13,7 +13,7 @@ type Props = {
   expanded?: boolean
   onExpand?: (spec: ArtifactSpec) => void
   onViewPipeline?: (attachmentId: string) => void
-  onRetry?: (attachmentId: string) => Promise<void>
+  onRetry?: (params: { attachmentId: string; captureId?: string | null }) => Promise<void>
 }
 
 export function AudioTranscriptArtifactCard({
@@ -48,7 +48,7 @@ export function AudioTranscriptArtifactCard({
     if (!canRetry || !attachmentId || !onRetry || retrying) return
     setRetrying(true)
     try {
-      await onRetry(attachmentId)
+      await onRetry({ attachmentId, captureId: spec.capture_id })
     } finally {
       setRetrying(false)
     }

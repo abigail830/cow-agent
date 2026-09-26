@@ -99,16 +99,19 @@ function MarkdownCover() {
   )
 }
 
-/** Microphone + waveform — same line-art language as other artifact covers. */
+/**
+ * Transcript page + waveform panel — same document frame as MarkdownCover,
+ * but left accent holds a smooth wave and top-right holds broadcast arcs.
+ */
 function AudioCover() {
   return (
     <svg viewBox="0 0 180 112" aria-hidden="true">
       <path d="M32 22h116v68H32z" />
       <path className="cover-fill" d="M42 34h40v44H42z" />
-      <path d="M52 46v10a8 8 0 0 0 16 0V46" />
-      <path d="M60 68v6M54 74h12" />
-      <circle cx="60" cy="42" r="3" />
-      <path d="M96 58v12M106 50v28M116 44v36M126 52v20M136 48v32M146 56v16" />
+      <path d="M46 58c3-10 6 10 9 0s6 10 9 0 6 10 9 0 6-14 9 0" />
+      <path d="M54 72h16" />
+      <path d="M96 42h44M96 54h32M96 66h24M96 78h16" />
+      <path d="M118 28a6 6 0 0 1 12 0M114 28a10 10 0 0 1 20 0M110 28a14 14 0 0 1 28 0" />
     </svg>
   )
 }

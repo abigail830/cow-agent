@@ -16,7 +16,10 @@ type Props = {
   expanded?: boolean
   onExpand?: (spec: ArtifactSpec) => void
   onViewParsePipeline?: (attachmentId: string) => void
-  onRetryAudioTranscript?: (attachmentId: string) => Promise<void>
+  onRetryAudioTranscript?: (params: {
+    attachmentId: string
+    captureId?: string | null
+  }) => Promise<void>
 }
 
 export function ArtifactBubble({

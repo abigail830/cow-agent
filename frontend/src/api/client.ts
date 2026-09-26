@@ -151,6 +151,12 @@ export const api = {
       method: 'POST',
     }),
 
+  retryAudioCapture: (chatId: string, captureId: string) =>
+    request<{ status: string; parse_job_id?: string | null }>(
+      `/chats/${chatId}/captures/${captureId}/retry`,
+      { method: 'POST' },
+    ),
+
   getAudioCaptureUploadConfig: (chatId: string) =>
     request<{
       mode: 'blob' | 'multipart'

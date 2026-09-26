@@ -45,6 +45,15 @@ async def retry_attachment_parse(
     row: ChatAttachment,
 ) -> ChatAttachment:
     """Re-dispatch parse pipeline for a failed or stuck attachment (full job retry)."""
+    if row.attachment_role == "transcript_host":
+        from app.db.repositories.audio_captures import AudioCaptureRepository
+        from app.platform.audio_capture.enqueue import enqueue_capture_parse_job
+
+        capture = await AudioCaptureRepository(session).get_by_host_attachment(row.id)
+        if capture is None:
+            raise ValueError("Audio capture host attachment has no linked capture")
+        return await enqueue_capture_parse_job(session, capture=capture, host_row=row)
+
     kind = classify_attachment(filename=row.filename, mime_type=row.mime_type)
     resolution = resolve_pipeline(kind)
 
