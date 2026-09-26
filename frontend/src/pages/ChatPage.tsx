@@ -822,7 +822,13 @@ export function ChatPage() {
 
   const selectAgent = useCallback(
     async (agent: Agent) => {
-      if (agent.id === selectedId) return
+      if (agent.id === selectedId) {
+        if (workspaceView !== 'chat') {
+          setHistoryOpen(false)
+          navigate(CHAT_HOME_PATH)
+        }
+        return
+      }
 
       if (selectedId) {
         const previous = getAgentSession(sessionsRef.current, selectedId)
