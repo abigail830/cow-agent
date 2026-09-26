@@ -17,7 +17,9 @@ from app.platform.chat.title_service import (
     maybe_schedule_chat_title_generation,
     normalize_title,
     schedule_chat_title_generation,
+    title_satisfies_language,
     TITLE_FINALIZED_KEY,
+    user_prefers_chinese_title,
 )
 from app.platform.llm.utility_models import UtilityModelRegistry, _uses_azure_responses_api
 
@@ -25,6 +27,18 @@ from app.platform.llm.utility_models import UtilityModelRegistry, _uses_azure_re
 def test_normalize_title_rejects_placeholder() -> None:
     assert normalize_title("New Chat") is None
     assert normalize_title('"BVI 公司注册"') == "BVI 公司注册"
+
+
+def test_normalize_title_english_allows_more_than_twelve_chars() -> None:
+    assert normalize_title("Content Studio draft") == "Content Studio draft"
+
+
+def test_normalize_title_chinese_still_capped_at_twelve() -> None:
+    long_zh = "功能列表十一个块详细分析对比"
+    normalized = normalize_title(long_zh)
+    assert normalized is not None
+    assert len(normalized) <= 12
+    assert normalized.endswith("…")
 
 
 def test_build_title_prompt_uses_first_two_turns_only() -> None:
@@ -76,10 +90,17 @@ def test_build_title_prompt_uses_first_two_turns_only() -> None:
         turn_ids=(turn1, turn2),
         messages=[user1, assistant1, user2, assistant2, user3],
     )
+    assert "简体中文" in prompt
     assert "帮我写 BVI proposal" in prompt
     assert "客户是 Demo Ltd" in prompt
     assert "收到，我来整理服务范围。" in prompt
     assert "第三轮不应出现" not in prompt
+    assert user_prefers_chinese_title(
+        turn_ids=(turn1, turn2),
+        messages=[user1, assistant1, user2, assistant2, user3],
+    )
+    assert not title_satisfies_language("Content Studio", prefer_chinese=True)
+    assert title_satisfies_language("内容工作室方案", prefer_chinese=True)
 
 
 def test_title_llm_applied_flag_in_session_state() -> None:
@@ -237,7 +258,7 @@ async def test_generate_chat_title_persists_normalized_title() -> None:
     factory = MagicMock(return_value=session_cm)
 
     utility = AsyncMock()
-    utility.complete = AsyncMock(return_value="BVI Proposal")
+    utility.complete = AsyncMock(return_value="BVI 公司方案")
 
     with (
         patch("app.platform.chat.title_service.get_async_session_factory", return_value=factory),
@@ -245,7 +266,7 @@ async def test_generate_chat_title_persists_normalized_title() -> None:
     ):
         await generate_chat_title(chat_id, turn_ids=(turn1, turn2))
 
-    assert chat.title == "BVI Proposal"
+    assert chat.title == "BVI 公司方案"
     utility.complete.assert_awaited_once()
     session.commit.assert_awaited_once()
 

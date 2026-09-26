@@ -806,7 +806,11 @@ export function ChatPage() {
     async (agentId: string) => {
       const inFlight = chatLoadTasksRef.current.get(agentId)
       if (inFlight) {
-        await inFlight
+        try {
+          await inFlight
+        } finally {
+          patchSession(agentId, { chatSessionLoading: false })
+        }
         return
       }
 
@@ -824,7 +828,11 @@ export function ChatPage() {
         }
       })()
       chatLoadTasksRef.current.set(agentId, task)
-      await task
+      try {
+        await task
+      } finally {
+        patchSession(agentId, { chatSessionLoading: false })
+      }
     },
     [loadChat, patchSession],
   )
@@ -2433,7 +2441,7 @@ export function ChatPage() {
                       onSubmit={handleSubmitAudioCapture}
                     />
                     <div
-                      className={`chat-composer${composerDragOver ? ' chat-composer-drag-over' : ''}${isStandby ? ' chat-composer-standby' : ''}`}
+                      className={`chat-composer${composerDragOver ? ' chat-composer-drag-over' : ''}`}
                       onDragOver={handleComposerDragOver}
                       onDragLeave={handleComposerDragLeave}
                       onDrop={handleComposerDrop}

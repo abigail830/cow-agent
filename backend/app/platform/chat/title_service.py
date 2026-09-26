@@ -15,6 +15,11 @@ from app.db.models import Chat, ChatMessage
 from app.db.repositories.chat_messages import ChatMessageRepository
 from app.db.session import get_async_session_factory
 from app.platform.attachments.materialize import split_user_prompt_text
+from app.platform.chat.title_prompt import (
+    TITLE_RETRY_ZH_HEADER,
+    TITLE_USER_PROMPT_EN_HEADER,
+    TITLE_USER_PROMPT_ZH_HEADER,
+)
 from app.platform.llm.utility_models import UtilityModelRegistry, UtilityPurpose
 from app.platform.memory.message_validate import message_from_body
 from app.platform.memory.projectors.utils import preview_text
@@ -23,9 +28,57 @@ logger = logging.getLogger(__name__)
 
 TITLE_LLM_APPLIED_KEY = "title_llm_applied"
 TITLE_FINALIZED_KEY = "title_finalized"  # legacy: was set on schedule before LLM success
-TITLE_MAX_CHARS = 12
+TITLE_MAX_CJK_CHARS = 12
+TITLE_MAX_LATIN_CHARS = 48  # ~10 English words; sidebar CSS ellipsizes longer lines
 USER_SNIPPET_MAX = 400
 ASSISTANT_SNIPPET_MAX = 1200
+
+
+def _title_has_cjk(text: str) -> bool:
+    for char in text:
+        if "\u4e00" <= char <= "\u9fff":
+            return True
+    return False
+
+
+def _count_cjk(text: str) -> int:
+    return sum(1 for char in text if "\u4e00" <= char <= "\u9fff")
+
+
+def _count_latin_letters(text: str) -> int:
+    return sum(1 for char in text if char.isascii() and char.isalpha())
+
+
+def user_prefers_chinese_title(
+    *,
+    turn_ids: tuple[uuid.UUID, uuid.UUID],
+    messages: list[ChatMessage],
+) -> bool:
+    """True when user excerpts in the title window are primarily Chinese."""
+    parts: list[str] = []
+    turn_set = set(turn_ids)
+    for message in messages:
+        if message.role != "user" or message.turn_id not in turn_set:
+            continue
+        text = _text_from_body(message.body, role="user")
+        if not text:
+            filename = _attachment_label(message.body)
+            if filename:
+                text = filename
+        if text:
+            parts.append(text)
+    combined = " ".join(parts)
+    cjk = _count_cjk(combined)
+    if cjk >= 3:
+        return True
+    latin = _count_latin_letters(combined)
+    return cjk > 0 and cjk >= latin
+
+
+def title_satisfies_language(title: str, *, prefer_chinese: bool) -> bool:
+    if not prefer_chinese:
+        return True
+    return _title_has_cjk(title)
 
 _inflight: set[uuid.UUID] = set()
 
@@ -56,8 +109,9 @@ def normalize_title(raw: str) -> str | None:
     title = (raw or "").strip().strip("\"'")
     if not title or title.lower() == "new chat":
         return None
-    if len(title) > TITLE_MAX_CHARS:
-        title = title[: TITLE_MAX_CHARS - 1].rstrip() + "…"
+    max_len = TITLE_MAX_CJK_CHARS if _title_has_cjk(title) else TITLE_MAX_LATIN_CHARS
+    if len(title) > max_len:
+        title = title[: max_len - 1].rstrip() + "…"
     return title
 
 
@@ -96,10 +150,10 @@ def _user_line(message: ChatMessage) -> str | None:
     if not text:
         filename = _attachment_label(message.body)
         if filename:
-            text = f"[Attachment: {filename}]"
+            text = f"[附件: {filename}]"
     if not text:
         return None
-    return f"User: {preview_text(text, USER_SNIPPET_MAX)}"
+    return f"用户: {preview_text(text, USER_SNIPPET_MAX)}"
 
 
 def _assistant_line(messages: list[ChatMessage]) -> str | None:
@@ -113,7 +167,7 @@ def _assistant_line(messages: list[ChatMessage]) -> str | None:
     if not parts:
         return None
     combined = " ".join(parts)
-    return f"Assistant: {preview_text(combined, ASSISTANT_SNIPPET_MAX)}"
+    return f"助手: {preview_text(combined, ASSISTANT_SNIPPET_MAX)}"
 
 
 def build_title_prompt(*, turn_ids: tuple[uuid.UUID, uuid.UUID], messages: list[ChatMessage]) -> str:
@@ -122,18 +176,23 @@ def build_title_prompt(*, turn_ids: tuple[uuid.UUID, uuid.UUID], messages: list[
         if message.turn_id in by_turn:
             by_turn[message.turn_id].append(message)
 
-    lines: list[str] = []
+    body_lines: list[str] = []
     for turn_id in turn_ids:
         turn_messages = by_turn[turn_id]
         user_messages = [row for row in turn_messages if row.role == "user"]
         if user_messages:
             user_line = _user_line(user_messages[0])
             if user_line:
-                lines.append(user_line)
+                body_lines.append(user_line)
         assistant_line = _assistant_line(turn_messages)
         if assistant_line:
-            lines.append(assistant_line)
-    return "\n".join(lines)
+            body_lines.append(assistant_line)
+    body = "\n".join(body_lines)
+    if not body:
+        return ""
+    prefer_chinese = user_prefers_chinese_title(turn_ids=turn_ids, messages=messages)
+    header = TITLE_USER_PROMPT_ZH_HEADER if prefer_chinese else TITLE_USER_PROMPT_EN_HEADER
+    return header + body
 
 
 async def maybe_schedule_chat_title_generation(
@@ -205,14 +264,31 @@ async def generate_chat_title(
         if not prompt:
             return
 
-        title = await UtilityModelRegistry().complete(
-            UtilityPurpose.CHAT_TITLE,
-            prompt=prompt,
-            max_tokens=64,
-            temperature=0.2,
-        )
+        prefer_chinese = user_prefers_chinese_title(turn_ids=turn_ids, messages=messages)
+        registry = UtilityModelRegistry()
+
+        async def _complete_title(user_prompt: str) -> str:
+            return await registry.complete(
+                UtilityPurpose.CHAT_TITLE,
+                prompt=user_prompt,
+                max_tokens=64,
+                temperature=0.2,
+            )
+
+        title = await _complete_title(prompt)
         normalized = normalize_title(title)
+        if normalized and prefer_chinese and not title_satisfies_language(normalized, prefer_chinese=True):
+            retry_prompt = TITLE_RETRY_ZH_HEADER + prompt
+            title = await _complete_title(retry_prompt)
+            normalized = normalize_title(title)
         if not normalized:
+            return
+        if prefer_chinese and not title_satisfies_language(normalized, prefer_chinese=True):
+            logger.warning(
+                "chat title rejected wrong language chat_id=%s title=%r",
+                chat_id,
+                normalized,
+            )
             return
 
         chat = await session.get(Chat, chat_id)
