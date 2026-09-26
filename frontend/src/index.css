@@ -945,6 +945,31 @@ body {
   opacity: 0.4;
 }
 
+.chat-history-panel-row-deleting .chat-history-panel-delete,
+.chat-history-panel-delete-busy {
+  opacity: 1;
+  pointer-events: auto;
+  color: var(--color-ink);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 1px rgba(24, 24, 27, 0.08);
+}
+
+.chat-history-panel-delete-busy:disabled {
+  opacity: 1;
+  cursor: wait;
+}
+
+.chat-history-delete-spinner {
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--color-brand-600);
+  stroke-width: 2.75;
+}
+
+.chat-history-panel-row-deleting .chat-history-panel-item {
+  color: var(--color-muted);
+}
+
 .chat-history-delete-overlay {
   position: fixed;
   inset: 0;

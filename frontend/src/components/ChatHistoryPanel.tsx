@@ -143,7 +143,7 @@ export function ChatHistoryPanel({
                     return (
                       <li
                         key={chat.id}
-                        className={`chat-history-panel-row ${active ? 'chat-history-panel-row-active' : ''}`}
+                        className={`chat-history-panel-row${active ? ' chat-history-panel-row-active' : ''}${deleting ? ' chat-history-panel-row-deleting' : ''}`}
                       >
                         <button
                           type="button"
@@ -155,7 +155,7 @@ export function ChatHistoryPanel({
                         </button>
                         <button
                           type="button"
-                          className="chat-history-panel-delete"
+                          className={`chat-history-panel-delete${deleting ? ' chat-history-panel-delete-busy' : ''}`}
                           onClick={(event) => {
                             event.stopPropagation()
                             if (!deleting) setPendingDelete(chat)
@@ -166,7 +166,7 @@ export function ChatHistoryPanel({
                           title={deleting ? 'Deleting…' : 'Delete'}
                         >
                           {deleting ? (
-                            <LoadingSpinner size="sm" />
+                            <LoadingSpinner size="sm" className="chat-history-delete-spinner" />
                           ) : (
                             <Trash2 size={14} strokeWidth={2} aria-hidden />
                           )}
