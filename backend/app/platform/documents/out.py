@@ -46,6 +46,7 @@ def attachment_document_out(
         chat_title=chat.title,
         has_parsed_content=artifacts.content_md,
         parsed_artifacts=artifacts,
+        gist=(attachment.gist or "").strip() or None,
     )
 
 

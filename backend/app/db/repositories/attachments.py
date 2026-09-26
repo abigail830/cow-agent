@@ -1,9 +1,10 @@
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import AgentModel, Chat, ChatAttachment
+from app.platform.docstore.models import ParseStatus
 
 
 class AttachmentRepository:
@@ -122,6 +123,39 @@ class AttachmentRepository:
         row.gist = gist.strip() or None
         await self._session.flush()
         return row
+
+    async def save_gist_metadata(
+        self,
+        attachment_id: uuid.UUID,
+        *,
+        gist: str,
+        content_sha256: str,
+        generated_at,
+    ) -> ChatAttachment | None:
+        """Persist gist only while attachment parse_status is still ready."""
+        gist_val = gist.strip() or None
+        stmt = (
+            update(ChatAttachment)
+            .where(ChatAttachment.id == attachment_id)
+            .where(ChatAttachment.parse_status == ParseStatus.READY.value)
+            .values(
+                gist=gist_val,
+                gist_content_sha256=content_sha256,
+                gist_generated_at=generated_at,
+            )
+            .returning(ChatAttachment)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def clear_gist(self, attachment_id: uuid.UUID) -> None:
+        row = await self.get(attachment_id)
+        if row is None:
+            return
+        row.gist = None
+        row.gist_content_sha256 = None
+        row.gist_generated_at = None
+        await self._session.flush()
 
     async def update_provider_file(
         self,

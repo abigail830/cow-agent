@@ -220,6 +220,8 @@ class ChatAttachment(Base):
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     gist: Mapped[str | None] = mapped_column(Text, nullable=True)
+    gist_content_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    gist_generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     parse_status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="ready")
     parse_pipeline_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     parse_job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

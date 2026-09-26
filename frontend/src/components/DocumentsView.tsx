@@ -82,6 +82,11 @@ function sessionLabel(doc: DocumentItem): string {
   return doc.chat_title?.trim() || 'Untitled session'
 }
 
+function attachmentGistLine(doc: DocumentItem): string | null {
+  const gist = doc.gist?.trim()
+  return gist || null
+}
+
 function parseStatusClass(status: AttachmentParseStatus | undefined): string {
   return `documents-status-badge documents-status-badge-${status ?? 'ready'}`
 }
@@ -323,16 +328,14 @@ function DocumentPreviewPane({
   }, [tab, artifacts.content_md, artifacts.meta_json, doc.chat_id, doc.id, hasPageIndex])
 
   const showOriginalPreview = tab === 'original' && canPreviewOriginal(doc.mime_type ?? '')
+  const gistLine = attachmentGistLine(doc)
 
   return (
     <div className="documents-preview-pane">
       <header className="documents-preview-header">
         <div className="documents-preview-heading">
           <h3 className="documents-preview-title">{doc.filename}</h3>
-          <p className="documents-preview-meta">
-            {agentLabel(doc)} · {sessionLabel(doc)} · {formatDocumentSize(doc)} ·{' '}
-            {parseStatusDisplayLabel(doc as Parameters<typeof parseStatusDisplayLabel>[0])}
-          </p>
+          {gistLine ? <p className="documents-preview-meta documents-preview-gist">{gistLine}</p> : null}
         </div>
         <button type="button" className="documents-preview-close" onClick={onClose} aria-label="Close preview">
           <X size={18} aria-hidden="true" />

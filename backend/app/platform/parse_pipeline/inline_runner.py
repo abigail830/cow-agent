@@ -237,9 +237,14 @@ async def _finalize_inline_job(job_payload: dict) -> None:
             )
         await session.commit()
         if row is not None:
+            from app.platform.docstore.models import ParseStatus
             from app.platform.parse_pipeline.serialization import attachment_out_extras
 
             publish_attachment_parse_updated(str(row.chat_id), {"attachment_id": str(row.id), **attachment_out_extras(row)})
+            if str(row.parse_status or "") == ParseStatus.READY.value:
+                from app.platform.attachments.gist import schedule_attachment_gist
+
+                schedule_attachment_gist(row.id)
 
 
 async def _mark_inline_failed(job_payload: dict) -> None:

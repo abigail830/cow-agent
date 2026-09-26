@@ -2160,6 +2160,11 @@ body {
   color: var(--color-muted);
 }
 
+.documents-preview-gist {
+  color: var(--color-text);
+  line-height: 1.45;
+}
+
 .documents-preview-close {
   display: inline-flex;
   align-items: center;

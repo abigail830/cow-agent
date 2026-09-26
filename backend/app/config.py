@@ -150,6 +150,25 @@ class Settings(BaseSettings):
         default=20,
         validation_alias="HYDRATE_LIBRARY_MAX_ITEMS",
     )
+    attachment_gist_enabled: bool = Field(default=True, validation_alias="ATTACHMENT_GIST_ENABLED")
+    attachment_gist_model: str = Field(default="qwen3.7-flash", validation_alias="ATTACHMENT_GIST_MODEL")
+    attachment_gist_model_api_key: str | None = Field(
+        default=None,
+        validation_alias="ATTACHMENT_GIST_MODEL_API_KEY",
+    )
+    attachment_gist_model_base_url: str | None = Field(
+        default=None,
+        validation_alias="ATTACHMENT_GIST_MODEL_BASE_URL",
+    )
+    attachment_gist_temperature: float = Field(default=0.2, validation_alias="ATTACHMENT_GIST_TEMPERATURE")
+    attachment_gist_max_input_chars: int = Field(
+        default=98304,
+        validation_alias="ATTACHMENT_GIST_MAX_INPUT_CHARS",
+    )
+    attachment_gist_max_output_tokens: int = Field(
+        default=256,
+        validation_alias="ATTACHMENT_GIST_MAX_OUTPUT_TOKENS",
+    )
     # Diagram rendering (agents/napkin-architect)
     plantuml_renderer: str = Field(default="kroki", validation_alias="PLANTUML_RENDERER")
     kroki_url: str = Field(default="https://kroki.io", validation_alias="KROKI_URL")
@@ -296,17 +315,10 @@ class Settings(BaseSettings):
         default="qwen-audio-3.1-asr-flash-filetrans",
         validation_alias="ASR_PROVIDER",
     )
-    asr_fallback_providers: list[str] = Field(
+    asr_fallback_providers: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["qwen-audio-3.0-asr-flash-filetrans", "fun-asr"],
         validation_alias=AliasChoices("ASR_FALLBACK_PROVIDERS", "ASR_FALLBACK_PROVIDER"),
     )
-
-    @field_validator("asr_fallback_providers", mode="before")
-    @classmethod
-    def parse_asr_fallback_providers(cls, value: object) -> object:
-        if isinstance(value, str):
-            return [part.strip() for part in value.split(",") if part.strip()]
-        return value
     asr_diarization_enabled: bool = Field(
         default=True,
         validation_alias="ASR_DIARIZATION_ENABLED",
@@ -327,6 +339,17 @@ class Settings(BaseSettings):
         validation_alias="GITHUB_WORKFLOW_FILE",
     )
     github_ref: str = Field(default="main", validation_alias="GITHUB_REF")
+
+    @field_validator("asr_fallback_providers", mode="before")
+    @classmethod
+    def parse_asr_fallback_providers(cls, value: object) -> list[str]:
+        if value is None or value == "":
+            return []
+        if isinstance(value, str):
+            return [part.strip() for part in value.split(",") if part.strip()]
+        if isinstance(value, list):
+            return [str(part).strip() for part in value if str(part).strip()]
+        return []
 
     @field_validator("auth_cookie_samesite", mode="before")
     @classmethod
@@ -392,6 +415,15 @@ class Settings(BaseSettings):
 
     def utility_deployment(self) -> str:
         return self.utility_model_deployment or self.azure_openai_deployment
+
+    def attachment_gist_api_key(self) -> str | None:
+        return self.attachment_gist_model_api_key or self.dashscope_api_key
+
+    def attachment_gist_base_url(self) -> str:
+        return (self.attachment_gist_model_base_url or self.dashscope_base_url).rstrip("/")
+
+    def attachment_gist_model_name(self) -> str:
+        return self.attachment_gist_model.strip()
 
 
 @lru_cache

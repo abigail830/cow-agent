@@ -312,4 +312,10 @@ async def parse_webhook(
     await db.commit()
     if result is None:
         return {"status": "duplicate"}
+    from app.platform.docstore.models import ParseStatus
+
+    if result.get("parse_status") == ParseStatus.READY.value:
+        from app.platform.attachments.gist import schedule_attachment_gist
+
+        schedule_attachment_gist(run_row.attachment_id)
     return {"status": "ok"}

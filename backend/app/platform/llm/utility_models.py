@@ -10,6 +10,7 @@ from app.platform.llm.model_registry import _azure_responses_base_url, _openai_c
 class UtilityPurpose(str, Enum):
     CHAT_TITLE = "chat_title"
     HISTORY_COMPACTION = "history_compaction"
+    ATTACHMENT_GIST = "attachment_gist"
 
 
 def _uses_azure_responses_api(base_url: str) -> bool:
@@ -27,7 +28,18 @@ class UtilityModelRegistry:
         self,
         purpose: UtilityPurpose | None = None,
     ) -> OpenAIChatClient | OpenAIChatCompletionClient:
-        del purpose
+        if purpose == UtilityPurpose.ATTACHMENT_GIST:
+            api_key = self._settings.attachment_gist_api_key()
+            if not api_key:
+                raise RuntimeError("ATTACHMENT_GIST requires DASHSCOPE_API_KEY or ATTACHMENT_GIST_MODEL_API_KEY")
+            base_url = self._settings.attachment_gist_base_url()
+            model = self._settings.attachment_gist_model_name()
+            return OpenAIChatCompletionClient(
+                model=model,
+                api_key=api_key,
+                base_url=_openai_compatible_base_url(base_url),
+            )
+
         s = self._settings
         base_url = s.utility_base_url()
         if _uses_azure_responses_api(base_url):
@@ -49,6 +61,10 @@ class UtilityModelRegistry:
                 "Generate a concise chat title (max 8 words) in the same language as the user. "
                 "Reply with the title only, no quotes."
             )
+        if purpose == UtilityPurpose.ATTACHMENT_GIST:
+            from app.platform.attachments.gist.prompt import GIST_SYSTEM_INSTRUCTIONS
+
+            return GIST_SYSTEM_INSTRUCTIONS
         return (
             "Summarize the conversation history concisely. Preserve key facts, decisions, and tool outcomes. "
             "Omit reasoning traces. Reply with summary text only."
@@ -60,13 +76,19 @@ class UtilityModelRegistry:
         *,
         prompt: str,
         max_tokens: int = 256,
+        instructions: str | None = None,
+        temperature: float | None = None,
     ) -> str:
         client = self.get_client(purpose)
+        system = instructions if instructions is not None else self._instructions_for(purpose)
+        options: dict = {"max_tokens": max_tokens}
+        if temperature is not None:
+            options["temperature"] = temperature
         agent = Agent(
             client=client,
             name=f"utility-{purpose.value}",
-            instructions=self._instructions_for(purpose),
-            default_options={"max_tokens": max_tokens},
+            instructions=system,
+            default_options=options,
         )
         result = await agent.run(prompt)
         return (result.text or "").strip()

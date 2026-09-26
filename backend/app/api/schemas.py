@@ -220,6 +220,7 @@ class DocumentOut(BaseModel):
     parse_progress: ParseProgressOut | None = None
     has_parsed_content: bool = False
     parsed_artifacts: ParsedArtifactsOut = Field(default_factory=ParsedArtifactsOut)
+    gist: str | None = None
     artifact_id: str | None = None
     artifact_kind: str | None = None
     artifact_format: str | None = None

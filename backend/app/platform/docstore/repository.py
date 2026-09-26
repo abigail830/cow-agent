@@ -31,6 +31,9 @@ class DocstoreRepository:
         row.parse_error_message = None
         row.parse_stage_snapshot = None
         row.parsed_artifact_manifest = None
+        row.gist = None
+        row.gist_content_sha256 = None
+        row.gist_generated_at = None
         await self._session.flush()
         return row
 
@@ -51,6 +54,9 @@ class DocstoreRepository:
         row.parse_error_message = None
         row.parse_stage_snapshot = None
         row.parsed_artifact_manifest = None
+        row.gist = None
+        row.gist_content_sha256 = None
+        row.gist_generated_at = None
         await self._session.flush()
         return row
 

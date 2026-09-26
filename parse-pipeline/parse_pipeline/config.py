@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import AliasChoices, Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -37,19 +37,23 @@ class Settings(BaseSettings):
 
     dashscope_api_key: str | None = Field(default=None, alias="DASHSCOPE_API_KEY")
     asr_provider: str = Field(default="qwen-audio-3.1-asr-flash-filetrans", alias="ASR_PROVIDER")
-    asr_fallback_providers: list[str] = Field(
+    asr_fallback_providers: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["qwen-audio-3.0-asr-flash-filetrans", "fun-asr"],
         validation_alias=AliasChoices("ASR_FALLBACK_PROVIDERS", "ASR_FALLBACK_PROVIDER"),
     )
+    asr_poll_interval_sec: float = Field(default=5.0, alias="ASR_POLL_INTERVAL_SEC")
+    asr_poll_timeout_sec: float = Field(default=7200.0, alias="ASR_POLL_TIMEOUT_SEC")
 
     @field_validator("asr_fallback_providers", mode="before")
     @classmethod
-    def _parse_asr_fallback_providers(cls, value: object) -> object:
+    def _parse_asr_fallback_providers(cls, value: object) -> list[str]:
+        if value is None or value == "":
+            return []
         if isinstance(value, str):
             return [part.strip() for part in value.split(",") if part.strip()]
-        return value
-    asr_poll_interval_sec: float = Field(default=5.0, alias="ASR_POLL_INTERVAL_SEC")
-    asr_poll_timeout_sec: float = Field(default=7200.0, alias="ASR_POLL_TIMEOUT_SEC")
+        if isinstance(value, list):
+            return [str(part).strip() for part in value if str(part).strip()]
+        return []
 
     webhook_max_retries: int = Field(default=1, alias="WEBHOOK_MAX_RETRIES")
     webhook_timeout_sec: float = Field(default=10.0, alias="WEBHOOK_TIMEOUT_SEC")

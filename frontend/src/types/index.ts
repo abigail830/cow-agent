@@ -142,6 +142,7 @@ export interface DocumentItem {
   parse_progress?: AttachmentParseProgress | null
   has_parsed_content?: boolean
   parsed_artifacts?: ParsedArtifactsAvailability
+  gist?: string | null
   artifact_id?: string | null
   artifact_kind?: string | null
   artifact_format?: string | null
