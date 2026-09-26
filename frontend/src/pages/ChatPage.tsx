@@ -2068,11 +2068,19 @@ export function ChatPage() {
 
   const handleDeleteChat = useCallback(
     async (id: string) => {
-      if (!selectedId || deletingChatId) return
+      if (!selectedId || deletingChatId === id) return
       const current = getAgentSession(sessionsRef.current, selectedId)
       const wasActive = current.chatId === id
       if (wasActive) {
         streamRegistryRef.current.abort(id)
+        fulfillment.resetFetchKey()
+        proposalFetchKeyRef.current = null
+        const storedId = getStoredChatId(selectedId)
+        if (id === storedId) {
+          clearStoredChatId(selectedId)
+        }
+        enterStandbyMode(selectedId)
+        patchSession(selectedId, fulfillment.newChatPatch())
       }
 
       setDeletingChatId(id)
@@ -2100,21 +2108,13 @@ export function ChatPage() {
 
       if (!wasActive) return
 
-      fulfillment.resetFetchKey()
-      proposalFetchKeyRef.current = null
       const storedId = getStoredChatId(selectedId)
-      if (id === storedId) {
-        clearStoredChatId(selectedId)
-      }
       if (remaining.length > 0 && storedId && storedId !== id) {
         const stillStored = remaining.some((row) => row.id === storedId)
         if (stillStored) {
           await openChatById(selectedId, storedId)
-          return
         }
       }
-      enterStandbyMode(selectedId)
-      patchSession(selectedId, fulfillment.newChatPatch())
     },
     [
       selectedId,

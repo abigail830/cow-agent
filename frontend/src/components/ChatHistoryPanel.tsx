@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Trash2 } from 'lucide-react'
+import { LoadingSpinner } from './LoadingSpinner'
 import type { ChatSummary } from '../types'
 
 type Props = {
@@ -59,7 +60,6 @@ export function ChatHistoryPanel({
   onDelete,
 }: Props) {
   const [pendingDelete, setPendingDelete] = useState<ChatSummary | null>(null)
-  const [confirming, setConfirming] = useState(false)
 
   useEffect(() => {
     if (!open) setPendingDelete(null)
@@ -77,28 +77,22 @@ export function ChatHistoryPanel({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       if (pendingDelete) {
-        if (!confirming) setPendingDelete(null)
+        setPendingDelete(null)
         return
       }
       onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [open, onClose, pendingDelete, confirming])
+  }, [open, onClose, pendingDelete])
 
   const groups = groupChats(chats)
 
-  const handleConfirmDelete = async () => {
-    if (!pendingDelete || confirming) return
-    setConfirming(true)
-    try {
-      await onDelete(pendingDelete.id)
-      setPendingDelete(null)
-    } catch {
-      /* parent surfaces the error */
-    } finally {
-      setConfirming(false)
-    }
+  const handleConfirmDelete = () => {
+    if (!pendingDelete) return
+    const chatId = pendingDelete.id
+    setPendingDelete(null)
+    void onDelete(chatId)
   }
 
   return (
@@ -164,13 +158,18 @@ export function ChatHistoryPanel({
                           className="chat-history-panel-delete"
                           onClick={(event) => {
                             event.stopPropagation()
-                            setPendingDelete(chat)
+                            if (!deleting) setPendingDelete(chat)
                           }}
                           disabled={deleting}
-                          aria-label={`Delete ${title}`}
-                          title="Delete"
+                          aria-busy={deleting}
+                          aria-label={deleting ? `Deleting ${title}` : `Delete ${title}`}
+                          title={deleting ? 'Deleting…' : 'Delete'}
                         >
-                          <Trash2 size={14} strokeWidth={2} aria-hidden />
+                          {deleting ? (
+                            <LoadingSpinner size="sm" />
+                          ) : (
+                            <Trash2 size={14} strokeWidth={2} aria-hidden />
+                          )}
                         </button>
                       </li>
                     )
@@ -186,9 +185,7 @@ export function ChatHistoryPanel({
         <div
           className="chat-history-delete-overlay"
           role="presentation"
-          onClick={() => {
-            if (!confirming) setPendingDelete(null)
-          }}
+          onClick={() => setPendingDelete(null)}
         >
           <div
             className="chat-history-delete-dialog"
@@ -208,17 +205,11 @@ export function ChatHistoryPanel({
                 type="button"
                 className="btn btn-secondary"
                 onClick={() => setPendingDelete(null)}
-                disabled={confirming}
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                className="btn btn-danger"
-                onClick={() => void handleConfirmDelete()}
-                disabled={confirming}
-              >
-                {confirming ? 'Deleting…' : 'Delete'}
+              <button type="button" className="btn btn-danger" onClick={handleConfirmDelete}>
+                Delete
               </button>
             </div>
           </div>
