@@ -129,6 +129,13 @@ async def _reconcile_gha_success(*, job_id: str, matched: dict) -> None:
 
             attachment = await session.get(ChatAttachment, run_row.attachment_id)
             if attachment is not None and attachment.parse_status == ParseStatus.READY.value:
+                from app.platform.audio_capture.webhook import sync_capture_from_parse_webhook
+
+                await sync_capture_from_parse_webhook(
+                    session,
+                    attachment_id=run_row.attachment_id,
+                    parse_status=ParseStatus.READY.value,
+                )
                 await jobs.update_run_status(job_id, "succeeded")
                 await session.commit()
                 return

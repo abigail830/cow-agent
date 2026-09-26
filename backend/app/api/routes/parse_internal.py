@@ -171,6 +171,13 @@ async def put_artifact(
         size_bytes=len(data),
         content_type=content_type,
     )
+    from app.platform.audio_capture.webhook import maybe_finalize_capture_after_parsed_artifact
+
+    await maybe_finalize_capture_after_parsed_artifact(
+        db,
+        attachment_id=attachment_id,
+        artifact_key=artifact_key,
+    )
     await db.commit()
     return {"status": "ok", "artifact": artifact_key}
 

@@ -65,6 +65,11 @@ def _stage_snapshot_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _webhook_artifacts_ready(payload: dict[str, Any]) -> bool:
+    artifacts = payload.get("artifacts") or {}
+    return isinstance(artifacts, dict) and bool(artifacts.get("ready"))
+
+
 def _map_parse_status(payload: dict[str, Any]) -> str:
     event = payload.get("event") or ""
     status = str(payload.get("status") or "").lower()
@@ -102,7 +107,8 @@ async def apply_webhook_event(
         return None
 
     parse_status = _map_parse_status(payload)
-    if parse_status == ParseStatus.READY.value:
+    artifacts_ready = _webhook_artifacts_ready(payload)
+    if parse_status == ParseStatus.READY.value and not artifacts_ready:
         attachment = await session.get(ChatAttachment, run_row.attachment_id)
         manifest = getattr(attachment, "parsed_artifact_manifest", None) if attachment is not None else None
         if not parsed_artifact_in_manifest(manifest, "meta_json"):

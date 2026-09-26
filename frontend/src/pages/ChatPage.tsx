@@ -97,6 +97,7 @@ import {
   parseDoneTurnMessages,
 } from '../lib/messageActivity'
 import { parseContextUsage } from '../lib/contextUsage'
+import { syncAudioTranscriptMessagesFromAttachments } from '../lib/syncAudioTranscriptFromAttachments'
 import { timelineToMessages } from '../lib/timelineAdapter'
 import { turnSyncStatusLabel } from '../lib/turnSync'
 import type { ArtifactSpec } from '../types/artifact'
@@ -1066,14 +1067,19 @@ export function ChatPage() {
 
   const shouldPollParseProgress = hasParsingAttachments || parseDrawerNeedsPoll
 
+  const displayMessages = useMemo(
+    () => syncAudioTranscriptMessagesFromAttachments(messages, chatAttachments, chatId),
+    [messages, chatAttachments, chatId],
+  )
+
   const hasRunningAudioTranscript = useMemo(
     () =>
-      messages.some((message) => {
+      displayMessages.some((message) => {
         const spec = message.metadata?.spec
         if (!spec || typeof spec !== 'object') return false
         return (spec as ArtifactSpec).kind === 'audio_transcript' && (spec as ArtifactSpec).job_status === 'running'
       }),
-    [messages],
+    [displayMessages],
   )
 
   useEffect(() => {
@@ -2350,7 +2356,7 @@ export function ChatPage() {
                           </div>
                         )}
                         <ChatMessageList
-                          messages={messages}
+                          messages={displayMessages}
                           loading={loading}
                           turnSyncHint={turnSyncHint}
                           proposalPanelOpen={isProposalComposer && !proposalPanelCollapsed}

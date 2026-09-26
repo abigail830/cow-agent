@@ -1451,7 +1451,11 @@ async def list_chat_messages(db: AsyncSession, chat_id: uuid.UUID) -> list[dict[
 
 
 async def list_chat_timeline(db: AsyncSession, chat_id: uuid.UUID) -> dict[str, Any]:
+    from app.platform.audio_capture.webhook import reconcile_audio_transcript_artifacts_for_chat
     from app.platform.chat.timeline_projection import build_timeline_response
+
+    if await reconcile_audio_transcript_artifacts_for_chat(db, chat_id):
+        await db.commit()
 
     messages = await ChatMessageRepository(db).list_by_chat(chat_id)
     annotations = await ChatUiAnnotationRepository(db).list_by_chat(chat_id)
