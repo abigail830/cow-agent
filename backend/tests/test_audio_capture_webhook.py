@@ -8,26 +8,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.platform.audio_capture.webhook import (
-    _effective_transcript_job_status,
+    _capture_job_status,
     maybe_finalize_capture_after_parsed_artifact,
     sync_capture_from_parse_webhook,
 )
 from app.platform.parse_pipeline.webhook import apply_webhook_event
 
 
-def test_effective_status_ready_when_content_md_in_manifest() -> None:
-    attachment = SimpleNamespace(
-        parse_status="running",
-        parsed_artifact_manifest={
-            "artifacts": {"content_md": {"artifact_key": "content_md"}},
-        },
-    )
-    capture_status, job_status = _effective_transcript_job_status(
-        parse_status="running",
-        attachment=attachment,
-    )
-    assert capture_status == "ready"
-    assert job_status == "ready"
+def test_capture_job_status_maps_parse_status() -> None:
+    assert _capture_job_status("ready") == ("ready", "ready")
+    assert _capture_job_status("failed") == ("failed", "failed")
+    assert _capture_job_status("running") == ("running", "running")
 
 
 @pytest.mark.asyncio
@@ -42,20 +33,8 @@ async def test_sync_capture_marks_annotation_ready() -> None:
         output_annotation_id=annotation_id,
     )
     annotation = SimpleNamespace(display={"title": "Audio transcript"})
-    host_attachment = SimpleNamespace(
-        parse_status="ready",
-        parsed_artifact_manifest={"artifacts": {"content_md": {}}},
-    )
     session = AsyncMock()
-
-    async def _get(model, pk):
-        if pk == annotation_id:
-            return annotation
-        if pk == attachment_id:
-            return host_attachment
-        return None
-
-    session.get = AsyncMock(side_effect=_get)
+    session.get = AsyncMock(return_value=annotation)
 
     with patch(
         "app.platform.audio_capture.webhook.AudioCaptureRepository",
