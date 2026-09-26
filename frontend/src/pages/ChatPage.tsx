@@ -249,7 +249,7 @@ export function ChatPage() {
   const proposalPanelTabRef = useRef(new Map<string, ProposalPanelTab>())
   const [memoryRefreshKey, setMemoryRefreshKey] = useState(0)
   const [forkingChat, setForkingChat] = useState(false)
-  const [deletingChatId, setDeletingChatId] = useState<string | null>(null)
+  const [deletingChatIds, setDeletingChatIds] = useState<string[]>([])
   const [forkBannerByChatId, setForkBannerByChatId] = useState<Record<string, ForkBannerState>>({})
   const messagesScrollRef = useRef<HTMLDivElement>(null)
   const pinToBottomRef = useRef(true)
@@ -2058,7 +2058,17 @@ export function ChatPage() {
 
   const handleDeleteChat = useCallback(
     async (id: string) => {
-      if (!selectedId || deletingChatId === id) return
+      if (!selectedId) return
+      let alreadyDeleting = false
+      setDeletingChatIds((prev) => {
+        if (prev.includes(id)) {
+          alreadyDeleting = true
+          return prev
+        }
+        return [...prev, id]
+      })
+      if (alreadyDeleting) return
+
       const current = getAgentSession(sessionsRef.current, selectedId)
       const wasActive = current.chatId === id
       if (wasActive) {
@@ -2073,7 +2083,6 @@ export function ChatPage() {
         patchSession(selectedId, fulfillment.newChatPatch())
       }
 
-      setDeletingChatId(id)
       try {
         await api.deleteChat(id)
       } catch (e) {
@@ -2082,7 +2091,7 @@ export function ChatPage() {
         })
         throw e
       } finally {
-        setDeletingChatId(null)
+        setDeletingChatIds((prev) => prev.filter((rowId) => rowId !== id))
       }
 
       clearForkBanner(id)
@@ -2093,27 +2102,23 @@ export function ChatPage() {
         return next
       })
 
-      const remaining = current.chatHistory.filter((row) => row.id !== id)
-      patchSession(selectedId, { chatHistory: remaining })
+      let remainingAfterDelete = current.chatHistory
+      patchSession(selectedId, (session) => {
+        remainingAfterDelete = session.chatHistory.filter((row) => row.id !== id)
+        return { chatHistory: remainingAfterDelete }
+      })
 
       if (!wasActive) return
 
       const storedId = getStoredChatId(selectedId)
-      if (remaining.length > 0 && storedId && storedId !== id) {
-        const stillStored = remaining.some((row) => row.id === storedId)
+      if (remainingAfterDelete.length > 0 && storedId && storedId !== id) {
+        const stillStored = remainingAfterDelete.some((row) => row.id === storedId)
         if (stillStored) {
           await openChatById(selectedId, storedId)
         }
       }
     },
-    [
-      selectedId,
-      deletingChatId,
-      enterStandbyMode,
-      fulfillment,
-      openChatById,
-      patchSession,
-    ],
+    [selectedId, enterStandbyMode, fulfillment, openChatById, patchSession],
   )
 
   useEffect(() => {
@@ -2622,7 +2627,7 @@ export function ChatPage() {
               chats={chatHistory}
               activeChatId={chatId}
               loading={chatHistoryLoading}
-              deletingChatId={deletingChatId}
+              deletingChatIds={deletingChatIds}
               onClose={() => setHistoryOpen(false)}
               onSelect={(id) => void openHistoryChat(id)}
               onDelete={handleDeleteChat}

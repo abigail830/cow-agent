@@ -8,7 +8,7 @@ type Props = {
   chats: ChatSummary[]
   activeChatId: string | null
   loading: boolean
-  deletingChatId?: string | null
+  deletingChatIds?: string[]
   onClose: () => void
   onSelect: (chatId: string) => void
   onDelete: (chatId: string) => Promise<void>
@@ -54,7 +54,7 @@ export function ChatHistoryPanel({
   chats,
   activeChatId,
   loading,
-  deletingChatId = null,
+  deletingChatIds = [],
   onClose,
   onSelect,
   onDelete,
@@ -138,7 +138,7 @@ export function ChatHistoryPanel({
                 <ul className="chat-history-panel-list">
                   {group.chats.map((chat) => {
                     const active = chat.id === activeChatId
-                    const deleting = chat.id === deletingChatId
+                    const deleting = deletingChatIds.includes(chat.id)
                     const title = chatLabel(chat)
                     return (
                       <li
