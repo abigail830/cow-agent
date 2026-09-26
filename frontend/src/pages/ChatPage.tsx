@@ -76,6 +76,7 @@ import { isAttachmentReferenceCompatible } from '../lib/attachmentCompat'
 import {
   detectMentionTrigger,
   filterAttachmentsForMention,
+  captureMentionText,
   insertMentionIntoText,
   parseAttachmentMentionIds,
   type MentionTrigger,
@@ -1200,7 +1201,7 @@ export function ChatPage() {
           session.input,
           cursor,
           mentionTrigger.start,
-          attachment.filename,
+          captureMentionText(attachment),
         )
         patchSession(selectedId, { input: nextValue })
         mentionDismissedStartRef.current = null
@@ -1211,7 +1212,7 @@ export function ChatPage() {
         })
       } else {
         const needsSpace = session.input.length > 0 && !/\s$/.test(session.input)
-        const mention = `${needsSpace ? ' ' : ''}@${attachment.filename} `
+        const mention = `${needsSpace ? ' ' : ''}@${captureMentionText(attachment)} `
         patchSession(selectedId, { input: `${session.input}${mention}` })
         mentionDismissedStartRef.current = null
         setMentionTrigger(null)

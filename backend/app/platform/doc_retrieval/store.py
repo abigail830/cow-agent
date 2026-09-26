@@ -13,6 +13,7 @@ from app.db.repositories.attachments import AttachmentRepository
 from app.platform.attachments.kinds import AttachmentKind, classify_attachment
 from app.platform.doc_retrieval.context import ChatAttachmentIndexEntry, DocRetrievalContext
 from app.platform.docstore.blob import load_parsed_artifact, load_parsed_figure
+from app.platform.docstore.manifest import parsed_artifact_in_manifest
 from app.platform.docstore.models import PARSE_READY_STATUSES
 
 
@@ -77,8 +78,14 @@ async def build_chat_library(
     rows = await repo.list_for_chat(chat_id)
     library: dict[str, ChatAttachmentIndexEntry] = {}
     for row in rows:
+        role = getattr(row, "attachment_role", None)
+        if role == "audio_part":
+            continue
         status = str(row.parse_status or "ready")
-        if status not in PARSE_READY_STATUSES:
+        if role == "transcript_host":
+            if not parsed_artifact_in_manifest(row.parsed_artifact_manifest, "content_md"):
+                continue
+        elif status not in PARSE_READY_STATUSES:
             continue
         meta: dict[str, Any] | None = None
         if load_meta:

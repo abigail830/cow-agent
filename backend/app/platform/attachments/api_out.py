@@ -44,4 +44,6 @@ def attachment_out(chat_id: uuid.UUID, row: dict[str, Any]) -> AttachmentOut:
         parse_job_id=row.get("parse_job_id"),
         parse_error_message=row.get("parse_error_message"),
         parse_progress=progress,
+        attachment_role=row.get("attachment_role"),
+        capture_id=row.get("capture_id"),
     )

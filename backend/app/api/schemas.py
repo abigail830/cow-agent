@@ -189,6 +189,8 @@ class AttachmentOut(BaseModel):
     parse_job_id: str | None = None
     parse_error_message: str | None = None
     parse_progress: ParseProgressOut | None = None
+    attachment_role: str | None = None
+    capture_id: str | None = None
 
 
 class ParsedArtifactsOut(BaseModel):

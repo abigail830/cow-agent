@@ -6,6 +6,36 @@ export type MentionTrigger = {
   query: string
 }
 
+/** One audio capture → one transcript_host row; @ references the capture title, not .m4a parts. */
+export function isAudioCaptureTranscript(att: ChatAttachment): boolean {
+  return att.attachment_role === 'transcript_host' && Boolean(att.capture_id)
+}
+
+/** Text inserted after @ for this attachment (capture title without .md when applicable). */
+export function captureMentionText(att: ChatAttachment): string {
+  if (isAudioCaptureTranscript(att)) {
+    return att.filename.replace(/\.md$/i, '')
+  }
+  return att.filename
+}
+
+function mentionTokensForAttachment(att: ChatAttachment): string[] {
+  const primary = captureMentionText(att)
+  const tokens = [`@${primary}`]
+  if (primary !== att.filename) {
+    tokens.push(`@${att.filename}`)
+  }
+  return tokens.sort((a, b) => b.length - a.length)
+}
+
+type MentionMatch = { att: ChatAttachment; token: string }
+
+function mentionMatchesSorted(attachments: ChatAttachment[]): MentionMatch[] {
+  return attachments
+    .flatMap((att) => mentionTokensForAttachment(att).map((token) => ({ att, token })))
+    .sort((a, b) => b.token.length - a.token.length)
+}
+
 /**
  * Detect an in-progress `@query` at the cursor.
  * Already-resolved `@filename` chips are closed tokens: typing immediately after
@@ -45,7 +75,10 @@ export function filterAttachmentsForMention(
   return attachments.filter((att) => {
     if (!isAttachmentReferenceCompatible(att).compatible) return false
     if (!normalized) return true
-    return att.filename.toLowerCase().includes(normalized)
+    const label = captureMentionText(att).toLowerCase()
+    return (
+      att.filename.toLowerCase().includes(normalized) || label.includes(normalized)
+    )
   })
 }
 
@@ -59,7 +92,7 @@ export function segmentInputByMentions(
   attachments: ChatAttachment[],
 ): InputMentionSegment[] {
   if (!text) return []
-  const byFilename = [...attachments].sort((a, b) => b.filename.length - a.filename.length)
+  const matches = mentionMatchesSorted(attachments)
   const segments: InputMentionSegment[] = []
   let index = 0
   while (index < text.length) {
@@ -71,8 +104,7 @@ export function segmentInputByMentions(
       continue
     }
     let matched = false
-    for (const att of byFilename) {
-      const token = `@${att.filename}`
+    for (const { att, token } of matches) {
       if (text.slice(index, index + token.length) === token) {
         segments.push({ kind: 'mention', value: token, attachment: att })
         index += token.length
@@ -94,7 +126,7 @@ export function parseAttachmentMentionIds(
   attachments: ChatAttachment[],
 ): string[] {
   if (!text || attachments.length === 0) return []
-  const byFilename = [...attachments].sort((a, b) => b.filename.length - a.filename.length)
+  const matches = mentionMatchesSorted(attachments)
   const ids: string[] = []
   let index = 0
   while (index < text.length) {
@@ -103,8 +135,7 @@ export function parseAttachmentMentionIds(
       continue
     }
     let matched = false
-    for (const att of byFilename) {
-      const token = `@${att.filename}`
+    for (const { att, token } of matches) {
       if (text.slice(index, index + token.length) === token) {
         ids.push(att.id)
         index += token.length
@@ -120,10 +151,11 @@ export function parseAttachmentMentionIds(
 /** Remove `@filename` tokens already shown as attachment chips in the sent message UI. */
 export function stripAttachmentMentionsFromText(
   text: string,
-  attachments: Array<{ filename: string }>,
+  attachments: Array<{ filename: string; attachment_role?: string | null; capture_id?: string | null }>,
 ): string {
   if (!text || attachments.length === 0) return text
-  const byFilename = [...attachments].sort((a, b) => b.filename.length - a.filename.length)
+  const fullAttachments = attachments as ChatAttachment[]
+  const matches = mentionMatchesSorted(fullAttachments)
   let result = ''
   let index = 0
   while (index < text.length) {
@@ -133,8 +165,7 @@ export function stripAttachmentMentionsFromText(
       continue
     }
     let matched = false
-    for (const att of byFilename) {
-      const token = `@${att.filename}`
+    for (const { token } of matches) {
       if (text.slice(index, index + token.length) === token) {
         index += token.length
         matched = true

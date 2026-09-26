@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { FileText, Search } from 'lucide-react'
+import { captureMentionText, isAudioCaptureTranscript } from '../lib/attachmentMentions'
 import type { ChatAttachment } from '../types'
 import { formatAttachmentTimestamp } from '../lib/attachmentMentions'
 
@@ -132,9 +133,10 @@ export function AttachmentMentionPopup({
                 <FileText size={16} strokeWidth={1.5} />
               </span>
               <span className="attachment-mention-item-body">
-                <span className="attachment-mention-name">{att.filename}</span>
+                <span className="attachment-mention-name">{captureMentionText(att)}</span>
                 <span className="attachment-mention-meta">
-                  Attachment · {formatFileSize(att.size_bytes)}
+                  {isAudioCaptureTranscript(att) ? 'Audio capture' : 'Attachment'} ·{' '}
+                  {formatFileSize(att.size_bytes)}
                   {att.created_at ? ` · ${formatAttachmentTimestamp(att.created_at)}` : ''}
                 </span>
               </span>

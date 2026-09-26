@@ -109,6 +109,8 @@ export interface ChatAttachment {
   parse_job_id?: string | null
   parse_error_message?: string | null
   parse_progress?: AttachmentParseProgress | null
+  attachment_role?: string | null
+  capture_id?: string | null
 }
 
 export interface ParsedArtifactsAvailability {

@@ -63,6 +63,8 @@ class AttachmentService:
         rows = await self._attachments.list_for_chat(chat_id)
         result: list[dict] = []
         for row in rows:
+            if getattr(row, "attachment_role", None) == "audio_part":
+                continue
             payload = attachment_metadata(row)
             if row.created_at is not None:
                 payload["created_at"] = row.created_at.isoformat()

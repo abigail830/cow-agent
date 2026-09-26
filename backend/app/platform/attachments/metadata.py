@@ -20,6 +20,12 @@ def attachment_metadata(att: Any) -> dict[str, Any]:
     content_hash = getattr(att, "content_hash", None)
     if content_hash:
         payload["content_hash"] = content_hash
+    attachment_role = getattr(att, "attachment_role", None)
+    if attachment_role:
+        payload["attachment_role"] = attachment_role
+    capture_id = getattr(att, "capture_id", None)
+    if capture_id is not None:
+        payload["capture_id"] = str(capture_id)
     created_at = getattr(att, "created_at", None)
     if created_at is not None:
         payload["created_at"] = created_at.isoformat()
