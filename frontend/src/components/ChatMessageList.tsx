@@ -25,6 +25,7 @@ type Props = {
   expandedArtifactId?: string | null
   onExpandArtifact?: (spec: ArtifactSpec) => void
   onViewParsePipeline?: (attachmentId: string) => void
+  onRetryAudioTranscript?: (attachmentId: string) => Promise<void>
   fulfillmentChatId?: string | null
   fulfillmentForms?: FulfillmentForm[]
   fulfillmentFormsLoading?: boolean
@@ -74,6 +75,7 @@ function renderBlock(
   expandedArtifactId?: string | null,
   onExpandArtifact?: (spec: ArtifactSpec) => void,
   onViewParsePipeline?: (attachmentId: string) => void,
+  onRetryAudioTranscript?: (attachmentId: string) => Promise<void>,
 ) {
   if (block.kind === 'bubble') {
     return <MessageBubble message={block.message} />
@@ -93,6 +95,7 @@ function renderBlock(
           expanded={isArtifactExpanded(block.spec, proposalPanelOpen, expandedArtifactId)}
           onExpand={onExpandArtifact}
           onViewParsePipeline={onViewParsePipeline}
+          onRetryAudioTranscript={onRetryAudioTranscript}
         />
       </div>
     )
@@ -112,6 +115,7 @@ export function ChatMessageList({
   expandedArtifactId = null,
   onExpandArtifact,
   onViewParsePipeline,
+  onRetryAudioTranscript,
   fulfillmentChatId = null,
   fulfillmentForms = [],
   fulfillmentFormsLoading = false,
@@ -141,6 +145,7 @@ export function ChatMessageList({
           expandedArtifactId,
           onExpandArtifact,
           onViewParsePipeline,
+          onRetryAudioTranscript,
         )
         const turnCopy = assistantCopyByIndex.get(index)
         const showActions = Boolean(turnCopy)

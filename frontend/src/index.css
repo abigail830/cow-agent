@@ -3007,8 +3007,16 @@ body {
   border-color: color-mix(in srgb, var(--color-brand-500, #6366f1) 35%, var(--color-border));
 }
 
+.audio-transcript-artifact-card-failed {
+  border-color: color-mix(in srgb, #b42318 35%, var(--color-border));
+}
+
 .audio-transcript-artifact-spinner {
   margin-left: 0.25rem;
+}
+
+.artifact-inline-action-btn-retry:not(:disabled):hover {
+  color: #b42318;
 }
 
 .chat-error-bar {
@@ -5321,6 +5329,7 @@ body {
   --cover-diagram: oklch(0.84 0.08 330);
   --cover-pdf: oklch(0.82 0.1 25);
   --cover-markdown: oklch(0.86 0.02 260);
+  --cover-audio: oklch(0.84 0.1 290);
   --cover-generic: oklch(0.88 0.015 80);
   --cover-accent: var(--cover-generic);
 
@@ -5392,6 +5401,10 @@ body {
 
 .artifact-cover.artifact-markdown {
   --cover-accent: var(--cover-markdown);
+}
+
+.artifact-cover.artifact-audio {
+  --cover-accent: var(--cover-audio);
 }
 
 .artifact-cover.artifact-generic {

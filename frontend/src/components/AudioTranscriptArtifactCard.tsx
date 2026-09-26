@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { RotateCcw } from 'lucide-react'
 import type { ArtifactSpec } from '../types/artifact'
 import { artifactCardSubtitle, isMarkdownPreviewableArtifact } from '../lib/artifactKinds'
 import { ArtifactCoverIllustration, resolveArtifactCoverKind } from './ArtifactCoverIllustration'
@@ -12,6 +13,7 @@ type Props = {
   expanded?: boolean
   onExpand?: (spec: ArtifactSpec) => void
   onViewPipeline?: (attachmentId: string) => void
+  onRetry?: (attachmentId: string) => Promise<void>
 }
 
 export function AudioTranscriptArtifactCard({
@@ -19,14 +21,18 @@ export function AudioTranscriptArtifactCard({
   expanded = false,
   onExpand,
   onViewPipeline,
+  onRetry,
 }: Props) {
   const [downloading, setDownloading] = useState(false)
+  const [retrying, setRetrying] = useState(false)
   const jobStatus = spec.job_status ?? 'running'
   const isRunning = jobStatus === 'running'
   const isFailed = jobStatus === 'failed'
   const canPreview = isMarkdownPreviewableArtifact(spec)
   const canDownload = Boolean(spec.download_url?.trim()) || Boolean(spec.content?.trim())
   const attachmentId = spec.attachment_id ?? spec.artifact_id
+  const canViewPipeline = Boolean(attachmentId && onViewPipeline)
+  const canRetry = Boolean(isFailed && attachmentId && onRetry)
 
   async function handleDownload() {
     if (!canDownload || downloading) return
@@ -35,6 +41,16 @@ export function AudioTranscriptArtifactCard({
       await downloadArtifactFile(spec)
     } finally {
       setDownloading(false)
+    }
+  }
+
+  async function handleRetry() {
+    if (!canRetry || !attachmentId || !onRetry || retrying) return
+    setRetrying(true)
+    try {
+      await onRetry(attachmentId)
+    } finally {
+      setRetrying(false)
     }
   }
 
@@ -56,19 +72,30 @@ export function AudioTranscriptArtifactCard({
         ) : null}
         {isFailed ? (
           <p className="audio-transcript-artifact-hint audio-transcript-artifact-hint-error">
-            Transcription failed. Open the pipeline for details or retry from Documents.
+            Transcription failed. Open the pipeline for details or retry below.
           </p>
         ) : null}
       </div>
       <div className="artifact-inline-card-actions inline-download-artifact-actions" role="toolbar" aria-label="Artifact actions">
         <div className="artifact-inline-action-group">
-          {isRunning && attachmentId && onViewPipeline ? (
+          {canViewPipeline ? (
             <button
               type="button"
               className="artifact-inline-action-btn"
-              onClick={() => onViewPipeline(attachmentId)}
+              onClick={() => onViewPipeline!(attachmentId!)}
             >
               View pipeline
+            </button>
+          ) : null}
+          {canRetry ? (
+            <button
+              type="button"
+              className="artifact-inline-action-btn artifact-inline-action-btn-retry"
+              disabled={retrying}
+              onClick={() => void handleRetry()}
+            >
+              {retrying ? <LoadingSpinner size="sm" /> : <RotateCcw size={14} aria-hidden />}
+              <span>{retrying ? 'Retrying…' : 'Retry'}</span>
             </button>
           ) : null}
           {canPreview ? (

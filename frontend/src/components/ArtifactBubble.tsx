@@ -16,9 +16,16 @@ type Props = {
   expanded?: boolean
   onExpand?: (spec: ArtifactSpec) => void
   onViewParsePipeline?: (attachmentId: string) => void
+  onRetryAudioTranscript?: (attachmentId: string) => Promise<void>
 }
 
-export function ArtifactBubble({ spec, expanded = false, onExpand, onViewParsePipeline }: Props) {
+export function ArtifactBubble({
+  spec,
+  expanded = false,
+  onExpand,
+  onViewParsePipeline,
+  onRetryAudioTranscript,
+}: Props) {
   if (isAudioTranscriptArtifact(spec)) {
     return (
       <AudioTranscriptArtifactCard
@@ -26,6 +33,7 @@ export function ArtifactBubble({ spec, expanded = false, onExpand, onViewParsePi
         expanded={expanded}
         onExpand={onExpand}
         onViewPipeline={onViewParsePipeline}
+        onRetry={onRetryAudioTranscript}
       />
     )
   }

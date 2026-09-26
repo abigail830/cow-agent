@@ -1294,6 +1294,30 @@ export function ChatPage() {
     [chatId, patchChatAttachments, patchSession, selectedId],
   )
 
+  const handleRetryAudioTranscript = useCallback(
+    async (attachmentId: string) => {
+      if (!chatId || !selectedId) return
+      const attachment = chatAttachments.find((row) => row.id === attachmentId)
+      const target: ChatAttachmentListItem =
+        attachment ??
+        ({
+          id: attachmentId,
+          chat_id: chatId,
+          filename: 'Audio transcript',
+          mime_type: 'text/markdown',
+          size_bytes: 0,
+          provider: 'platform',
+          provider_file_id: attachmentId,
+          created_at: null,
+          parse_status: 'failed',
+        } satisfies ChatAttachmentListItem)
+      await handleRetryAttachmentParse(target)
+      await reloadMessagesAfterStream(selectedId, chatId)
+      await loadChatAttachments(chatId, { silent: true })
+    },
+    [chatAttachments, chatId, handleRetryAttachmentParse, loadChatAttachments, reloadMessagesAfterStream, selectedId],
+  )
+
   const uploadToLibrary = useCallback(
     (file: File): void => {
       if (!selectedId) return
@@ -2307,6 +2331,7 @@ export function ChatPage() {
                           expandedArtifactId={expandedArtifact?.artifact_id ?? null}
                           onExpandArtifact={handleExpandArtifact}
                           onViewParsePipeline={handleViewParsePipeline}
+                          onRetryAudioTranscript={chatId ? handleRetryAudioTranscript : undefined}
                           fulfillmentChatId={isYlWorker2 ? chatId : null}
                           fulfillmentForms={isYlWorker2 ? fulfillmentForms : []}
                           fulfillmentFormsLoading={isYlWorker2 ? fulfillmentFormsLoading : false}

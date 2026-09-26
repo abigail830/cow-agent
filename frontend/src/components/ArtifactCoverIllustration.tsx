@@ -1,12 +1,21 @@
 import type { ReactNode } from 'react'
 import type { ArtifactSpec } from '../types/artifact'
 
-export type ArtifactCoverKind = 'word' | 'slides' | 'web' | 'diagram' | 'pdf' | 'markdown' | 'generic'
+export type ArtifactCoverKind =
+  | 'word'
+  | 'slides'
+  | 'web'
+  | 'diagram'
+  | 'pdf'
+  | 'markdown'
+  | 'audio'
+  | 'generic'
 
 export function resolveArtifactCoverKind(spec: ArtifactSpec): ArtifactCoverKind {
   const format = (spec.format || '').toLowerCase()
   const name = (spec.filename || '').toLowerCase()
 
+  if (spec.kind === 'audio_transcript') return 'audio'
   if (spec.kind === 'diagram_svg' || format === 'svg') return 'diagram'
   if (spec.kind === 'slide_deck') {
     if (format === 'html' || name.endsWith('.html')) return 'web'
@@ -90,6 +99,20 @@ function MarkdownCover() {
   )
 }
 
+/** Microphone + waveform — same line-art language as other artifact covers. */
+function AudioCover() {
+  return (
+    <svg viewBox="0 0 180 112" aria-hidden="true">
+      <path d="M32 22h116v68H32z" />
+      <path className="cover-fill" d="M42 34h40v44H42z" />
+      <path d="M52 46v10a8 8 0 0 0 16 0V46" />
+      <path d="M60 68v6M54 74h12" />
+      <circle cx="60" cy="42" r="3" />
+      <path d="M96 58v12M106 50v28M116 44v36M126 52v20M136 48v32M146 56v16" />
+    </svg>
+  )
+}
+
 function GenericCover() {
   return (
     <svg viewBox="0 0 180 112" aria-hidden="true">
@@ -108,6 +131,7 @@ const COVER_BY_KIND: Record<ArtifactCoverKind, () => ReactNode> = {
   diagram: DiagramCover,
   pdf: PdfCover,
   markdown: MarkdownCover,
+  audio: AudioCover,
   generic: GenericCover,
 }
 
