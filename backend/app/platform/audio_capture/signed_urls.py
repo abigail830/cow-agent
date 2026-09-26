@@ -6,11 +6,16 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import time
 import uuid
 from typing import Any
 
 from app.config import get_settings
+from app.platform.attachments.storage import inline_attachment_blob_path
+from app.platform.blob.client import blob_presigned_get_url, blob_storage_enabled
+
+logger = logging.getLogger(__name__)
 
 
 def _secret() -> bytes:
@@ -61,3 +66,22 @@ def public_asr_file_url(*, chat_id: uuid.UUID, attachment_id: uuid.UUID) -> str:
     public_base = (settings.parse_pipeline_public_base_url or "http://127.0.0.1:8000").strip()
     token, _ = mint_asr_file_token(chat_id=chat_id, attachment_id=attachment_id)
     return f"{public_base.rstrip('/')}/api/v1/public/asr-files/{token}"
+
+
+def mint_asr_download_url(*, chat_id: uuid.UUID, attachment_id: uuid.UUID) -> tuple[str, int]:
+    """Mint an internet-reachable audio URL for external ASR providers."""
+    settings = get_settings()
+    ttl_sec = max(300, int(settings.asr_signed_url_ttl_sec))
+    expires_at = int(time.time()) + ttl_sec
+    if blob_storage_enabled():
+        pathname = inline_attachment_blob_path(chat_id, attachment_id)
+        try:
+            url = blob_presigned_get_url(pathname, valid_until_ms=expires_at * 1000)
+            return url, expires_at
+        except Exception as exc:
+            logger.warning(
+                "Blob presigned ASR URL failed for %s, falling back to proxy URL: %s",
+                pathname,
+                exc,
+            )
+    return public_asr_file_url(chat_id=chat_id, attachment_id=attachment_id), expires_at

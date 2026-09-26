@@ -234,7 +234,7 @@ async def mint_asr_files(
     authorization: str | None = Header(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    from app.platform.audio_capture.signed_urls import mint_asr_file_token, public_asr_file_url
+    from app.platform.audio_capture.signed_urls import mint_asr_download_url
 
     token = _extract_bearer(authorization)
     jobs = ParseJobRepository(db)
@@ -246,11 +246,14 @@ async def mint_asr_files(
     for attachment_id in body.attachment_ids:
         if not jobs.payload_allows_attachment(run_row, attachment_id):
             raise HTTPException(status_code=403, detail=f"attachment not in job: {attachment_id}")
-        _, expires_at = mint_asr_file_token(chat_id=run_row.chat_id, attachment_id=attachment_id)
+        download_url, expires_at = mint_asr_download_url(
+            chat_id=run_row.chat_id,
+            attachment_id=attachment_id,
+        )
         urls.append(
             {
                 "attachment_id": str(attachment_id),
-                "url": public_asr_file_url(chat_id=run_row.chat_id, attachment_id=attachment_id),
+                "url": download_url,
                 "expires_at": expires_at,
             }
         )

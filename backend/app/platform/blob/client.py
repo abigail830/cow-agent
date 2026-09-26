@@ -228,6 +228,109 @@ def blob_delete_prefix(pathname_prefix: str) -> int:
     return deleted
 
 
+_PRESIGN_CANONICAL_QUERY_KEYS = (
+    "vercel-blob-add-random-suffix",
+    "vercel-blob-allow-overwrite",
+    "vercel-blob-allowed-content-types",
+    "vercel-blob-cache-control-max-age",
+    "vercel-blob-callback-token-payload",
+    "vercel-blob-callback-url",
+    "vercel-blob-if-match",
+    "vercel-blob-maximum-size-in-bytes",
+    "vercel-blob-valid-until",
+)
+
+
+def _hmac_sha256_base64url(key: str, data: str) -> str:
+    digest = hmac.new(key.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
+def _build_presign_canonical_string(
+    *,
+    pathname: str,
+    operation: str,
+    presign_entries: list[tuple[str, str]],
+) -> str:
+    lines = [f"operation={operation}", f"pathname={pathname.lstrip('/')}"]
+    entry_map = dict(presign_entries)
+    for key in _PRESIGN_CANONICAL_QUERY_KEYS:
+        value = entry_map.get(key)
+        if value:
+            lines.append(f"{key}={value}")
+    lines.sort()
+    return "\n".join(lines)
+
+
+def _add_presigned_params(base_url: str, *, delegation_token: str, signature: str, params: dict[str, str]) -> str:
+    query = urlencode(
+        {
+            **params,
+            "vercel-blob-delegation": delegation_token,
+            "vercel-blob-signature": signature,
+        }
+    )
+    separator = "&" if "?" in base_url else "?"
+    return f"{base_url}{separator}{query}"
+
+
+def blob_issue_signed_token(
+    *,
+    pathname: str,
+    operations: list[str] | None = None,
+    valid_until_ms: int | None = None,
+) -> dict[str, Any]:
+    now_ms = int(time.time() * 1000)
+    valid_until = valid_until_ms or (now_ms + 3600_000)
+    body = {
+        "pathname": pathname.lstrip("/"),
+        "operations": operations or ["get"],
+        "validUntil": valid_until,
+    }
+    url = f"{_BLOB_CONTROL_API}/signed-token"
+    with httpx.Client(timeout=30.0) as client:
+        response = client.post(url, json=body, headers=_auth_headers(content_type="application/json"))
+        response.raise_for_status()
+        data = response.json()
+    if not isinstance(data, dict):
+        raise RuntimeError("Vercel Blob signed-token returned unexpected payload.")
+    return data
+
+
+def blob_presigned_get_url(pathname: str, *, valid_until_ms: int | None = None) -> str:
+    """Return a time-limited public GET URL for a private blob object."""
+    now_ms = int(time.time() * 1000)
+    delegation_valid_until = valid_until_ms or (now_ms + 3600_000)
+    issued = blob_issue_signed_token(
+        pathname=pathname,
+        operations=["get"],
+        valid_until_ms=delegation_valid_until,
+    )
+    delegation_token = str(issued["delegationToken"])
+    client_signing_token = str(issued["clientSigningToken"])
+    deleg_until = int(issued["validUntil"])
+
+    presign_entries: list[tuple[str, str]] = []
+    resolved_until = min(delegation_valid_until, deleg_until)
+    if resolved_until < deleg_until:
+        presign_entries.append(("vercel-blob-valid-until", str(resolved_until)))
+
+    canonical = _build_presign_canonical_string(
+        pathname=pathname,
+        operation="get",
+        presign_entries=presign_entries,
+    )
+    signature = _hmac_sha256_base64url(client_signing_token, canonical)
+    object_path = pathname.lstrip("/")
+    blob_url = _blob_object_url(object_path)
+    return _add_presigned_params(
+        blob_url,
+        delegation_token=delegation_token,
+        signature=signature,
+        params=dict(presign_entries),
+    )
+
+
 def generate_client_upload_token(
     pathname: str,
     *,
