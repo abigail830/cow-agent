@@ -34,7 +34,6 @@ const UDocArtifactViewer = lazy(async () => {
 })
 
 type Props = {
-  onClose: () => void
   onOpenChat?: (chatId: string) => void
 }
 
@@ -598,7 +597,7 @@ function ArtifactDocumentPreviewPane({
   )
 }
 
-export function DocumentsView({ onClose, onOpenChat }: Props) {
+export function DocumentsView({ onOpenChat }: Props) {
   const [documents, setDocuments] = useState<DocumentItem[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -728,17 +727,15 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        if (selected) setSelected(null)
-        else onClose()
+      if (event.key === 'Escape' && selected) {
+        setSelected(null)
       }
     }
     window.document.addEventListener('keydown', onKeyDown)
     return () => window.document.removeEventListener('keydown', onKeyDown)
-  }, [onClose, selected])
+  }, [selected])
 
   const handleOpenChat = (chatId: string) => {
-    onClose()
     onOpenChat?.(chatId)
   }
 
@@ -749,9 +746,6 @@ export function DocumentsView({ onClose, onOpenChat }: Props) {
           <h1 className="documents-view-title">Chat Documents</h1>
           <p className="documents-view-subtitle">Uploads and generated artifacts across sessions.</p>
         </div>
-        <button type="button" className="documents-view-close" onClick={onClose} aria-label="Back to chat">
-          <X size={18} aria-hidden="true" />
-        </button>
       </header>
 
       <div ref={splitRef} className="documents-view-split">

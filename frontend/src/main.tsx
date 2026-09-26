@@ -20,7 +20,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/settings/integrations" element={<IntegrationsSettingsPage />} />
           <Route element={<RequireAuth />}>
             <Route path="/" element={<HomePage />} />
-            <Route path="/chat" element={<ChatPage />} />
+            <Route path="/chat/*" element={<ChatPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

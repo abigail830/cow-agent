@@ -1,20 +1,12 @@
 import { FileText, Plug } from 'lucide-react'
+import { NavLink } from 'react-router-dom'
+import { CHAT_DOCUMENTS_PATH, CHAT_INTEGRATIONS_PATH } from '../lib/chatRoutes'
 
 type Props = {
   collapsed: boolean
-  documentsOpen: boolean
-  integrationsOpen: boolean
-  onOpenDocuments: () => void
-  onOpenIntegrations: () => void
 }
 
-export function SidebarUtilityNav({
-  collapsed,
-  documentsOpen,
-  integrationsOpen,
-  onOpenDocuments,
-  onOpenIntegrations,
-}: Props) {
+export function SidebarUtilityNav({ collapsed }: Props) {
   return (
     <div className="agent-sidebar-utility">
       {!collapsed ? (
@@ -22,30 +14,32 @@ export function SidebarUtilityNav({
       ) : null}
       <ul className={`agent-sidebar-utility-list${collapsed ? ' agent-sidebar-utility-list-collapsed' : ''}`}>
         <li>
-          <button
-            type="button"
+          <NavLink
+            to={CHAT_DOCUMENTS_PATH}
             title={collapsed ? 'Chat Documents' : undefined}
-            className={`agent-nav-item ${documentsOpen ? 'agent-nav-item-active' : ''} ${
-              collapsed ? 'agent-nav-item-collapsed' : ''
-            }`}
-            onClick={onOpenDocuments}
+            className={({ isActive }) =>
+              `agent-nav-item ${isActive ? 'agent-nav-item-active' : ''} ${
+                collapsed ? 'agent-nav-item-collapsed' : ''
+              }`
+            }
           >
             <FileText className="h-[1.375rem] w-[1.375rem] shrink-0" strokeWidth={1.75} aria-hidden="true" />
             {!collapsed ? <span className="agent-nav-label">Chat Documents</span> : null}
-          </button>
+          </NavLink>
         </li>
         <li>
-          <button
-            type="button"
+          <NavLink
+            to={CHAT_INTEGRATIONS_PATH}
             title={collapsed ? 'Integrations' : undefined}
-            className={`agent-nav-item ${integrationsOpen ? 'agent-nav-item-active' : ''} ${
-              collapsed ? 'agent-nav-item-collapsed' : ''
-            }`}
-            onClick={onOpenIntegrations}
+            className={({ isActive }) =>
+              `agent-nav-item ${isActive ? 'agent-nav-item-active' : ''} ${
+                collapsed ? 'agent-nav-item-collapsed' : ''
+              }`
+            }
           >
             <Plug className="h-[1.375rem] w-[1.375rem] shrink-0" strokeWidth={1.75} aria-hidden="true" />
             {!collapsed ? <span className="agent-nav-label">Integrations</span> : null}
-          </button>
+          </NavLink>
         </li>
       </ul>
     </div>

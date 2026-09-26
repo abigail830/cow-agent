@@ -1,9 +1,9 @@
 import { Navigate, useSearchParams } from 'react-router-dom'
+import { CHAT_DOCUMENTS_PATH } from '../lib/chatRoutes'
 
-/** Legacy route — forwards to chat with the documents drawer open. */
+/** OAuth / bookmark compatibility — canonical URL is `/chat/documents`. */
 export function DocumentsSettingsPage() {
   const [searchParams] = useSearchParams()
-  const next = new URLSearchParams(searchParams)
-  next.set('documents', '1')
-  return <Navigate to={`/chat?${next.toString()}`} replace />
+  const qs = searchParams.toString()
+  return <Navigate to={qs ? `${CHAT_DOCUMENTS_PATH}?${qs}` : CHAT_DOCUMENTS_PATH} replace />
 }

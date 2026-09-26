@@ -11,7 +11,7 @@ import {
 import { Mic, Paperclip } from 'lucide-react'
 import { ContextUsageIndicator } from '../components/ContextUsageIndicator'
 import { KbScopePopover } from '../components/KbScopePopover'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, streamChat } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { AgentIcon } from '../components/AgentIcon'
@@ -47,6 +47,12 @@ import { SidebarToggleIcon } from '../components/SidebarToggleIcon'
 import { SidebarUtilityNav } from '../components/SidebarUtilityNav'
 import { SidebarUserMenu } from '../components/SidebarUserMenu'
 import { formatAgentLabel } from '../lib/agentLabel'
+import {
+  CHAT_DOCUMENTS_PATH,
+  CHAT_HOME_PATH,
+  CHAT_INTEGRATIONS_PATH,
+  chatWorkspaceView,
+} from '../lib/chatRoutes'
 import {
   getAgentSession,
   type AgentChatSession,
@@ -207,8 +213,12 @@ function readSidebarCollapsed(): boolean {
 
 export function ChatPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, logout } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
+  const workspaceView = chatWorkspaceView(location.pathname)
+  const documentsOpen = workspaceView === 'documents'
+  const integrationsOpen = workspaceView === 'integrations'
   const [agents, setAgents] = useState<Agent[]>([])
   const [agentsLoading, setAgentsLoading] = useState(true)
   const [agentsError, setAgentsError] = useState<string | null>(null)
@@ -231,8 +241,6 @@ export function ChatPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [memoryOpen, setMemoryOpen] = useState(false)
-  const [integrationsOpen, setIntegrationsOpen] = useState(() => searchParams.get('integrations') === '1')
-  const [documentsOpen, setDocumentsOpen] = useState(() => searchParams.get('documents') === '1')
   const [proposalPanelWidth, setProposalPanelWidth] = useState(readProposalPanelWidth)
   const streamRegistryRef = useRef(new StreamRegistry())
   const reloadInFlightRef = useRef(new Map<string, Promise<void>>())
@@ -537,55 +545,32 @@ export function ChatPage() {
   const closeOverlayPanels = useCallback(() => {
     setHistoryOpen(false)
     setMemoryOpen(false)
-    setIntegrationsOpen(false)
-    setDocumentsOpen(false)
-  }, [])
-
-  const openIntegrations = useCallback(() => {
-    setIntegrationsOpen(true)
-    setHistoryOpen(false)
-    setMemoryOpen(false)
-    setDocumentsOpen(false)
-  }, [])
-
-  const openDocuments = useCallback(() => {
-    setDocumentsOpen(true)
-    setHistoryOpen(false)
-    setMemoryOpen(false)
-    setIntegrationsOpen(false)
-  }, [])
+    if (workspaceView !== 'chat') {
+      navigate(CHAT_HOME_PATH)
+    }
+  }, [navigate, workspaceView])
 
   useEffect(() => {
     if (searchParams.get('integrations') !== '1') return
-    setIntegrationsOpen(true)
-    setHistoryOpen(false)
-    setMemoryOpen(false)
-    setDocumentsOpen(false)
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        next.delete('integrations')
-        return next
-      },
-      { replace: true },
-    )
-  }, [searchParams, setSearchParams])
+    const next = new URLSearchParams(searchParams)
+    next.delete('integrations')
+    const qs = next.toString()
+    navigate(qs ? `${CHAT_INTEGRATIONS_PATH}?${qs}` : CHAT_INTEGRATIONS_PATH, { replace: true })
+  }, [navigate, searchParams])
 
   useEffect(() => {
     if (searchParams.get('documents') !== '1') return
-    setDocumentsOpen(true)
+    const next = new URLSearchParams(searchParams)
+    next.delete('documents')
+    const qs = next.toString()
+    navigate(qs ? `${CHAT_DOCUMENTS_PATH}?${qs}` : CHAT_DOCUMENTS_PATH, { replace: true })
+  }, [navigate, searchParams])
+
+  useEffect(() => {
+    if (workspaceView === 'chat') return
     setHistoryOpen(false)
     setMemoryOpen(false)
-    setIntegrationsOpen(false)
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        next.delete('documents')
-        return next
-      },
-      { replace: true },
-    )
-  }, [searchParams, setSearchParams])
+  }, [workspaceView])
 
   const {
     handleExpandArtifact,
@@ -849,8 +834,9 @@ export function ChatPage() {
       patchSession(agent.id, { chatSessionLoading: true, error: null })
       setSelectedId(agent.id)
       setHistoryOpen(false)
-      setDocumentsOpen(false)
-      setIntegrationsOpen(false)
+      if (workspaceView !== 'chat') {
+        navigate(CHAT_HOME_PATH)
+      }
       try {
         await loadAgentStandby(agent.id)
       } catch (e) {
@@ -860,7 +846,7 @@ export function ChatPage() {
         })
       }
     },
-    [loadAgentStandby, patchSession, selectedId],
+    [loadAgentStandby, navigate, patchSession, selectedId, workspaceView],
   )
 
   const loadAgents = useCallback(async (options?: { autoSelect?: boolean }) => {
@@ -1976,7 +1962,9 @@ export function ChatPage() {
     if (!storedId) return
     if (!chatHistory.some((row) => row.id === storedId)) return
     setHistoryOpen(false)
-    setDocumentsOpen(false)
+    if (workspaceView !== 'chat') {
+      navigate(CHAT_HOME_PATH)
+    }
     proposalFetchKeyRef.current = null
     fulfillment.resetFetchKey()
     try {
@@ -1994,7 +1982,9 @@ export function ChatPage() {
     const current = getAgentSession(sessionsRef.current, selectedId)
     if (current.loading && current.chatId === id) return
     setHistoryOpen(false)
-    setDocumentsOpen(false)
+    if (workspaceView !== 'chat') {
+      navigate(CHAT_HOME_PATH)
+    }
     proposalFetchKeyRef.current = null
     fulfillment.resetFetchKey()
     try {
@@ -2198,7 +2188,7 @@ export function ChatPage() {
           )}
           {!agentsLoading &&
             agents.map((agent) => {
-            const active = agent.id === selectedId && !documentsOpen && !integrationsOpen
+            const active = agent.id === selectedId && workspaceView === 'chat'
             const agentSession = getAgentSession(sessions, agent.id)
             const agentBusy = agentSession.loading
             return (
@@ -2224,13 +2214,7 @@ export function ChatPage() {
           })}
         </ul>
 
-        <SidebarUtilityNav
-          collapsed={sidebarCollapsed}
-          documentsOpen={documentsOpen}
-          integrationsOpen={integrationsOpen}
-          onOpenDocuments={openDocuments}
-          onOpenIntegrations={openIntegrations}
-        />
+        <SidebarUtilityNav collapsed={sidebarCollapsed} />
 
         <div className="agent-sidebar-footer">
           {!sidebarCollapsed ? (
@@ -2250,12 +2234,9 @@ export function ChatPage() {
 
       <section className="chat-main flex min-w-0 flex-1 flex-col">
         {documentsOpen ? (
-          <DocumentsView
-            onClose={() => setDocumentsOpen(false)}
-            onOpenChat={(id) => void openHistoryChat(id)}
-          />
+          <DocumentsView onOpenChat={(id) => void openHistoryChat(id)} />
         ) : integrationsOpen ? (
-          <IntegrationsView onClose={() => setIntegrationsOpen(false)} />
+          <IntegrationsView />
         ) : showChat && selected ? (
           <div className={`chat-main-layout${isProposalComposer ? ' chat-main-layout-proposal' : ''}`}>
             <div className="chat-main-inner">

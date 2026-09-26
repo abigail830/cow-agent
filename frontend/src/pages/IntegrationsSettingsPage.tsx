@@ -1,9 +1,9 @@
 import { Navigate, useSearchParams } from 'react-router-dom'
+import { CHAT_INTEGRATIONS_PATH } from '../lib/chatRoutes'
 
-/** Legacy OAuth callback route — forwards to chat with the integrations view open. */
+/** OAuth callback landing — canonical URL is `/chat/integrations`. */
 export function IntegrationsSettingsPage() {
   const [searchParams] = useSearchParams()
-  const next = new URLSearchParams(searchParams)
-  next.set('integrations', '1')
-  return <Navigate to={`/chat?${next.toString()}`} replace />
+  const qs = searchParams.toString()
+  return <Navigate to={qs ? `${CHAT_INTEGRATIONS_PATH}?${qs}` : CHAT_INTEGRATIONS_PATH} replace />
 }

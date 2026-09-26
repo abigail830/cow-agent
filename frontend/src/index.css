@@ -299,6 +299,8 @@ body {
   color: var(--color-muted);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
+  text-decoration: none;
+  box-sizing: border-box;
 }
 
 .agent-nav-item:hover {

@@ -1,13 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ExternalLink, X } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { LoadingSpinner } from './LoadingSpinner'
 import type { IntegrationStatus } from '../types'
-
-type Props = {
-  onClose: () => void
-}
 
 const PROVIDER_DOCS: Record<string, string> = {
   notion: 'https://developers.notion.com/docs/mcp',
@@ -30,7 +26,7 @@ function statusLabel(item: IntegrationStatus): string {
   return 'Not configured'
 }
 
-export function IntegrationsView({ onClose }: Props) {
+export function IntegrationsView() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([])
   const [loading, setLoading] = useState(true)
@@ -87,14 +83,6 @@ export function IntegrationsView({ onClose }: Props) {
     void refresh()
   }, [searchParams, setSearchParams, refresh])
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.document.addEventListener('keydown', onKeyDown)
-    return () => window.document.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
-
   const handleConnect = async (provider: string) => {
     setBusyProvider(provider)
     setError(null)
@@ -150,9 +138,6 @@ export function IntegrationsView({ onClose }: Props) {
           <h1 className="integrations-view-title">Integrations</h1>
           <p className="integrations-view-subtitle">Connect once, reuse across agents.</p>
         </div>
-        <button type="button" className="integrations-view-close" onClick={onClose} aria-label="Back to chat">
-          <X size={18} aria-hidden="true" />
-        </button>
       </header>
 
       <div className="integrations-view-body">
