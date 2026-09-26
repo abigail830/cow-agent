@@ -57,7 +57,6 @@ import {
   getAgentSession,
   type AgentChatSession,
 } from '../lib/agentChatSession'
-import { clearStoredChatId, getStoredChatId, setStoredChatId } from '../lib/chatStorage'
 import { getStoredModelId, setStoredModelId } from '../lib/modelStorage'
 import { StreamRegistry } from '../lib/streamRegistry'
 import {
@@ -110,19 +109,13 @@ import type { ArtifactSpec } from '../types/artifact'
 import type { VizSpec } from '../types/viz'
 import type { ProposalPreview } from '../types/proposalPreview'
 import type { ProposalDraftResponse } from '../types/proposalDraft'
-import type { Agent, ChatAttachment, ChatSummary, Message, ModelOption } from '../types'
+import type { Agent, ChatAttachment, Message, ModelOption } from '../types'
 
 const SIDEBAR_COLLAPSED_KEY = 'agent-platform:sidebar-collapsed'
 const PROPOSAL_COMPOSER_SLUG = 'proposal-composer'
 const YL_WORKER2_SLUG = 'yl-worker2'
 const AUDIO_CAPTURE_MAX_TOTAL_BYTES = 80 * 1024 * 1024
 const AUDIO_CAPTURE_POLL_MS = 5000
-
-function findStoredChatSummary(agentId: string, rows: ChatSummary[]): ChatSummary | null {
-  const storedId = getStoredChatId(agentId)
-  if (!storedId) return null
-  return rows.find((row) => row.id === storedId) ?? null
-}
 
 function parseProposalExportWord(raw: unknown): ProposalPreview['export'] {
   if (!raw || typeof raw !== 'object') return undefined
@@ -250,6 +243,7 @@ export function ChatPage() {
   const [memoryRefreshKey, setMemoryRefreshKey] = useState(0)
   const [forkingChat, setForkingChat] = useState(false)
   const [deletingChatIds, setDeletingChatIds] = useState<string[]>([])
+  const chatBootstrapTaskRef = useRef(new Map<string, Promise<void>>())
   const [forkBannerByChatId, setForkBannerByChatId] = useState<Record<string, ForkBannerState>>({})
   const messagesScrollRef = useRef<HTMLDivElement>(null)
   const pinToBottomRef = useRef(true)
@@ -348,10 +342,6 @@ export function ChatPage() {
   const isYlWorker2 = selected?.slug === YL_WORKER2_SLUG
   const showChat = !agentsLoading && selected != null
   const isStandby = sessionInitialized && chatId === null && !chatSessionLoading
-  const storedLastChat = useMemo(
-    () => (selectedId ? findStoredChatSummary(selectedId, chatHistory) : null),
-    [selectedId, chatHistory],
-  )
 
   const fulfillment = useFulfillmentPanel({
     selectedId,
@@ -668,12 +658,26 @@ export function ChatPage() {
     const current = getAgentSession(sessionsRef.current, agentId)
     if (current.chatId) return current.chatId
     const chat = await api.createChat(agentId)
-    setStoredChatId(agentId, chat.id)
     streamRegistryRef.current.bindChat(chat.id, agentId)
     patchSession(agentId, { chatId: chat.id, initialized: true })
     await refreshChatHistory(agentId)
     return chat.id
   }, [patchSession, refreshChatHistory])
+
+  const waitForChatBootstrap = useCallback(async (agentId: string) => {
+    const pending = chatBootstrapTaskRef.current.get(agentId)
+    if (pending) await pending
+  }, [])
+
+  const resolveChatIdForComposer = useCallback(
+    async (agentId: string): Promise<string> => {
+      await waitForChatBootstrap(agentId)
+      const current = getAgentSession(sessionsRef.current, agentId)
+      if (current.chatId) return current.chatId
+      return ensureChatId(agentId)
+    },
+    [ensureChatId, waitForChatBootstrap],
+  )
 
   const openChatById = useCallback(async (agentId: string, id: string) => {
     const loadGen = (openChatLoadGenRef.current.get(agentId) ?? 0) + 1
@@ -722,7 +726,6 @@ export function ChatPage() {
           patchSession(agentId, { contextUsage: usage })
         })
         .catch(() => {})
-      setStoredChatId(agentId, id)
       streamRegistryRef.current.bindChat(id, agentId)
     } catch (e) {
       if (loadGen !== openChatLoadGenRef.current.get(agentId)) return
@@ -735,31 +738,37 @@ export function ChatPage() {
   }, [discardVisibleChatAttachments, resetProposalPanel, patchSession])
 
   const createAndOpenChat = useCallback(
-    async (agentId: string) => {
+    async (agentId: string, options?: { preserveInput?: boolean; background?: boolean }) => {
       const current = getAgentSession(sessionsRef.current, agentId)
+      const background = options?.background === true
       if (current.chatId) {
         streamRegistryRef.current.abort(current.chatId)
       }
       setMentionTrigger(null)
       mentionDismissedStartRef.current = null
-      discardVisibleChatAttachments()
-      patchSession(agentId, {
-        chatId: null,
-        error: null,
-        chatSessionLoading: true,
-        messages: [],
-        input: '',
-        pendingAttachments: [],
-        expandedArtifact: null,
-      })
-      resetProposalPanel(agentId)
+      if (!background) {
+        discardVisibleChatAttachments()
+      }
+      if (background) {
+        patchSession(agentId, { error: null })
+      } else {
+        patchSession(agentId, {
+          chatId: null,
+          error: null,
+          chatSessionLoading: true,
+          messages: [],
+          input: options?.preserveInput ? current.input : '',
+          pendingAttachments: [],
+          expandedArtifact: null,
+        })
+        resetProposalPanel(agentId)
+      }
       try {
         const chat = await api.createChat(agentId)
-        setStoredChatId(agentId, chat.id)
         streamRegistryRef.current.bindChat(chat.id, agentId)
         patchSession(agentId, {
           chatId: chat.id,
-          messages: [],
+          messages: background ? current.messages : [],
           chatSessionLoading: false,
           initialized: true,
           warmupStatus: 'idle',
@@ -1044,7 +1053,6 @@ export function ChatPage() {
   )
   const stagedReadyCount = stagedAttachmentItems.filter(isAttachmentReady).length
   const composerCanSend =
-    !isStandby &&
     !loading &&
     !chatSessionLoading &&
     !stagedUploading &&
@@ -1361,7 +1369,7 @@ export function ChatPage() {
       void (async () => {
         const pendingId = pending.id
         try {
-          const activeChatId = await ensureChatId(selectedId)
+          const activeChatId = await resolveChatIdForComposer(selectedId)
           const uploaded = await api.uploadChatAttachment(activeChatId, file)
           const latestChatId = getAgentSession(sessionsRef.current, selectedId).chatId
           if (latestChatId !== activeChatId) {
@@ -1394,10 +1402,10 @@ export function ChatPage() {
     [
       attachmentLimits.max_bytes_per_file,
       chatSessionLoading,
-      ensureChatId,
       loading,
       patchChatAttachments,
       patchSession,
+      resolveChatIdForComposer,
       selectedId,
     ],
   )
@@ -1417,6 +1425,9 @@ export function ChatPage() {
 
   const handleAttachFilesClick = () => {
     if (loading || chatSessionLoading) return
+    if (isStandby) {
+      void beginConversationFromStandby()
+    }
     fileInputRef.current?.click()
   }
 
@@ -1437,6 +1448,9 @@ export function ChatPage() {
     event.preventDefault()
     setComposerDragOver(false)
     if (loading || chatSessionLoading) return
+    if (isStandby) {
+      void beginConversationFromStandby()
+    }
     const files = Array.from(event.dataTransfer.files ?? [])
     for (const file of files) {
       uploadToLibrary(file)
@@ -1456,12 +1470,18 @@ export function ChatPage() {
     const files = readPastedAttachmentFiles(event.clipboardData)
     if (files.length === 0) return
     event.preventDefault()
+    if (isStandby) {
+      void beginConversationFromStandby()
+    }
     for (const file of files) {
       uploadToLibrary(file)
     }
   }
 
   const handleComposerInputChange = (value: string) => {
+    if (isStandby && value.length > 0) {
+      void beginConversationFromStandby()
+    }
     setInputForSelected(value)
   }
 
@@ -1505,7 +1525,15 @@ export function ChatPage() {
     const agentSlug = agents.find((a) => a.id === agentId)?.slug
     const composer = agentSlug === PROPOSAL_COMPOSER_SLUG
     const ylWorker = agentSlug === YL_WORKER2_SLUG
-    const currentSession = getAgentSession(sessionsRef.current, agentId)
+    let currentSession = getAgentSession(sessionsRef.current, agentId)
+    if (!currentSession.chatId) {
+      try {
+        await beginConversationFromStandby()
+      } catch {
+        return
+      }
+      currentSession = getAgentSession(sessionsRef.current, agentId)
+    }
     const existingChatId = currentSession.chatId
     const text = currentSession.input.trim()
     const readyStagedIds = stagedAttachmentIdsRef.current.filter((id) => {
@@ -1525,13 +1553,17 @@ export function ChatPage() {
 
     let activeChatId: string
     try {
-      activeChatId = await ensureChatId(agentId)
+      activeChatId = existingChatId ?? (await resolveChatIdForComposer(agentId))
     } catch (e) {
       patchSession(agentId, {
         loading: false,
         error: e instanceof Error ? e.message : 'Failed to start conversation',
       })
       return
+    }
+
+    if (!existingChatId) {
+      startChatWarmup(agentId, activeChatId)
     }
 
     streamRegistryRef.current.bindChat(activeChatId, agentId)
@@ -1942,46 +1974,60 @@ export function ChatPage() {
     }
   }
 
-  const startNewChat = async () => {
-    if (!selectedId || loading || chatSessionLoading) return
-    setHistoryOpen(false)
-    proposalFetchKeyRef.current = null
-    fulfillment.resetFetchKey()
-    try {
-      const newChatId = await createAndOpenChat(selectedId)
-      if (newChatId) {
-        startChatWarmup(selectedId, newChatId)
+  const bootstrapChatSession = useCallback(
+    async (
+      agentId: string,
+      options?: { preserveInput?: boolean; background?: boolean },
+    ) => {
+      const inFlight = chatBootstrapTaskRef.current.get(agentId)
+      if (inFlight) {
+        await inFlight
+        return
       }
-      patchSession(selectedId, {
-        proposalPanelTab: 'preview',
-        proposalPanelCollapsed: isProposalComposer ? false : true,
-        ...fulfillment.newChatPatch(),
-      })
-    } catch {
-      /* error patched in createAndOpenChat */
-    }
-  }
 
-  const continueLastConversation = async () => {
-    if (!selectedId || chatSessionLoading) return
-    const storedId = getStoredChatId(selectedId)
-    if (!storedId) return
-    if (!chatHistory.some((row) => row.id === storedId)) return
-    setHistoryOpen(false)
-    if (workspaceView !== 'chat') {
-      navigate(CHAT_HOME_PATH)
-    }
-    proposalFetchKeyRef.current = null
-    fulfillment.resetFetchKey()
-    try {
-      await openChatById(selectedId, storedId)
-      startChatWarmup(selectedId, storedId)
-    } catch (e) {
-      patchSession(selectedId, {
-        error: e instanceof Error ? e.message : 'Failed to load conversation',
-      })
-    }
-  }
+      const task = (async () => {
+        setHistoryOpen(false)
+        proposalFetchKeyRef.current = null
+        fulfillment.resetFetchKey()
+        try {
+          const newChatId = await createAndOpenChat(agentId, options)
+          if (newChatId) {
+            startChatWarmup(agentId, newChatId)
+          }
+          patchSession(agentId, {
+            proposalPanelTab: 'preview',
+            proposalPanelCollapsed: isProposalComposer ? false : true,
+            ...fulfillment.newChatPatch(),
+          })
+        } catch {
+          /* error patched in createAndOpenChat */
+        }
+      })()
+
+      chatBootstrapTaskRef.current.set(agentId, task)
+      try {
+        await task
+      } finally {
+        if (chatBootstrapTaskRef.current.get(agentId) === task) {
+          chatBootstrapTaskRef.current.delete(agentId)
+        }
+      }
+    },
+    [createAndOpenChat, fulfillment, isProposalComposer, patchSession, startChatWarmup],
+  )
+
+  const startNewChat = useCallback(async () => {
+    if (!selectedId || loading || chatSessionLoading) return
+    await bootstrapChatSession(selectedId)
+  }, [bootstrapChatSession, chatSessionLoading, loading, selectedId])
+
+  const beginConversationFromStandby = useCallback(async (): Promise<boolean> => {
+    if (!selectedId || loading || chatSessionLoading) return false
+    const current = getAgentSession(sessionsRef.current, selectedId)
+    if (current.chatId) return true
+    await bootstrapChatSession(selectedId, { preserveInput: true, background: true })
+    return getAgentSession(sessionsRef.current, selectedId).chatId != null
+  }, [bootstrapChatSession, chatSessionLoading, loading, selectedId])
 
   const openHistoryChat = async (id: string) => {
     if (!selectedId || chatSessionLoading) return
@@ -2081,10 +2127,6 @@ export function ChatPage() {
         streamRegistryRef.current.abort(id)
         fulfillment.resetFetchKey()
         proposalFetchKeyRef.current = null
-        const storedId = getStoredChatId(selectedId)
-        if (id === storedId) {
-          clearStoredChatId(selectedId)
-        }
         enterStandbyMode(selectedId)
         patchSession(selectedId, fulfillment.newChatPatch())
       }
@@ -2114,17 +2156,8 @@ export function ChatPage() {
         return { chatHistory: remainingAfterDelete }
       })
 
-      if (!wasActive) return
-
-      const storedId = getStoredChatId(selectedId)
-      if (remainingAfterDelete.length > 0 && storedId && storedId !== id) {
-        const stillStored = remainingAfterDelete.some((row) => row.id === storedId)
-        if (stillStored) {
-          await openChatById(selectedId, storedId)
-        }
-      }
     },
-    [selectedId, enterStandbyMode, fulfillment, openChatById, patchSession],
+    [selectedId, enterStandbyMode, fulfillment, patchSession],
   )
 
   useEffect(() => {
@@ -2330,10 +2363,6 @@ export function ChatPage() {
                       <ChatStandbyPanel
                         agentName={formatAgentLabel(selected)}
                         agentDescription={selected.description}
-                        lastChat={storedLastChat}
-                        busy={chatSessionLoading}
-                        onNewConversation={() => void startNewChat()}
-                        onContinueLast={() => void continueLastConversation()}
                       />
                     ) : (
                       <>
@@ -2405,9 +2434,9 @@ export function ChatPage() {
                     />
                     <div
                       className={`chat-composer${composerDragOver ? ' chat-composer-drag-over' : ''}${isStandby ? ' chat-composer-standby' : ''}`}
-                      onDragOver={isStandby ? undefined : handleComposerDragOver}
-                      onDragLeave={isStandby ? undefined : handleComposerDragLeave}
-                      onDrop={isStandby ? undefined : handleComposerDrop}
+                      onDragOver={handleComposerDragOver}
+                      onDragLeave={handleComposerDragLeave}
+                      onDrop={handleComposerDrop}
                     >
                       <input
                         ref={fileInputRef}
@@ -2421,7 +2450,7 @@ export function ChatPage() {
                         attachments={stagedAttachmentItems}
                         onRemove={removeStagedAttachment}
                         onChipClick={(att) => setParseDrawerAttachment(att)}
-                        disabled={loading || chatSessionLoading || isStandby}
+                        disabled={loading || chatSessionLoading}
                       />
                       <div ref={composerMentionWrapRef} className="chat-composer-mention-wrap">
                         <AttachmentMentionPopup
@@ -2440,12 +2469,8 @@ export function ChatPage() {
                           textareaRef={textareaRef}
                           value={input}
                           attachments={readyChatAttachments}
-                          placeholder={
-                            isStandby
-                              ? 'Choose an option above to start'
-                              : 'Message… (type @ to reference attachments)'
-                          }
-                          disabled={loading || chatSessionLoading || isStandby}
+                          placeholder="Message… (type @ to reference attachments)"
+                          disabled={loading || chatSessionLoading}
                           onChange={handleComposerInputChange}
                           onSelect={handleComposerSelectionChange}
                           onPaste={(e) => handleComposerPaste(e)}
@@ -2500,7 +2525,7 @@ export function ChatPage() {
                           <button
                             type="button"
                             className="chat-composer-attach-btn"
-                            disabled={loading || chatSessionLoading || isStandby}
+                            disabled={loading || chatSessionLoading}
                             onClick={handleAttachFilesClick}
                             aria-label="Upload attachment"
                             title="Upload attachment"
@@ -2510,7 +2535,7 @@ export function ChatPage() {
                           {selected?.supports_kb_scope ? (
                             <KbScopePopover
                               agentId={selected.id}
-                              disabled={loading || chatSessionLoading || isStandby}
+                              disabled={loading || chatSessionLoading}
                             />
                           ) : null}
                           <ContextUsageIndicator usage={contextUsage} />
