@@ -1,10 +1,22 @@
+from __future__ import annotations
+
+import asyncio
+import logging
 from enum import Enum
 
 from agent_framework import Agent
+from agent_framework.exceptions import ChatClientException
 from agent_framework.openai import OpenAIChatClient, OpenAIChatCompletionClient
+from httpx import ConnectError as HttpxConnectError
+from openai import APIConnectionError
 
 from app.config import Settings, get_settings
 from app.platform.llm.model_registry import _azure_responses_base_url, _openai_compatible_base_url
+
+logger = logging.getLogger(__name__)
+
+_UTILITY_COMPLETE_RETRIES = 3
+_UTILITY_RETRY_BASE_SEC = 0.6
 
 
 class UtilityPurpose(str, Enum):
@@ -16,6 +28,18 @@ class UtilityPurpose(str, Enum):
 def _uses_azure_responses_api(base_url: str) -> bool:
     normalized = base_url.rstrip("/").lower()
     return "cognitiveservices.azure.com" in normalized or ".openai.azure.com" in normalized
+
+
+def _is_transient_utility_error(exc: BaseException) -> bool:
+    if isinstance(exc, (APIConnectionError, HttpxConnectError)):
+        return True
+    if isinstance(exc, ChatClientException):
+        cause = exc.__cause__
+        if isinstance(cause, (APIConnectionError, HttpxConnectError)):
+            return True
+        message = str(exc).lower()
+        return "connection error" in message
+    return False
 
 
 class UtilityModelRegistry:
@@ -90,8 +114,29 @@ class UtilityModelRegistry:
             instructions=system,
             default_options=options,
         )
-        result = await agent.run(prompt)
-        return (result.text or "").strip()
+
+        last_exc: BaseException | None = None
+        for attempt in range(_UTILITY_COMPLETE_RETRIES):
+            try:
+                result = await agent.run(prompt)
+                return (result.text or "").strip()
+            except Exception as exc:
+                if not _is_transient_utility_error(exc) or attempt >= _UTILITY_COMPLETE_RETRIES - 1:
+                    raise
+                last_exc = exc
+                delay = _UTILITY_RETRY_BASE_SEC * (2**attempt)
+                logger.warning(
+                    "utility LLM transient error purpose=%s attempt=%s/%s retry_in=%.1fs: %s",
+                    purpose.value,
+                    attempt + 1,
+                    _UTILITY_COMPLETE_RETRIES,
+                    delay,
+                    exc,
+                )
+                await asyncio.sleep(delay)
+        if last_exc is not None:
+            raise last_exc
+        return ""
 
     async def smoke_test(self) -> str:
         return await self.complete(

@@ -33,9 +33,33 @@ def _strip_json_fence(raw: str) -> str:
     return text.strip()
 
 
+def _extract_json_object(raw: str) -> str:
+    text = _strip_json_fence(raw)
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        return text[start : end + 1]
+    return text
+
+
+def _normalize_tags(tags_raw: object) -> list[str]:
+    tags: list[str] = []
+    if isinstance(tags_raw, str):
+        for part in re.split(r"[,;|]", tags_raw):
+            piece = part.strip()
+            if piece:
+                tags.append(piece)
+        return tags
+    if isinstance(tags_raw, list):
+        for item in tags_raw:
+            if isinstance(item, str) and item.strip():
+                tags.append(item.strip())
+    return tags
+
+
 def parse_gist_metadata(raw: str) -> AttachmentGistMetadata | None:
     try:
-        payload = json.loads(_strip_json_fence(raw))
+        payload = json.loads(_extract_json_object(raw))
     except json.JSONDecodeError:
         return None
     if not isinstance(payload, dict):
@@ -43,14 +67,7 @@ def parse_gist_metadata(raw: str) -> AttachmentGistMetadata | None:
     abstract = payload.get("abstract")
     if not isinstance(abstract, str) or not abstract.strip():
         return None
-    tags_raw = payload.get("tags")
-    tags: list[str] = []
-    if isinstance(tags_raw, list):
-        for item in tags_raw:
-            if isinstance(item, str) and item.strip():
-                tags.append(item.strip())
-    if len(tags) < 3:
-        return None
+    tags = _normalize_tags(payload.get("tags"))
     if len(tags) > 8:
         tags = tags[:8]
     return AttachmentGistMetadata(abstract=abstract.strip(), tags=tuple(tags))

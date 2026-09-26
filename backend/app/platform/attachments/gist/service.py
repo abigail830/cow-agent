@@ -95,18 +95,23 @@ async def generate_and_save_attachment_gist(
         instructions=GIST_SYSTEM_INSTRUCTIONS,
         temperature=settings.attachment_gist_temperature,
     )
+    last_raw = raw
     metadata = parse_gist_metadata(raw)
     if metadata is None:
-        raw_retry = await registry.complete(
+        last_raw = await registry.complete(
             UtilityPurpose.ATTACHMENT_GIST,
             prompt=user_prompt + "\n\nYour previous reply was not valid JSON. Reply with JSON only.",
             max_tokens=settings.attachment_gist_max_output_tokens,
             instructions=GIST_SYSTEM_INSTRUCTIONS,
             temperature=settings.attachment_gist_temperature,
         )
-        metadata = parse_gist_metadata(raw_retry)
+        metadata = parse_gist_metadata(last_raw)
     if metadata is None:
-        logger.warning("attachment gist parse failed attachment_id=%s", attachment_id)
+        logger.warning(
+            "attachment gist parse failed attachment_id=%s raw_preview=%r",
+            attachment_id,
+            (last_raw or "")[:500],
+        )
         return False
 
     gist_text = metadata.to_gist_text()

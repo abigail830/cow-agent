@@ -5,7 +5,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.platform.attachments.gist.prompt import build_gist_user_prompt, truncate_markdown_for_gist
+from app.platform.attachments.gist.prompt import (
+    GIST_OUTPUT_EXAMPLE,
+    build_gist_user_prompt,
+    truncate_markdown_for_gist,
+)
 from app.platform.attachments.gist.schema import AttachmentGistMetadata, parse_gist_metadata
 from app.platform.attachments.gist.service import content_sha256
 from app.platform.attachments.gist.scheduler import schedule_attachment_gist, _inflight
@@ -19,9 +23,25 @@ def test_parse_gist_metadata_valid():
     assert len(meta.tags) == 3
 
 
-def test_parse_gist_metadata_requires_three_tags():
-    raw = '{"abstract": "Hello.", "tags": ["a", "b"]}'
-    assert parse_gist_metadata(raw) is None
+def test_parse_gist_metadata_accepts_one_tag():
+    raw = '{"abstract": "Hello.", "tags": ["a"]}'
+    meta = parse_gist_metadata(raw)
+    assert meta is not None
+    assert meta.tags == ("a",)
+
+
+def test_parse_gist_metadata_extracts_embedded_json():
+    raw = 'Sure.\n{"abstract": "Summary.", "tags": ["x", "y", "z"]}\n'
+    meta = parse_gist_metadata(raw)
+    assert meta is not None
+    assert meta.abstract == "Summary."
+
+
+def test_parse_gist_metadata_accepts_comma_separated_tags_string():
+    raw = '{"abstract": "Hi.", "tags": "alpha, beta, gamma"}'
+    meta = parse_gist_metadata(raw)
+    assert meta is not None
+    assert len(meta.tags) == 3
 
 
 def test_to_gist_text_joins_tags():
@@ -44,6 +64,8 @@ def test_build_gist_user_prompt_includes_fence():
     assert "doc.pdf" in prompt
     assert "---" in prompt
     assert "body" in prompt
+    assert GIST_OUTPUT_EXAMPLE in prompt
+    assert "Example shape:" in prompt
 
 
 def test_content_sha256_stable():
