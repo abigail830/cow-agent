@@ -35,6 +35,8 @@ const UDocArtifactViewer = lazy(async () => {
 
 type Props = {
   onOpenChat?: (chatId: string) => void
+  /** When set, list is locked to this agent (no agent filter / column). */
+  scopedAgentId?: string
 }
 
 type PreviewTab = 'original' | 'parsed' | 'meta' | 'pageindex'
@@ -600,7 +602,7 @@ function ArtifactDocumentPreviewPane({
   )
 }
 
-export function DocumentsView({ onOpenChat }: Props) {
+export function DocumentsView({ onOpenChat, scopedAgentId }: Props) {
   const [documents, setDocuments] = useState<DocumentItem[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -614,6 +616,8 @@ export function DocumentsView({ onOpenChat }: Props) {
   const [agents, setAgents] = useState<Agent[]>([])
   const [selected, setSelected] = useState<DocumentItem | null>(null)
   const [previewWidth, setPreviewWidth] = useState<number | null>(() => readStoredPreviewWidth())
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const splitRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
@@ -625,20 +629,23 @@ export function DocumentsView({ onOpenChat }: Props) {
 
   const showAttachmentFilters = source === 'all' || source === 'attachment'
 
+  const effectiveAgentId = scopedAgentId ?? agentId
+
   const filters = useMemo(
     () => ({
       q: debouncedQuery || undefined,
       parse_status: showAttachmentFilters && parseStatus ? parseStatus : undefined,
       mime_type: showAttachmentFilters && mimeType ? mimeType : undefined,
-      agent_id: agentId || undefined,
+      agent_id: effectiveAgentId || undefined,
       source,
       limit: 100,
       offset: 0,
     }),
-    [agentId, debouncedQuery, mimeType, parseStatus, showAttachmentFilters, source],
+    [effectiveAgentId, debouncedQuery, mimeType, parseStatus, showAttachmentFilters, source],
   )
 
   useEffect(() => {
+    if (scopedAgentId) return
     void (async () => {
       try {
         const rows = await api.listAgents()
@@ -647,7 +654,7 @@ export function DocumentsView({ onOpenChat }: Props) {
         setAgents([])
       }
     })()
-  }, [])
+  }, [scopedAgentId])
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -742,81 +749,153 @@ export function DocumentsView({ onOpenChat }: Props) {
     onOpenChat?.(chatId)
   }
 
+  const toggleSearch = () => {
+    setSearchOpen((open) => {
+      const next = !open
+      if (next) {
+        window.setTimeout(() => searchInputRef.current?.focus(), 0)
+      } else {
+        setSearchInput('')
+      }
+      return next
+    })
+  }
+
+  const sourcePill = (value: DocumentSourceType | 'all', label: string) => (
+    <button
+      key={value}
+      type="button"
+      className={`artifacts-source-pill${source === value ? ' artifacts-source-pill-active' : ''}`}
+      onClick={() => setSource(value)}
+    >
+      {label}
+    </button>
+  )
+
   return (
-    <div className="documents-view">
+    <div className={`documents-view${scopedAgentId ? ' documents-view-agent-scoped' : ''}`}>
       <header className="documents-view-header">
         <div>
-          <h1 className="documents-view-title">Chat Documents</h1>
-          <p className="documents-view-subtitle">Uploads and generated artifacts across sessions.</p>
+          <h1 className="documents-view-title">{scopedAgentId ? 'Artifacts' : 'Chat Documents'}</h1>
+          {!scopedAgentId ? (
+            <p className="documents-view-subtitle">
+              Uploads and generated artifacts across sessions.
+            </p>
+          ) : null}
         </div>
       </header>
 
       <div ref={splitRef} className="documents-view-split">
         <div className={`documents-view-list-pane${selected ? ' documents-view-list-pane-split' : ''}`}>
-          <div className="documents-view-filters">
-            <label className="documents-filter-search">
-              <Search size={14} aria-hidden="true" />
-              <input
-                type="search"
-                value={searchInput}
-                placeholder="Search name…"
-                onChange={(event) => setSearchInput(event.target.value)}
-              />
-            </label>
-            <select
-              className="documents-filter-select"
-              value={agentId}
-              aria-label="Filter by agent"
-              onChange={(event) => setAgentId(event.target.value)}
-            >
-              <option value="">All agents</option>
-              {agents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name}
-                </option>
-              ))}
-            </select>
-            <select
-              className="documents-filter-select"
-              value={source}
-              aria-label="Filter by source"
-              onChange={(event) => setSource(event.target.value as DocumentSourceType | 'all')}
-            >
-              {SOURCE_FILTER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            {showAttachmentFilters ? (
+          {scopedAgentId ? (
+            <div className="artifacts-toolbar">
+              <div className="artifacts-source-pills">
+                {sourcePill('all', 'All')}
+                {sourcePill('artifact', 'Generated')}
+                {sourcePill('attachment', 'Attachment')}
+              </div>
+              <div className="artifacts-toolbar-end">
+                {searchOpen ? (
+                  <label className="documents-filter-search artifacts-search-inline">
+                    <Search size={14} aria-hidden="true" />
+                    <input
+                      ref={searchInputRef}
+                      type="search"
+                      value={searchInput}
+                      placeholder="Search by file name…"
+                      onChange={(event) => setSearchInput(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="artifacts-search-close"
+                      aria-label="Clear search"
+                      onClick={() => {
+                        setSearchInput('')
+                        setSearchOpen(false)
+                      }}
+                    >
+                      <X size={14} aria-hidden="true" />
+                    </button>
+                  </label>
+                ) : null}
+                <button
+                  type="button"
+                  className={`artifacts-search-toggle${searchOpen ? ' artifacts-search-toggle-active' : ''}`}
+                  aria-label={searchOpen ? 'Close search' : 'Search artifacts'}
+                  aria-expanded={searchOpen}
+                  onClick={toggleSearch}
+                >
+                  <Search size={16} strokeWidth={1.75} aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {!scopedAgentId ? (
+            <div className="documents-view-filters">
+              <label className="documents-filter-search">
+                <Search size={14} aria-hidden="true" />
+                <input
+                  type="search"
+                  value={searchInput}
+                  placeholder="Search name…"
+                  onChange={(event) => setSearchInput(event.target.value)}
+                />
+              </label>
               <select
                 className="documents-filter-select"
-                value={parseStatus}
-                aria-label="Filter by parse status"
-                onChange={(event) => setParseStatus(event.target.value)}
+                value={agentId}
+                aria-label="Filter by agent"
+                onChange={(event) => setAgentId(event.target.value)}
               >
-                {PARSE_STATUS_OPTIONS.map((option) => (
-                  <option key={option.value || 'all-status'} value={option.value}>
+                <option value="">All agents</option>
+                {agents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="documents-filter-select"
+                value={source}
+                aria-label="Filter by source"
+                onChange={(event) => setSource(event.target.value as DocumentSourceType | 'all')}
+              >
+                {SOURCE_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
               </select>
-            ) : null}
-            {showAttachmentFilters ? (
-              <select
-                className="documents-filter-select"
-                value={mimeType}
-                aria-label="Filter by file type"
-                onChange={(event) => setMimeType(event.target.value)}
-              >
-                {MIME_FILTER_OPTIONS.map((option) => (
-                  <option key={option.value || 'all-types'} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-          </div>
+              {showAttachmentFilters ? (
+                <select
+                  className="documents-filter-select"
+                  value={parseStatus}
+                  aria-label="Filter by parse status"
+                  onChange={(event) => setParseStatus(event.target.value)}
+                >
+                  {PARSE_STATUS_OPTIONS.map((option) => (
+                    <option key={option.value || 'all-status'} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              {showAttachmentFilters ? (
+                <select
+                  className="documents-filter-select"
+                  value={mimeType}
+                  aria-label="Filter by file type"
+                  onChange={(event) => setMimeType(event.target.value)}
+                >
+                  {MIME_FILTER_OPTIONS.map((option) => (
+                    <option key={option.value || 'all-types'} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+            </div>
+          ) : null}
 
           {error ? <div className="documents-drawer-error">{error}</div> : null}
 
@@ -827,6 +906,34 @@ export function DocumentsView({ onOpenChat }: Props) {
               </div>
             ) : documents.length === 0 ? (
               <p className="documents-drawer-empty">No documents match your filters.</p>
+            ) : scopedAgentId ? (
+              <ul className="artifacts-card-list">
+                {documents.map((doc) => (
+                  <li key={documentRowKey(doc)}>
+                    <button
+                      type="button"
+                      className={`artifacts-card${selected && documentsMatch(selected, doc) ? ' artifacts-card-selected' : ''}`}
+                      onClick={() => handleSelect(doc)}
+                    >
+                      <span className="artifacts-card-icon" aria-hidden="true">
+                        <DocumentFileIcon doc={doc} />
+                      </span>
+                      <span className="artifacts-card-body">
+                        <span className="artifacts-card-filename" title={doc.filename}>
+                          {doc.filename}
+                        </span>
+                        <span className="artifacts-card-session" title={doc.chat_id}>
+                          {sessionLabel(doc)}
+                          <span className="artifacts-card-session-id">{doc.chat_id}</span>
+                        </span>
+                      </span>
+                      <span className="artifacts-card-date">
+                        {doc.created_at ? formatAttachmentTimestamp(doc.created_at) : '—'}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             ) : (
               <>
                 <p className="documents-drawer-count">
@@ -834,9 +941,15 @@ export function DocumentsView({ onOpenChat }: Props) {
                     ? `${total} document${total === 1 ? '' : 's'}`
                     : `${documents.length} of ${total}`}
                 </p>
-                <div className={`documents-table${selected ? ' documents-table-preview-open' : ''}`}>
+                <div
+                  className={`documents-table${selected ? ' documents-table-preview-open' : ''}${
+                    scopedAgentId ? ' documents-table-agent-scoped' : ''
+                  }`}
+                >
                   <div className="documents-table-head" aria-hidden="true">
-                    <span className="documents-col documents-col-agent">Agent</span>
+                    {!scopedAgentId ? (
+                      <span className="documents-col documents-col-agent">Agent</span>
+                    ) : null}
                     <span className="documents-col documents-col-session">Session</span>
                     <span className="documents-col documents-col-source">Source</span>
                     <span className="documents-col documents-col-file">File</span>
@@ -854,16 +967,18 @@ export function DocumentsView({ onOpenChat }: Props) {
                           className={`documents-table-row${selected && documentsMatch(selected, doc) ? ' documents-table-row-selected' : ''}`}
                           onClick={() => handleSelect(doc)}
                         >
-                          <span className="documents-col documents-col-agent">
-                            <span className="documents-col-agent-name" title={agentLabel(doc)}>
-                              {agentLabel(doc)}
-                            </span>
-                            {doc.agent_slug ? (
-                              <span className="documents-col-agent-slug" title={doc.agent_slug}>
-                                {doc.agent_slug}
+                          {!scopedAgentId ? (
+                            <span className="documents-col documents-col-agent">
+                              <span className="documents-col-agent-name" title={agentLabel(doc)}>
+                                {agentLabel(doc)}
                               </span>
-                            ) : null}
-                          </span>
+                              {doc.agent_slug ? (
+                                <span className="documents-col-agent-slug" title={doc.agent_slug}>
+                                  {doc.agent_slug}
+                                </span>
+                              ) : null}
+                            </span>
+                          ) : null}
                           <span className="documents-col documents-col-session">
                             <span className="documents-col-session-name" title={sessionLabel(doc)}>
                               {sessionLabel(doc)}

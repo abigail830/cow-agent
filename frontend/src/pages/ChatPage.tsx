@@ -46,12 +46,13 @@ import { NewChatIcon } from '../components/NewChatIcon'
 import { SidebarToggleIcon } from '../components/SidebarToggleIcon'
 import { SidebarUtilityNav } from '../components/SidebarUtilityNav'
 import { SidebarUserMenu } from '../components/SidebarUserMenu'
+import { mergeAgentIntoList, readNavAgent, stashNavAgent } from '../lib/agentNavCache'
 import { formatAgentLabel } from '../lib/agentLabel'
 import {
-  CHAT_DOCUMENTS_PATH,
-  CHAT_HOME_PATH,
-  CHAT_INTEGRATIONS_PATH,
-  chatWorkspaceView,
+  agentChatPath,
+  parseChatRoute,
+  resolveLegacyChatPath,
+  writeLastAgentId,
 } from '../lib/chatRoutes'
 import {
   getAgentSession,
@@ -209,7 +210,7 @@ export function ChatPage() {
   const location = useLocation()
   const { user, logout } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
-  const workspaceView = chatWorkspaceView(location.pathname)
+  const { agentId: routeAgentId, view: workspaceView } = parseChatRoute(location.pathname)
   const documentsOpen = workspaceView === 'documents'
   const integrationsOpen = workspaceView === 'integrations'
   const [agents, setAgents] = useState<Agent[]>([])
@@ -217,7 +218,9 @@ export function ChatPage() {
   const [agentsError, setAgentsError] = useState<string | null>(null)
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
   const [selectedModelByAgent, setSelectedModelByAgent] = useState<Record<string, string>>({})
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(
+    () => parseChatRoute(window.location.pathname).agentId,
+  )
   const [sessions, setSessions] = useState<Record<string, AgentChatSession>>({})
   const [attachmentLimits, setAttachmentLimits] = useState<AttachmentLimits>(DEFAULT_ATTACHMENT_LIMITS)
   const [chatAttachments, setChatAttachments] = useState<ChatAttachmentListItem[]>([])
@@ -286,7 +289,8 @@ export function ChatPage() {
 
   const warmupTasksRef = useRef<Map<string, Promise<void>>>(new Map())
 
-  const session = getAgentSession(sessions, selectedId)
+  const activeAgentId = routeAgentId ?? selectedId
+  const session = getAgentSession(sessions, activeAgentId)
   const {
     initialized: sessionInitialized,
     chatId,
@@ -336,12 +340,28 @@ export function ChatPage() {
     turnSyncStatusLabel(turnSyncPhase) ??
     (loading && warmupStatus === 'connecting' ? 'Connecting tools…' : null)
 
+  const navAgentState = (location.state as { agent?: Agent } | null)?.agent ?? null
+
   const selected = agents.find((a) => a.id === selectedId) ?? null
+  const sidebarAgent = useMemo(() => {
+    if (!activeAgentId) return null
+    return (
+      agents.find((a) => a.id === activeAgentId) ??
+      (navAgentState?.id === activeAgentId ? navAgentState : null) ??
+      readNavAgent(activeAgentId)
+    )
+  }, [activeAgentId, agents, navAgentState])
   const selectedModelId = selectedId ? selectedModelByAgent[selectedId] ?? null : null
-  const isProposalComposer = selected?.slug === PROPOSAL_COMPOSER_SLUG
-  const isYlWorker2 = selected?.slug === YL_WORKER2_SLUG
-  const showChat = !agentsLoading && selected != null
+  const isProposalComposer = sidebarAgent?.slug === PROPOSAL_COMPOSER_SLUG
+  const isYlWorker2 = sidebarAgent?.slug === YL_WORKER2_SLUG
+  const showChat = activeAgentId != null && sidebarAgent != null
   const isStandby = sessionInitialized && chatId === null && !chatSessionLoading
+  const useStandbyLayout =
+    workspaceView === 'chat' &&
+    chatId === null &&
+    !loading &&
+    (isStandby || chatSessionLoading || !sessionInitialized)
+  const showStandbyPanel = useStandbyLayout
 
   const fulfillment = useFulfillmentPanel({
     selectedId,
@@ -535,26 +555,66 @@ export function ChatPage() {
   const closeOverlayPanels = useCallback(() => {
     setHistoryOpen(false)
     setMemoryOpen(false)
-    if (workspaceView !== 'chat') {
-      navigate(CHAT_HOME_PATH)
+    if (workspaceView !== 'chat' && selectedId) {
+      navigate(agentChatPath(selectedId))
     }
-  }, [navigate, workspaceView])
+  }, [navigate, selectedId, workspaceView])
 
   useEffect(() => {
     if (searchParams.get('integrations') !== '1') return
     const next = new URLSearchParams(searchParams)
     next.delete('integrations')
     const qs = next.toString()
-    navigate(qs ? `${CHAT_INTEGRATIONS_PATH}?${qs}` : CHAT_INTEGRATIONS_PATH, { replace: true })
-  }, [navigate, searchParams])
+    const target =
+      resolveLegacyChatPath('integrations', selectedId) ??
+      (selectedId ? agentChatPath(selectedId) : '/')
+    navigate(qs ? `${target}?${qs}` : target, { replace: true })
+  }, [navigate, searchParams, selectedId])
 
   useEffect(() => {
     if (searchParams.get('documents') !== '1') return
     const next = new URLSearchParams(searchParams)
     next.delete('documents')
     const qs = next.toString()
-    navigate(qs ? `${CHAT_DOCUMENTS_PATH}?${qs}` : CHAT_DOCUMENTS_PATH, { replace: true })
-  }, [navigate, searchParams])
+    const target =
+      resolveLegacyChatPath('documents', selectedId) ??
+      (selectedId ? agentChatPath(selectedId) : '/')
+    navigate(qs ? `${target}?${qs}` : target, { replace: true })
+  }, [navigate, searchParams, selectedId])
+
+  useEffect(() => {
+    if (!routeAgentId) return
+    const snapshot =
+      navAgentState?.id === routeAgentId ? navAgentState : readNavAgent(routeAgentId)
+    if (snapshot) {
+      setAgents((prev) => mergeAgentIntoList(prev, snapshot))
+    }
+  }, [navAgentState, routeAgentId])
+
+  useEffect(() => {
+    if (agentsLoading) return
+    const parsed = parseChatRoute(location.pathname)
+    if (parsed.agentId) {
+      const exists =
+        agents.some((item) => item.id === parsed.agentId) ||
+        readNavAgent(parsed.agentId) != null ||
+        navAgentState?.id === parsed.agentId
+      if (agents.length === 0 && !exists) return
+      if (!exists) {
+        navigate('/', { replace: true })
+      }
+      return
+    }
+    const target = resolveLegacyChatPath(parsed.view, selectedId)
+    if (target) {
+      const qs = searchParams.toString()
+      navigate(qs ? `${target}?${qs}` : target, { replace: true })
+      return
+    }
+    if (location.pathname.startsWith('/chat')) {
+      navigate('/', { replace: true })
+    }
+  }, [agents, agentsLoading, location.pathname, navigate, navAgentState, searchParams, selectedId])
 
   useEffect(() => {
     if (workspaceView === 'chat') return
@@ -819,7 +879,12 @@ export function ChatPage() {
         streamRegistryRef.current.abort(current.chatId)
       }
 
-      patchSession(agentId, { chatSessionLoading: true, error: null })
+      patchSession(agentId, {
+        chatSessionLoading: true,
+        error: null,
+        chatId: null,
+        messages: [],
+      })
       const task = (async () => {
         try {
           await loadChat(agentId)
@@ -837,17 +902,13 @@ export function ChatPage() {
     [loadChat, patchSession],
   )
 
-  const selectAgent = useCallback(
+  const activateAgent = useCallback(
     async (agent: Agent) => {
-      if (agent.id === selectedId) {
-        if (workspaceView !== 'chat') {
-          setHistoryOpen(false)
-          navigate(CHAT_HOME_PATH)
-        }
-        return
-      }
+      const sameAgent = agent.id === selectedId
+      const session = getAgentSession(sessionsRef.current, agent.id)
+      if (sameAgent && session.initialized) return
 
-      if (selectedId) {
+      if (selectedId && !sameAgent) {
         const previous = getAgentSession(sessionsRef.current, selectedId)
         if (previous.chatId) {
           streamRegistryRef.current.abort(previous.chatId)
@@ -856,10 +917,8 @@ export function ChatPage() {
 
       patchSession(agent.id, { chatSessionLoading: true, error: null })
       setSelectedId(agent.id)
+      writeLastAgentId(agent.id)
       setHistoryOpen(false)
-      if (workspaceView !== 'chat') {
-        navigate(CHAT_HOME_PATH)
-      }
       try {
         await loadAgentStandby(agent.id)
       } catch (e) {
@@ -869,7 +928,7 @@ export function ChatPage() {
         })
       }
     },
-    [loadAgentStandby, navigate, patchSession, selectedId, workspaceView],
+    [loadAgentStandby, patchSession, selectedId],
   )
 
   const loadAgents = useCallback(async (options?: { autoSelect?: boolean }) => {
@@ -877,7 +936,8 @@ export function ChatPage() {
     setAgentsError(null)
     try {
       const rows = await api.listAgents()
-      setAgents(rows)
+      setAgents((prev) => rows.reduce((acc, row) => mergeAgentIntoList(acc, row), prev))
+      rows.forEach((row) => stashNavAgent(row))
       if (rows.length > 0 && options?.autoSelect) {
         setSelectedId(rows[0].id)
         await loadAgentStandby(rows[0].id)
@@ -897,7 +957,6 @@ export function ChatPage() {
   }, [])
 
   useEffect(() => {
-    if (agentsLoading) return
     const agentParam = searchParams.get('agent')
     if (!agentParam) return
 
@@ -910,11 +969,23 @@ export function ChatPage() {
       { replace: true },
     )
 
-    const agent = agents.find((item) => item.id === agentParam)
+    navigate(agentChatPath(agentParam), { replace: true })
+  }, [navigate, searchParams, setSearchParams])
+
+  useEffect(() => {
+    if (agentsLoading || !routeAgentId) return
+    if (!agents.some((item) => item.id === routeAgentId)) return
+    setSelectedId(routeAgentId)
+    writeLastAgentId(routeAgentId)
+  }, [agents, agentsLoading, routeAgentId])
+
+  useEffect(() => {
+    if (agentsLoading || !routeAgentId) return
+    const agent = agents.find((item) => item.id === routeAgentId)
     if (agent) {
-      void selectAgent(agent)
+      void activateAgent(agent)
     }
-  }, [agents, agentsLoading, searchParams, selectAgent, setSearchParams])
+  }, [activateAgent, agents, agentsLoading, routeAgentId])
 
   useEffect(() => {
     if (!isProposalComposer || !selectedId || !chatId) {
@@ -2043,7 +2114,7 @@ export function ChatPage() {
     if (current.loading && current.chatId === id) return
     setHistoryOpen(false)
     if (workspaceView !== 'chat') {
-      navigate(CHAT_HOME_PATH)
+      navigate(agentChatPath(selectedId))
     }
     proposalFetchKeyRef.current = null
     fulfillment.resetFetchKey()
@@ -2177,96 +2248,44 @@ export function ChatPage() {
   return (
     <div className="flex h-screen overflow-hidden bg-surface">
       <aside
-        className={`agent-sidebar flex shrink-0 flex-col border-r border-border bg-surface-raised ${
+        className={`agent-sidebar flex h-full shrink-0 flex-col border-r border-border bg-surface-raised ${
           sidebarCollapsed ? 'agent-sidebar-collapsed' : ''
         }`}
       >
         <div
-          className={`sidebar-brand-wrap${sidebarCollapsed ? ' sidebar-brand-wrap-collapsed' : ''}`}
+          className={`sidebar-brand-wrap${
+            sidebarCollapsed ? ' sidebar-brand-wrap-collapsed' : ''
+          }`}
         >
-          <button
-            type="button"
-            className="sidebar-brand sidebar-brand-btn"
-            aria-label="Home"
-            title={sidebarCollapsed ? 'Home' : undefined}
-            onClick={() => navigate('/')}
-          >
-            <img src="/cow.png" alt="" className="sidebar-brand-icon" />
-            {!sidebarCollapsed && (
-              <>
-                <span className="sidebar-brand-agent">Agent</span>{' '}
-                <span className="sidebar-brand-team">Team</span>
-              </>
+          <div className="agent-sidebar-agent-brand">
+            {sidebarAgent ? (
+              <AgentIcon slug={sidebarAgent.slug} className="agent-sidebar-agent-avatar shrink-0" />
+            ) : (
+              <span className="agent-sidebar-agent-avatar inline-flex shrink-0 items-center justify-center rounded-full bg-surface text-[10px] text-muted">
+                …
+              </span>
             )}
-          </button>
-        </div>
-
-        {!sidebarCollapsed && (
-          <div className="px-4 pb-0.5 pt-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle">
-              Agents
-            </p>
-          </div>
-        )}
-
-        <ul
-          className={`min-h-0 flex-1 overflow-y-auto pb-2 ${sidebarCollapsed ? 'px-1.5 pt-2' : 'px-2'}`}
-        >
-          {agentsLoading && !sidebarCollapsed && (
-            <li className="px-2 py-3 text-[11px] text-muted">Loading…</li>
-          )}
-          {agentsError && !sidebarCollapsed && (
-            <li className="space-y-2 px-2 py-3">
-              <p className="text-[11px] leading-relaxed text-brand-700">
-                Failed to load agents: {agentsError}
-              </p>
-              <p className="text-[10px] text-muted">
-                Make sure the backend is running (http://127.0.0.1:8000)
-              </p>
-              <button
-                type="button"
-                className="btn btn-secondary text-[10px]"
-                onClick={() => void loadAgents({ autoSelect: true })}
-              >
-                Retry
-              </button>
-            </li>
-          )}
-          {!agentsLoading && !agentsError && agents.length === 0 && !sidebarCollapsed && (
-            <li className="px-2 py-3 text-[11px] leading-relaxed text-muted">
-              No agents found. Add a directory and profile.yaml under backend/agents/, then restart
-              the backend.
-            </li>
-          )}
-          {!agentsLoading &&
-            agents.map((agent) => {
-            const active = agent.id === selectedId && workspaceView === 'chat'
-            const agentSession = getAgentSession(sessions, agent.id)
-            const agentBusy = agentSession.loading
-            return (
-              <li key={agent.id}>
+            {!sidebarCollapsed && sidebarAgent ? (
+              <div className="agent-sidebar-agent-brand-text">
                 <button
                   type="button"
-                  onClick={() => void selectAgent(agent)}
-                  title={sidebarCollapsed ? formatAgentLabel(agent) : undefined}
-                  className={`agent-nav-item ${active ? 'agent-nav-item-active' : ''} ${
-                    sidebarCollapsed ? 'agent-nav-item-collapsed' : ''
-                  }${agentBusy ? ' agent-nav-item-busy' : ''}`}
+                  className="agent-sidebar-desk-link"
+                  aria-label="Back to home"
+                  onClick={() => navigate('/')}
                 >
-                  <AgentIcon slug={agent.slug} className="h-6 w-6 shrink-0" />
-                  {!sidebarCollapsed && (
-                    <span className="agent-nav-label">{formatAgentLabel(agent)}</span>
-                  )}
-                  {agentBusy && (
-                    <span className="agent-nav-busy-dot" aria-hidden title="Responding…" />
-                  )}
+                  FDE-Desk
                 </button>
-              </li>
-            )
-          })}
-        </ul>
+                <span className="agent-sidebar-agent-brand-name">
+                  {formatAgentLabel(sidebarAgent)}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        </div>
 
-        <SidebarUtilityNav collapsed={sidebarCollapsed} />
+        <SidebarUtilityNav collapsed={sidebarCollapsed} agentId={routeAgentId ?? selectedId} />
+
+        <div className="agent-sidebar-spacer" aria-hidden="true" />
 
         <div className="agent-sidebar-footer">
           {!sidebarCollapsed ? (
@@ -2286,19 +2305,16 @@ export function ChatPage() {
 
       <section className="chat-main flex min-w-0 flex-1 flex-col">
         {documentsOpen ? (
-          <DocumentsView onOpenChat={(id) => void openHistoryChat(id)} />
+          <DocumentsView
+            scopedAgentId={selectedId ?? routeAgentId ?? undefined}
+            onOpenChat={(id) => void openHistoryChat(id)}
+          />
         ) : integrationsOpen ? (
           <IntegrationsView />
-        ) : showChat && selected ? (
+        ) : showChat && sidebarAgent ? (
           <div className={`chat-main-layout${isProposalComposer ? ' chat-main-layout-proposal' : ''}`}>
             <div className="chat-main-inner">
-            <div className="chat-header">
-              <div className="chat-header-brand">
-                <span className="chat-header-icon-slot" aria-hidden>
-                  <AgentIcon slug={selected.slug} className="chat-header-icon" />
-                </span>
-                <h1 className="chat-header-title">{selected.name}</h1>
-              </div>
+            <div className="chat-header chat-header-actions-only">
               <div className="chat-header-actions">
                 <div className="chat-header-action-wrap">
                   <button
@@ -2358,20 +2374,23 @@ export function ChatPage() {
             </div>
 
             <div className="chat-body-frame">
-              <div className="chat-body-white">
+              <div
+                className={`chat-body-white${useStandbyLayout ? ' chat-body-standby-centered' : ''}`}
+              >
                 <div
                   ref={messagesScrollRef}
                   className="chat-messages-scroll"
                   onScroll={updateScrollPin}
                 >
                   <div className="chat-content-column">
-                    {chatSessionLoading ? (
-                      <PanelLoadingState message="Loading conversation…" />
-                    ) : isStandby ? (
+                    {showStandbyPanel ? (
                       <ChatStandbyPanel
-                        agentName={formatAgentLabel(selected)}
-                        agentDescription={selected.description}
+                        agentSlug={sidebarAgent.slug}
+                        agentName={formatAgentLabel(sidebarAgent)}
+                        agentDescription={sidebarAgent.description}
                       />
+                    ) : chatSessionLoading ? (
+                      <PanelLoadingState message="Loading conversation…" />
                     ) : (
                       <>
                         {messages.length === 0 && (
@@ -2418,7 +2437,9 @@ export function ChatPage() {
                   </div>
                 ) : null}
 
-                <div className="chat-composer-wrap">
+                <div
+                  className={`chat-composer-wrap${useStandbyLayout ? ' chat-composer-wrap-standby' : ''}`}
+                >
                   <div className="chat-content-column">
                     {!isStandby && chatId ? (
                       <div className="chat-composer-tools">
@@ -2540,9 +2561,9 @@ export function ChatPage() {
                           >
                             <Paperclip size={16} strokeWidth={1.75} aria-hidden="true" />
                           </button>
-                          {selected?.supports_kb_scope ? (
+                          {sidebarAgent.supports_kb_scope ? (
                             <KbScopePopover
-                              agentId={selected.id}
+                              agentId={sidebarAgent.id}
                               disabled={loading || chatSessionLoading}
                             />
                           ) : null}
@@ -2657,7 +2678,7 @@ export function ChatPage() {
             <MemoryPanel
               open={memoryOpen}
               agents={agents}
-              activeAgentId={selected.id}
+              activeAgentId={sidebarAgent.id}
               refreshKey={memoryRefreshKey}
               onClose={() => setMemoryOpen(false)}
             />
@@ -2678,9 +2699,24 @@ export function ChatPage() {
               <LoadingSpinner size="lg" />
             ) : (
               <>
-                <p className="chat-main-placeholder-title">Select an agent to start chatting</p>
+                <p className="chat-main-placeholder-title">
+                  {agentsError ? 'Could not load agents' : 'Choose an agent on the home page'}
+                </p>
                 <p className="chat-main-placeholder-subtitle">
-                  Agents are loaded from backend/agents/ profiles
+                  {agentsError ? (
+                    <>
+                      {agentsError}
+                      <button
+                        type="button"
+                        className="btn btn-secondary ml-2 text-[11px]"
+                        onClick={() => void loadAgents()}
+                      >
+                        Retry
+                      </button>
+                    </>
+                  ) : (
+                    'Pick an agent from the grid to open its workspace.'
+                  )}
                 </p>
               </>
             )}

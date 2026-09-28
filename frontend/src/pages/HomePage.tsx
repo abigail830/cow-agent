@@ -5,6 +5,8 @@ import { AgentIcon } from '../components/AgentIcon'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { SidebarUserMenu } from '../components/SidebarUserMenu'
 import { formatAgentLabel } from '../lib/agentLabel'
+import { stashNavAgent } from '../lib/agentNavCache'
+import { agentChatPath } from '../lib/chatRoutes'
 import { formatApiError } from '../lib/apiErrorMessage'
 import { greetingForUser } from '../lib/greeting'
 import { useAuth } from '../context/AuthContext'
@@ -33,6 +35,11 @@ export function HomePage() {
   }, [])
 
   useEffect(() => {
+    const agentParam = searchParams.get('agent')
+    if (agentParam) {
+      navigate(agentChatPath(agentParam), { replace: true })
+      return
+    }
     if (searchParams.toString()) {
       navigate(`/chat?${searchParams.toString()}`, { replace: true })
     }
@@ -43,7 +50,8 @@ export function HomePage() {
   }, [loadAgents])
 
   const openAgent = (agent: Agent) => {
-    navigate(`/chat?agent=${encodeURIComponent(agent.id)}`)
+    stashNavAgent(agent)
+    navigate(agentChatPath(agent.id), { state: { agent } })
   }
 
   if (!user) return null

@@ -1,43 +1,70 @@
-import { FileText, Plug } from 'lucide-react'
+import { BotMessageSquare, Boxes, Plug } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
-import { CHAT_DOCUMENTS_PATH, CHAT_INTEGRATIONS_PATH } from '../lib/chatRoutes'
+import { agentChatPath, agentDocumentsPath, agentIntegrationsPath } from '../lib/chatRoutes'
 
 type Props = {
   collapsed: boolean
+  agentId: string | null
 }
 
-export function SidebarUtilityNav({ collapsed }: Props) {
+function navItemClass(collapsed: boolean, isActive: boolean): string {
+  return `agent-nav-item ${isActive ? 'agent-nav-item-active' : ''} ${
+    collapsed ? 'agent-nav-item-collapsed' : ''
+  }`
+}
+
+export function SidebarUtilityNav({ collapsed, agentId }: Props) {
+  if (!agentId) return null
+
+  const chatPath = agentChatPath(agentId)
+  const documentsPath = agentDocumentsPath(agentId)
+  const integrationsPath = agentIntegrationsPath(agentId)
+
   return (
-    <div className="agent-sidebar-utility">
-      {!collapsed ? (
-        <p className="agent-sidebar-utility-heading">Workspace</p>
-      ) : null}
-      <ul className={`agent-sidebar-utility-list${collapsed ? ' agent-sidebar-utility-list-collapsed' : ''}`}>
+    <div className="agent-sidebar-primary-nav">
+      <ul
+        className={`agent-sidebar-utility-list${collapsed ? ' agent-sidebar-utility-list-collapsed' : ''}`}
+      >
         <li>
           <NavLink
-            to={CHAT_DOCUMENTS_PATH}
-            title={collapsed ? 'Chat Documents' : undefined}
-            className={({ isActive }) =>
-              `agent-nav-item ${isActive ? 'agent-nav-item-active' : ''} ${
-                collapsed ? 'agent-nav-item-collapsed' : ''
-              }`
-            }
+            to={chatPath}
+            end
+            title={collapsed ? 'Work' : undefined}
+            className={({ isActive }) => navItemClass(collapsed, isActive)}
           >
-            <FileText className="h-[1.375rem] w-[1.375rem] shrink-0" strokeWidth={1.75} aria-hidden="true" />
-            {!collapsed ? <span className="agent-nav-label">Chat Documents</span> : null}
+            <BotMessageSquare
+              className="h-[1.375rem] w-[1.375rem] shrink-0"
+              strokeWidth={1.75}
+              aria-hidden="true"
+            />
+            {!collapsed ? <span className="agent-nav-label">Work</span> : null}
           </NavLink>
         </li>
         <li>
           <NavLink
-            to={CHAT_INTEGRATIONS_PATH}
-            title={collapsed ? 'Integrations' : undefined}
-            className={({ isActive }) =>
-              `agent-nav-item ${isActive ? 'agent-nav-item-active' : ''} ${
-                collapsed ? 'agent-nav-item-collapsed' : ''
-              }`
-            }
+            to={documentsPath}
+            title={collapsed ? 'Artifacts' : undefined}
+            className={({ isActive }) => navItemClass(collapsed, isActive)}
           >
-            <Plug className="h-[1.375rem] w-[1.375rem] shrink-0" strokeWidth={1.75} aria-hidden="true" />
+            <Boxes
+              className="h-[1.375rem] w-[1.375rem] shrink-0"
+              strokeWidth={1.75}
+              aria-hidden="true"
+            />
+            {!collapsed ? <span className="agent-nav-label">Artifacts</span> : null}
+          </NavLink>
+        </li>
+        <li>
+          <NavLink
+            to={integrationsPath}
+            title={collapsed ? 'Integrations' : undefined}
+            className={({ isActive }) => navItemClass(collapsed, isActive)}
+          >
+            <Plug
+              className="h-[1.375rem] w-[1.375rem] shrink-0"
+              strokeWidth={1.75}
+              aria-hidden="true"
+            />
             {!collapsed ? <span className="agent-nav-label">Integrations</span> : null}
           </NavLink>
         </li>

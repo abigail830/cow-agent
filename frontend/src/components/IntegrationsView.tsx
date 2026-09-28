@@ -132,7 +132,7 @@ export function IntegrationsView() {
   }
 
   return (
-    <div className="integrations-view">
+    <div className="integrations-view integrations-view-agent-scoped">
       <header className="integrations-view-header">
         <div>
           <h1 className="integrations-view-title">Integrations</h1>
