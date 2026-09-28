@@ -21,9 +21,11 @@
   --color-chrome: color-mix(in oklab, var(--color-surface) 92%, white);
   --cover-paper: #f4f4f5;
   --color-panel-soft: rgba(244, 244, 245, 0.72);
+  /* Solid gutter around chat canvas (matches former user-bubble gray tone) */
+  --color-chat-gutter: #f4f4f5;
   --color-panel-muted: rgba(228, 228, 231, 0.45);
   /* User message bubble — light brand tint */
-  --color-user-bubble: var(--color-panel-soft);
+  --color-user-bubble: var(--color-brand-50);
   --color-border: #e4e4e7;
   --color-border-strong: #d4d4d8;
   --color-ink: #18181b;
@@ -800,12 +802,20 @@ body {
 }
 
 .chat-main-layout .chat-main-inner {
-  background: #fff;
+  background: var(--color-chat-gutter);
 }
 
 .chat-main-layout .chat-body-frame {
   background: transparent;
-  padding-top: 0;
+  margin: 0 10px 0;
+  padding: 0 10px 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.chat-main-layout .chat-body-white {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .chat-history-panel {
@@ -813,7 +823,7 @@ body {
   width: 0;
   overflow: hidden;
   transition: width 0.22s ease;
-  background: var(--color-panel-soft);
+  background: var(--color-surface-raised);
 }
 
 .chat-history-panel-open {
@@ -827,6 +837,7 @@ body {
   height: 100%;
   min-height: 0;
   flex-direction: column;
+  background: var(--color-surface-raised);
 }
 
 .chat-history-panel-header {
@@ -852,7 +863,7 @@ body {
 
 .chat-history-panel-close:hover {
   color: var(--color-ink);
-  background: rgba(255, 255, 255, 0.65);
+  background: var(--color-surface);
 }
 
 .chat-history-panel-scroll {
@@ -911,14 +922,18 @@ body {
   line-height: 1.4;
   color: var(--color-ink);
   cursor: pointer;
-  transition: background 0.12s;
+  transition: background 0.12s, color 0.12s;
 }
 
-.chat-history-panel-row:hover .chat-history-panel-item,
-.chat-history-panel-row:focus-within .chat-history-panel-item,
+.chat-history-panel-row:hover .chat-history-panel-item:not(.chat-history-panel-item-active),
+.chat-history-panel-row:focus-within .chat-history-panel-item:not(.chat-history-panel-item-active) {
+  background: var(--color-surface);
+}
+
 .chat-history-panel-item-active,
 .chat-history-panel-row-active .chat-history-panel-item {
-  background: rgba(255, 255, 255, 0.55);
+  background: var(--color-brand-50);
+  color: var(--color-brand-600);
 }
 
 .chat-history-panel-delete {
@@ -957,7 +972,7 @@ body {
 
 .chat-history-panel-delete:hover:not(:disabled) {
   color: #b91c1c;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--color-surface);
 }
 
 .chat-history-panel-delete:disabled {
@@ -1438,8 +1453,9 @@ body {
   background: transparent;
   font-family: var(--font-sans);
   font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--color-brand-500);
   cursor: pointer;
   transition: color 0.12s;
@@ -3157,7 +3173,7 @@ body {
   overflow: hidden;
   border: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
   border-radius: 12px;
-  background: color-mix(in oklab, var(--color-surface-raised) 97%, var(--color-panel-muted));
+  background: var(--color-surface-raised);
   box-shadow: none;
 }
 

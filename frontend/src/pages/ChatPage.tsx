@@ -356,11 +356,12 @@ export function ChatPage() {
   const isYlWorker2 = sidebarAgent?.slug === YL_WORKER2_SLUG
   const showChat = activeAgentId != null && sidebarAgent != null
   const isStandby = sessionInitialized && chatId === null && !chatSessionLoading
+  /**
+   * Centered greeting + composer until the first message exists.
+   * Decoupled from chatId / warmup so early bootstrap does not jump layout.
+   */
   const useStandbyLayout =
-    workspaceView === 'chat' &&
-    chatId === null &&
-    !loading &&
-    (isStandby || chatSessionLoading || !sessionInitialized)
+    workspaceView === 'chat' && messages.length === 0 && !loading
   const showStandbyPanel = useStandbyLayout
 
   const fulfillment = useFulfillmentPanel({
@@ -1558,7 +1559,7 @@ export function ChatPage() {
   }
 
   const handleComposerInputChange = (value: string) => {
-    if (isStandby && value.length > 0) {
+    if (selectedId && !chatId && value.length > 0) {
       void beginConversationFromStandby()
     }
     setInputForSelected(value)
@@ -2273,7 +2274,7 @@ export function ChatPage() {
                   aria-label="Back to home"
                   onClick={() => navigate('/')}
                 >
-                  FDE-Desk
+                  FDE-DESK
                 </button>
                 <span className="agent-sidebar-agent-brand-name">
                   {formatAgentLabel(sidebarAgent)}
@@ -2429,7 +2430,7 @@ export function ChatPage() {
                   </p>
                 )}
 
-                {warmupStatus === 'connecting' && !isStandby ? (
+                {warmupStatus === 'connecting' && messages.length > 0 ? (
                   <div className="chat-composer-warmup">
                     <div className="chat-content-column">
                       <p className="chat-warmup-status">Connecting tools…</p>
@@ -2441,7 +2442,7 @@ export function ChatPage() {
                   className={`chat-composer-wrap${useStandbyLayout ? ' chat-composer-wrap-standby' : ''}`}
                 >
                   <div className="chat-content-column">
-                    {!isStandby && chatId ? (
+                    {!useStandbyLayout && chatId ? (
                       <div className="chat-composer-tools">
                         <button
                           type="button"
