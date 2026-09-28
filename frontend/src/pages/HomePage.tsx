@@ -64,7 +64,9 @@ export function HomePage() {
           <span className="sidebar-brand-agent">Agent</span>{' '}
           <span className="sidebar-brand-team">Team</span>
         </button>
-        <SidebarUserMenu user={user} collapsed={false} onLogout={logout} />
+        <div className="home-header-user">
+          <SidebarUserMenu user={user} collapsed={false} onLogout={logout} />
+        </div>
       </header>
 
       <main className="home-main">

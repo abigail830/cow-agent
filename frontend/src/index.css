@@ -7437,11 +7437,15 @@ body {
 }
 
 .home-header {
+  position: relative;
+  z-index: 20;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 1rem;
   flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: visible;
   padding: 1rem 1.25rem 0.75rem;
   border-bottom: 1px solid var(--color-border);
   background: color-mix(in oklab, var(--color-chrome) 88%, white);
@@ -7449,6 +7453,36 @@ body {
 
 .home-brand {
   min-width: 0;
+  flex-shrink: 0;
+}
+
+.home-header-user {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.home-header-user .agent-sidebar-user-wrap {
+  flex: none;
+  min-width: auto;
+}
+
+.home-header-user .agent-sidebar-user-btn {
+  width: auto;
+  max-width: none;
+}
+
+.home-header-user .agent-sidebar-display-name {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+/* Sidebar menu opens upward; home header needs downward dropdown */
+.home-header-user .agent-sidebar-user-menu {
+  top: calc(100% + 0.375rem);
+  bottom: auto;
+  left: auto;
+  right: 0;
 }
 
 .home-main {
