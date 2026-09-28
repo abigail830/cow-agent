@@ -363,6 +363,8 @@ export function ChatPage() {
   const useStandbyLayout =
     workspaceView === 'chat' && messages.length === 0 && !loading
   const showStandbyPanel = useStandbyLayout
+  /** History / fork: chat id is known while timeline is still fetching */
+  const showConversationLoading = chatSessionLoading && chatId != null
 
   const fulfillment = useFulfillmentPanel({
     selectedId,
@@ -758,6 +760,7 @@ export function ChatPage() {
         [agentId]: {
           ...session,
           error: null,
+          chatId: id,
           chatSessionLoading: true,
           messages: session.chatId === id ? session.messages : [],
         },
@@ -2384,14 +2387,17 @@ export function ChatPage() {
                   onScroll={updateScrollPin}
                 >
                   <div className="chat-content-column">
-                    {showStandbyPanel ? (
+                    {showConversationLoading ? (
+                      <PanelLoadingState
+                        message="Loading conversation…"
+                        className="chat-session-loading"
+                      />
+                    ) : showStandbyPanel ? (
                       <ChatStandbyPanel
                         agentSlug={sidebarAgent.slug}
                         agentName={formatAgentLabel(sidebarAgent)}
                         agentDescription={sidebarAgent.description}
                       />
-                    ) : chatSessionLoading ? (
-                      <PanelLoadingState message="Loading conversation…" />
                     ) : (
                       <>
                         {messages.length === 0 && (
@@ -2400,6 +2406,7 @@ export function ChatPage() {
                           </div>
                         )}
                         <ChatMessageList
+                          key={chatId ?? 'empty'}
                           messages={messages}
                           loading={loading}
                           turnSyncHint={turnSyncHint}

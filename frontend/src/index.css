@@ -3,6 +3,8 @@
 @theme {
   --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* Sidebar FDE-DESK — swap: 'Patrick Hand' | 'Permanent Marker' | 'Gloria Hallelujah' */
+  --font-desk-brand: 'Permanent Marker', 'PingFang SC', cursive;
 
   --color-brand-50: #fff5ef;
   --color-brand-100: #ffe8d9;
@@ -1451,10 +1453,10 @@ body {
   border: none;
   padding: 0;
   background: transparent;
-  font-family: var(--font-sans);
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
+  font-family: var(--font-desk-brand);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--color-brand-500);
   cursor: pointer;
@@ -3835,6 +3837,36 @@ body {
   color: var(--color-muted, #64748b);
 }
 
+.chat-session-loading {
+  flex: 1;
+  min-height: 12rem;
+  animation: chat-session-loading-in 0.18s ease-out;
+}
+
+@keyframes chat-session-loading-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.chat-timeline-enter {
+  animation: chat-timeline-enter 0.24s ease-out;
+}
+
+@keyframes chat-timeline-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .chat-main-placeholder {
   display: flex;
   flex: 1;
@@ -3888,8 +3920,9 @@ body {
 .chat-composer {
   position: relative;
   border-radius: 14px;
-  border: 1px solid color-mix(in oklab, var(--color-border) 85%, var(--color-ink));
+  border: 1px solid color-mix(in oklab, var(--color-brand-500) 38%, var(--color-border));
   background: color-mix(in oklab, var(--color-surface-raised) 98%, var(--color-panel-soft));
+  transition: border-color 0.15s ease, background 0.15s ease;
   padding: 0.625rem 0.875rem 0.5rem;
   min-height: 5.25rem;
   display: flex;

@@ -142,7 +142,7 @@ export function ChatMessageList({
     (fulfillmentForms.length > 0 || fulfillmentFormsLoading || Boolean(fulfillmentFormsError))
 
   return (
-    <div className="chat-timeline">
+    <div className="chat-timeline chat-timeline-enter">
       {blocks.map((block, index) => {
         const key = block.kind === 'bubble' ? block.message.id : `${block.kind}-${block.id}-${index}`
         const node = renderBlock(
