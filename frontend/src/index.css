@@ -21,8 +21,8 @@
   --color-chrome: color-mix(in oklab, var(--color-surface) 92%, white);
   --cover-paper: #f4f4f5;
   --color-panel-soft: rgba(244, 244, 245, 0.72);
-  /* Solid gutter around chat canvas (matches former user-bubble gray tone) */
-  --color-chat-gutter: #f4f4f5;
+  /* Subtle gutter around chat canvas (top / left / right) */
+  --color-chat-gutter: color-mix(in oklab, var(--color-surface) 24%, white);
   --color-panel-muted: rgba(228, 228, 231, 0.45);
   /* User message bubble — light brand tint */
   --color-user-bubble: var(--color-brand-50);
@@ -3466,6 +3466,7 @@ body {
 /* Assistant text + viz blocks share the same max width for visual alignment */
 :root {
   --chat-assistant-max-width: 78%;
+  --chat-message-font-size: 14px;
 }
 
 .chat-assistant-block {
@@ -3475,10 +3476,15 @@ body {
 }
 
 /* Chat timeline */
+.chat-message-text {
+  font-size: var(--chat-message-font-size);
+}
+
 .chat-timeline {
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
+  font-size: var(--chat-message-font-size);
   /* Scrollable tail space — flex scroll containers ignore padding-bottom on the viewport. */
   padding-bottom: 0.875rem;
 }

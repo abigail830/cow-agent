@@ -182,7 +182,7 @@ export function MessageBubble({ message }: Props) {
   if (message.message_type === 'error') {
     return (
       <div className="flex justify-start">
-        <div className="chat-assistant-block msg-assistant rounded-sm border border-brand-200 px-3 py-2 text-[12px] text-brand-700">
+        <div className="chat-assistant-block msg-assistant chat-message-text rounded-sm border border-brand-200 px-3 py-2 text-brand-700">
           {formatUserFacingError(message.content, 'Assistant run failed')}
         </div>
       </div>
@@ -192,7 +192,7 @@ export function MessageBubble({ message }: Props) {
   if (message.message_type === 'cancelled' && message.metadata?.original_type === 'text') {
     return (
       <div className="msg-wrap msg-wrap-assistant">
-        <div className="chat-assistant-block msg-assistant msg-assistant-cancelled rounded-sm px-3 py-2 text-[12px] leading-relaxed">
+        <div className="chat-assistant-block msg-assistant msg-assistant-cancelled chat-message-text rounded-sm px-3 py-2 leading-relaxed">
           <MarkdownContent content={message.content ?? ''} />
         </div>
       </div>
@@ -208,7 +208,7 @@ export function MessageBubble({ message }: Props) {
   return (
     <div className={`msg-wrap ${isUser ? 'msg-wrap-user' : 'msg-wrap-assistant'}`}>
       <div
-        className={`px-3 py-2 text-[12px] leading-relaxed ${
+        className={`chat-message-text px-3 py-2 leading-relaxed ${
           isUser ? 'msg-user max-w-[78%]' : 'chat-assistant-block msg-assistant rounded-sm'
         }`}
       >
