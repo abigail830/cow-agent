@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from app.config import get_settings
-from app.db.models import ChatAttachment, ParseJobRun
+from app.db.models import ChatAttachment, HubItem, ParseJobRun
 from app.db.session import get_async_session_factory
 from app.platform.docstore.models import ParseStatus
 from app.platform.parse_pipeline.repository import ParseJobRepository
@@ -45,8 +45,13 @@ async def sweep_stale_parse_jobs() -> int:
             if not expired:
                 continue
 
-            attachment = await session.get(ChatAttachment, run_row.attachment_id)
+            attachment: ChatAttachment | HubItem | None = await session.get(
+                ChatAttachment, run_row.attachment_id
+            )
             if attachment is None:
+                attachment = await session.get(HubItem, run_row.attachment_id)
+            if attachment is None:
+                await ParseJobRepository(session).update_run_status(run_row.job_id, "failed")
                 continue
             if str(attachment.parse_status) not in _ACTIVE_PARSE_STATUSES:
                 await ParseJobRepository(session).update_run_status(run_row.job_id, "failed")

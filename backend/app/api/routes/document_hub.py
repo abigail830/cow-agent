@@ -295,12 +295,21 @@ async def list_items(
         raise HTTPException(status_code=404, detail="Folder not found")
     items = HubItemRepository(db)
     rows = await items.list_folder_items(user_id, folder_id, q=q)
+    from app.platform.document_hub.parse_status import reconcile_hub_item_parse_status
+
     out: list[HubItemOut] = []
+    status_changed = False
     for row in rows:
+        prev_status = row.parse_status
+        row = await reconcile_hub_item_parse_status(db, row)
+        if row.parse_status != prev_status:
+            status_changed = True
         file_count = 1
         if row.item_kind == "audio_capture" and row.capture_id:
             file_count = await items.count_parts(row.capture_id)
         out.append(_item_out(row, file_count=file_count))
+    if status_changed:
+        await db.commit()
     return out
 
 
