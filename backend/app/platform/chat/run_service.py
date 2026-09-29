@@ -132,8 +132,7 @@ class ChatRunService:
         chat: Chat,
         attachments: list,
     ) -> dict[str, Any]:
-        del chat
-        return link_attachments_metadata({}, attachments)
+        return link_attachments_metadata({}, attachments, chat_id=chat.id)
 
     async def _prior_already_full_attachment_ids(
         self,

@@ -2,6 +2,17 @@ import type { ChatAttachment } from '../types'
 import type { ChatDocumentImport } from '../types/hub'
 import { isAttachmentReady } from './attachmentUpload'
 
+/** Resolve an attachment id for send — chat uploads and hub imports use different stores. */
+export function resolveAttachmentForSend(
+  attachmentId: string,
+  chatAttachments: ChatAttachment[],
+  mentionAttachments: ChatAttachment[],
+): ChatAttachment | undefined {
+  const fromChat = chatAttachments.find((row) => row.id === attachmentId)
+  if (fromChat) return fromChat
+  return mentionAttachments.find((row) => row.id === attachmentId)
+}
+
 /** Map session import rows to mention-compatible attachment rows. */
 export function importsToMentionAttachments(
   imports: ChatDocumentImport[],

@@ -8,7 +8,7 @@ import {
   type ClipboardEvent,
   type DragEvent,
 } from 'react'
-import { Mic, Paperclip } from 'lucide-react'
+import { FolderOpen, Mic, Paperclip } from 'lucide-react'
 import { ContextUsageIndicator } from '../components/ContextUsageIndicator'
 import { KbScopePopover } from '../components/KbScopePopover'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
@@ -19,8 +19,10 @@ import { ChatHistoryPanel } from '../components/ChatHistoryPanel'
 import { DocumentsView } from '../components/DocumentsView'
 import { IntegrationsView } from '../components/IntegrationsView'
 import { DocumentHubView } from '../components/DocumentHubView'
+import { HubFolderRouteSync } from '../components/HubFolderRouteSync'
+import { HubFoldersProvider } from '../context/HubFoldersContext'
 import type { ChatDocumentImport } from '../types/hub'
-import { importsToMentionAttachments } from '../lib/sessionDocuments'
+import { importsToMentionAttachments, resolveAttachmentForSend } from '../lib/sessionDocuments'
 import { MemoryPanel } from '../components/MemoryPanel'
 import { ProposalLivePanel } from '../components/ProposalLivePanel'
 import { ProposalPanelShell, readProposalPanelWidth, type ProposalPanelTab } from '../components/ProposalPanelShell'
@@ -34,6 +36,7 @@ import { AttachmentMentionPopup } from '../components/AttachmentMentionPopup'
 import { ComposerMentionInput } from '../components/ComposerMentionInput'
 import { AttachmentParseDrawer } from '../components/AttachmentParseDrawer'
 import { TranscribeAudioPanel } from '../components/TranscribeAudioPanel'
+import { HubImportPicker } from '../components/HubImportPicker'
 import { ComposerStagedChips } from '../components/ComposerStagedChips'
 import {
   clearForkBanner,
@@ -250,7 +253,7 @@ export function ChatPage() {
   const [memoryRefreshKey, setMemoryRefreshKey] = useState(0)
   const [forkingChat, setForkingChat] = useState(false)
   const [deletingChatIds, setDeletingChatIds] = useState<string[]>([])
-  const chatBootstrapTaskRef = useRef(new Map<string, Promise<void>>())
+  const chatBootstrapTaskRef = useRef(new Map<string, Promise<string | null>>())
   const [forkBannerByChatId, setForkBannerByChatId] = useState<Record<string, ForkBannerState>>({})
   const messagesScrollRef = useRef<HTMLDivElement>(null)
   const pinToBottomRef = useRef(true)
@@ -276,7 +279,9 @@ export function ChatPage() {
       setSessions((prev) => {
         const current = getAgentSession(prev, agentId)
         const updates = typeof patch === 'function' ? patch(current) : patch
-        return { ...prev, [agentId]: { ...current, ...updates } }
+        const next = { ...prev, [agentId]: { ...current, ...updates } }
+        sessionsRef.current = next
+        return next
       })
     },
     [],
@@ -1119,6 +1124,9 @@ export function ChatPage() {
   )
 
   const [sessionImports, setSessionImports] = useState<ChatDocumentImport[]>([])
+  const [hubImportOpen, setHubImportOpen] = useState(false)
+  const [hubImportTargetChatId, setHubImportTargetChatId] = useState<string | null>(null)
+  const [hubImportBootstrapping, setHubImportBootstrapping] = useState(false)
 
   const loadSessionImports = useCallback(async (id: string) => {
     try {
@@ -1766,7 +1774,11 @@ export function ChatPage() {
     }
 
     for (const attachmentId of attachmentIds) {
-      const att = attachmentRows.find((row) => row.id === attachmentId)
+      const att = resolveAttachmentForSend(
+        attachmentId,
+        attachmentRows,
+        mentionAttachments,
+      )
       if (!att) {
         patchSession(agentId, {
           loading: false,
@@ -2096,14 +2108,13 @@ export function ChatPage() {
     async (
       agentId: string,
       options?: { preserveInput?: boolean; background?: boolean },
-    ) => {
+    ): Promise<string | null> => {
       const inFlight = chatBootstrapTaskRef.current.get(agentId)
       if (inFlight) {
-        await inFlight
-        return
+        return inFlight
       }
 
-      const task = (async () => {
+      const task = (async (): Promise<string | null> => {
         setHistoryOpen(false)
         proposalFetchKeyRef.current = null
         fulfillment.resetFetchKey()
@@ -2117,14 +2128,16 @@ export function ChatPage() {
             proposalPanelCollapsed: isProposalComposer ? false : true,
             ...fulfillment.newChatPatch(),
           })
+          return newChatId ?? getAgentSession(sessionsRef.current, agentId).chatId
         } catch {
           /* error patched in createAndOpenChat */
+          return null
         }
       })()
 
       chatBootstrapTaskRef.current.set(agentId, task)
       try {
-        await task
+        return await task
       } finally {
         if (chatBootstrapTaskRef.current.get(agentId) === task) {
           chatBootstrapTaskRef.current.delete(agentId)
@@ -2139,13 +2152,59 @@ export function ChatPage() {
     await bootstrapChatSession(selectedId)
   }, [bootstrapChatSession, chatSessionLoading, loading, selectedId])
 
-  const beginConversationFromStandby = useCallback(async (): Promise<boolean> => {
-    if (!selectedId || loading || chatSessionLoading) return false
-    const current = getAgentSession(sessionsRef.current, selectedId)
-    if (current.chatId) return true
-    await bootstrapChatSession(selectedId, { preserveInput: true, background: true })
-    return getAgentSession(sessionsRef.current, selectedId).chatId != null
-  }, [bootstrapChatSession, chatSessionLoading, loading, selectedId])
+  const beginConversationFromStandby = useCallback(async (): Promise<string | null> => {
+    const agentId = activeAgentId
+    if (!agentId || loading || chatSessionLoading) return null
+    const current = getAgentSession(sessionsRef.current, agentId)
+    if (current.chatId) return current.chatId
+    return bootstrapChatSession(agentId, { preserveInput: true, background: true })
+  }, [activeAgentId, bootstrapChatSession, chatSessionLoading, loading])
+
+  const handleOpenHubImport = useCallback(async () => {
+    const agentId = activeAgentId
+    if (!agentId || loading || chatSessionLoading || hubImportBootstrapping) return
+    setHubImportBootstrapping(true)
+    try {
+      let targetChatId = chatId
+      if (!targetChatId) {
+        targetChatId = await beginConversationFromStandby()
+      }
+      if (!targetChatId) {
+        patchSession(agentId, { error: 'Could not start a conversation. Try again.' })
+        return
+      }
+      setHubImportTargetChatId(targetChatId)
+      patchSession(agentId, { error: null })
+      setHubImportOpen(true)
+    } finally {
+      setHubImportBootstrapping(false)
+    }
+  }, [
+    activeAgentId,
+    beginConversationFromStandby,
+    chatId,
+    chatSessionLoading,
+    hubImportBootstrapping,
+    loading,
+    patchSession,
+  ])
+
+  const handleHubImported = useCallback(
+    (rows: ChatDocumentImport[]) => {
+      const importChatId = hubImportTargetChatId ?? chatId
+      if (!importChatId) return
+      setSessionImports((prev) => {
+        const byRef = new Map(prev.map((row) => [`${row.source}:${row.ref_id}`, row]))
+        for (const row of rows) {
+          byRef.set(`${row.source}:${row.ref_id}`, row)
+        }
+        return [...byRef.values()]
+      })
+      void loadSessionImports(importChatId)
+      if (activeAgentId) patchSession(activeAgentId, { error: null })
+    },
+    [activeAgentId, chatId, hubImportTargetChatId, loadSessionImports, patchSession],
+  )
 
   const openHistoryChat = async (id: string) => {
     if (!selectedId || chatSessionLoading) return
@@ -2284,8 +2343,12 @@ export function ChatPage() {
     }
   }, [])
 
+  const hubFolderId = searchParams.get('folder')
+
   return (
-    <div className="flex h-screen overflow-hidden bg-surface">
+    <HubFoldersProvider>
+      <HubFolderRouteSync hubOpen={hubOpen} />
+      <div className="flex h-screen overflow-hidden bg-surface">
       <aside
         className={`agent-sidebar flex h-full shrink-0 flex-col border-r border-border bg-surface-raised ${
           sidebarCollapsed ? 'agent-sidebar-collapsed' : ''
@@ -2355,7 +2418,7 @@ export function ChatPage() {
         ) : integrationsOpen ? (
           <IntegrationsView />
         ) : hubOpen ? (
-          <DocumentHubView />
+          <DocumentHubView folderId={hubFolderId} />
         ) : showChat && sidebarAgent ? (
           <div className={`chat-main-layout${isProposalComposer ? ' chat-main-layout-proposal' : ''}`}>
             <div className="chat-main-inner">
@@ -2610,6 +2673,16 @@ export function ChatPage() {
                           >
                             <Paperclip size={16} strokeWidth={1.75} aria-hidden="true" />
                           </button>
+                          <button
+                            type="button"
+                            className={`chat-composer-attach-btn${hubImportOpen ? ' chat-composer-attach-btn-active' : ''}`}
+                            disabled={loading || chatSessionLoading || hubImportBootstrapping}
+                            onClick={() => void handleOpenHubImport()}
+                            aria-label="Import from Document Hub"
+                            title="Import from Document Hub"
+                          >
+                            <FolderOpen size={16} strokeWidth={1.75} aria-hidden="true" />
+                          </button>
                           {sidebarAgent.supports_kb_scope ? (
                             <KbScopePopover
                               agentId={sidebarAgent.id}
@@ -2672,6 +2745,18 @@ export function ChatPage() {
               onClose={() => setParseDrawerAttachment(null)}
               onRetry={chatId ? handleRetryAttachmentParse : undefined}
             />
+            {hubImportOpen && (hubImportTargetChatId ?? chatId) ? (
+              <HubImportPicker
+                open={hubImportOpen}
+                chatId={hubImportTargetChatId ?? chatId!}
+                existingImports={sessionImports}
+                onClose={() => {
+                  setHubImportOpen(false)
+                  setHubImportTargetChatId(null)
+                }}
+                onImported={handleHubImported}
+              />
+            ) : null}
             </div>
 
             {isProposalComposer && (
@@ -2773,5 +2858,6 @@ export function ChatPage() {
         )}
       </section>
     </div>
+    </HubFoldersProvider>
   )
 }

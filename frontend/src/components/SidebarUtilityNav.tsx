@@ -1,12 +1,7 @@
-import { BotMessageSquare, Boxes, FolderOpen, Plug } from 'lucide-react'
+import { BotMessageSquare, Boxes, Plug } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
-import {
-  agentChatPath,
-  agentDocumentsPath,
-  agentHubPath,
-  agentIntegrationsPath,
-  HUB_TARGET_CHAT_STORAGE_KEY,
-} from '../lib/chatRoutes'
+import { agentChatPath, agentDocumentsPath, agentIntegrationsPath } from '../lib/chatRoutes'
+import { SidebarHubNav } from './SidebarHubNav'
 
 type Props = {
   collapsed: boolean
@@ -26,8 +21,6 @@ export function SidebarUtilityNav({ collapsed, agentId, activeChatId }: Props) {
   const chatPath = agentChatPath(agentId)
   const documentsPath = agentDocumentsPath(agentId)
   const integrationsPath = agentIntegrationsPath(agentId)
-  const hubPath = agentHubPath(agentId)
-
   return (
     <div className="agent-sidebar-primary-nav">
       <ul
@@ -76,29 +69,7 @@ export function SidebarUtilityNav({ collapsed, agentId, activeChatId }: Props) {
             {!collapsed ? <span className="agent-nav-label">Integrations</span> : null}
           </NavLink>
         </li>
-        <li>
-          <NavLink
-            to={hubPath}
-            title={collapsed ? 'Document Hub' : undefined}
-            className={({ isActive }) => navItemClass(collapsed, isActive)}
-            onClick={() => {
-              if (activeChatId) {
-                try {
-                  sessionStorage.setItem(HUB_TARGET_CHAT_STORAGE_KEY, activeChatId)
-                } catch {
-                  /* ignore */
-                }
-              }
-            }}
-          >
-            <FolderOpen
-              className="h-[1.375rem] w-[1.375rem] shrink-0"
-              strokeWidth={1.75}
-              aria-hidden="true"
-            />
-            {!collapsed ? <span className="agent-nav-label">Document Hub</span> : null}
-          </NavLink>
-        </li>
+        <SidebarHubNav collapsed={collapsed} agentId={agentId} activeChatId={activeChatId} />
       </ul>
     </div>
   )

@@ -20,6 +20,9 @@ class DocstoreRepository:
         self._session = session
 
     async def _get_parse_row(self, document_id: uuid.UUID) -> ParseDocumentRow | None:
+        return await self.get_parse_row(document_id)
+
+    async def get_parse_row(self, document_id: uuid.UUID) -> ParseDocumentRow | None:
         row = await self._session.get(ChatAttachment, document_id)
         if row is not None:
             return row

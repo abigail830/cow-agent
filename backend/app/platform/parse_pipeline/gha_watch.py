@@ -7,9 +7,9 @@ from datetime import datetime, timezone
 import httpx
 
 from app.config import get_settings
-from app.db.models import ChatAttachment
 from app.db.session import get_async_session_factory
 from app.platform.docstore.models import ParseStatus
+from app.platform.docstore.repository import DocstoreRepository
 from app.platform.parse_pipeline.repository import ParseJobRepository
 from app.platform.parse_pipeline.status_report import report_parse_run_status
 
@@ -84,11 +84,7 @@ async def _watch_gha_run(*, job_id: str) -> None:
                 message = "GitHub Actions job in progress…"
                 if html_url:
                     message = f"{message} ({html_url})"
-                await _mark_job_running_if_pending(
-                    job_id=job_id,
-                    message=message,
-                    current_stage="fetch",
-                )
+                await _update_gha_in_progress(job_id=job_id, message=message)
                 await asyncio.sleep(poll_interval)
                 continue
 
@@ -127,14 +123,15 @@ async def _reconcile_gha_success(*, job_id: str, matched: dict) -> None:
             if run_row.status in {"failed", "succeeded"}:
                 return
 
-            attachment = await session.get(ChatAttachment, run_row.attachment_id)
-            if attachment is not None and attachment.parse_status == ParseStatus.READY.value:
+            docstore = DocstoreRepository(session)
+            row = await docstore.get_parse_row(run_row.attachment_id)
+            if row is not None and row.parse_status == ParseStatus.READY.value:
                 await jobs.update_run_status(job_id, "succeeded")
                 await session.commit()
                 return
 
-            if attachment is not None and parsed_artifact_in_manifest(
-                attachment.parsed_artifact_manifest,
+            if row is not None and parsed_artifact_in_manifest(
+                row.parsed_artifact_manifest,
                 "meta_json",
             ):
                 await report_parse_run_status(
@@ -161,31 +158,49 @@ async def _reconcile_gha_success(*, job_id: str, matched: dict) -> None:
     await _mark_job_failed(job_id=job_id, error_code="WEBHOOK_DELIVERY_LOST", error_message=message)
 
 
-async def _mark_job_running_if_pending(
-    *,
-    job_id: str,
-    message: str,
-    current_stage: str = "fetch",
-) -> None:
+def _gha_in_progress_snapshot(*, message: str) -> dict:
+    """Visible pipeline progress while external GHA worker runs (webhooks may be sparse)."""
+    now = datetime.now(timezone.utc).isoformat()
+    return {
+        "current_stage": "parse_wait",
+        "message": message,
+        "stages": [
+            {"stage_id": "fetch", "status": "succeeded", "started_at": now, "finished_at": now},
+            {"stage_id": "analyze", "status": "succeeded", "started_at": now, "finished_at": now},
+            {"stage_id": "parse_submit", "status": "succeeded", "started_at": now, "finished_at": now},
+            {"stage_id": "parse_wait", "status": "running", "started_at": now, "finished_at": None},
+        ],
+    }
+
+
+async def _update_gha_in_progress(*, job_id: str, message: str) -> None:
     factory = get_async_session_factory()
     async with factory() as session:
         jobs = ParseJobRepository(session)
         run_row = await jobs.get_run(job_id)
         if run_row is None or run_row.status in {"failed", "succeeded"}:
             return
-        attachment = await session.get(ChatAttachment, run_row.attachment_id)
-        if attachment is None or attachment.parse_status != ParseStatus.PENDING.value:
+        docstore = DocstoreRepository(session)
+        row = await docstore.get_parse_row(run_row.attachment_id)
+        if row is None:
+            return
+        if row.parse_status not in {ParseStatus.PENDING.value, ParseStatus.RUNNING.value}:
+            return
+        snap = row.parse_stage_snapshot if isinstance(row.parse_stage_snapshot, dict) else {}
+        current = snap.get("current_stage")
+        stages = snap.get("stages")
+        if (
+            isinstance(stages, list)
+            and len(stages) > 0
+            and current not in (None, "", "fetch")
+        ):
             return
         await report_parse_run_status(
             session,
             run_row=run_row,
             parse_status=ParseStatus.RUNNING.value,
             run_status="running",
-            stage_snapshot={
-                "current_stage": current_stage,
-                "message": message,
-                "stages": [],
-            },
+            stage_snapshot=_gha_in_progress_snapshot(message=message),
         )
         await session.commit()
 

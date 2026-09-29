@@ -35,17 +35,25 @@ def build_user_run_input(
     )
 
 
-def user_message_attachment_metadata(attachments: list[Any]) -> dict[str, Any]:
+def user_message_attachment_metadata(
+    attachments: list[Any],
+    *,
+    chat_id: uuid.UUID | None = None,
+) -> dict[str, Any]:
     if not attachments:
         return {}
-    return {"attachments": [attachment_metadata(att) for att in attachments]}
+    return {
+        "attachments": [attachment_metadata(att, chat_id=chat_id) for att in attachments],
+    }
 
 
 def link_attachments_metadata(
     metadata: dict[str, Any],
     attachments: list[Any],
+    *,
+    chat_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
-    attachment_meta = user_message_attachment_metadata(attachments)
+    attachment_meta = user_message_attachment_metadata(attachments, chat_id=chat_id)
     if not attachment_meta:
         return metadata
     return {**metadata, **attachment_meta}

@@ -7,6 +7,23 @@ export const HUB_MIN_LIST_WIDTH = 260
 
 export const HUB_FOLDER_WIDTH_KEY = 'document-hub-folder-width'
 export const HUB_PREVIEW_WIDTH_KEY = 'document-hub-preview-width'
+export const HUB_LAST_FOLDER_ID_KEY = 'document-hub:last-folder-id'
+
+export function readStoredHubFolderId(): string | null {
+  try {
+    return sessionStorage.getItem(HUB_LAST_FOLDER_ID_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function storeHubFolderId(folderId: string): void {
+  try {
+    sessionStorage.setItem(HUB_LAST_FOLDER_ID_KEY, folderId)
+  } catch {
+    /* ignore */
+  }
+}
 
 export function readStoredHubWidth(key: string, fallback: number): number {
   try {

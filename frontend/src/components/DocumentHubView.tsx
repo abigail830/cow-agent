@@ -9,17 +9,16 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { api } from '../api/client'
-import type { HubFolder, HubItem } from '../types/hub'
+import type { HubItem } from '../types/hub'
 import { HUB_TARGET_CHAT_STORAGE_KEY } from '../lib/chatRoutes'
+import { useHubFolders } from '../context/HubFoldersContext'
 import {
-  HUB_FOLDER_WIDTH_KEY,
-  HUB_MAX_FOLDER_WIDTH,
   HUB_MAX_PREVIEW_RATIO,
-  HUB_MIN_FOLDER_WIDTH,
   HUB_MIN_LIST_WIDTH,
   HUB_MIN_PREVIEW_WIDTH,
   HUB_PREVIEW_WIDTH_KEY,
   HUB_RESIZE_HANDLE_WIDTH,
+  storeHubFolderId,
   readStoredHubWidth,
   storeHubWidth,
 } from '../lib/documentHubLayout'
@@ -32,12 +31,16 @@ import {
 import { hubItemParsedArtifacts } from '../lib/documentArtifacts'
 import { documentParseListBadge } from '../lib/documentParseDisplay'
 import { formatFileSize } from '../lib/formatBytes'
-import { FileImage, FileText, FolderInput, Trash2, Workflow } from 'lucide-react'
+import { FileImage, FileText, FolderInput, Search, Trash2, Workflow, X } from 'lucide-react'
 import { AttachmentParseDrawer } from './AttachmentParseDrawer'
 import { LoadingSpinner } from './LoadingSpinner'
 import { ParsedDocumentPreview } from './ParsedDocumentPreview'
 
 type PendingUpload = { id: string; filename: string }
+
+type Props = {
+  folderId: string | null
+}
 
 function hubFileIsSvg(filename: string, mimeType: string): boolean {
   const name = filename.toLowerCase()
@@ -58,43 +61,31 @@ function HubFileIcon({ filename, mimeType }: { filename: string; mimeType: strin
   return <FileText size={14} />
 }
 
-function folderDepth(folder: HubFolder, byId: Map<string, HubFolder>): number {
-  let depth = 0
-  let parentId = folder.parent_id
-  const seen = new Set<string>()
-  while (parentId) {
-    if (seen.has(parentId)) break
-    seen.add(parentId)
-    depth += 1
-    parentId = byId.get(parentId)?.parent_id ?? null
-  }
-  return depth
-}
-
-export function DocumentHubView() {
-  const [folders, setFolders] = useState<HubFolder[]>([])
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+export function DocumentHubView({ folderId }: Props) {
+  const { rootFolders, loading: foldersLoading } = useHubFolders()
   const [items, setItems] = useState<HubItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [itemsLoading, setItemsLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([])
   const [error, setError] = useState<string | null>(null)
   const [selectedItem, setSelectedItem] = useState<HubItem | null>(null)
   const [importNotice, setImportNotice] = useState<string | null>(null)
+  const [importingToChat, setImportingToChat] = useState(false)
   const [parseDrawerItem, setParseDrawerItem] = useState<HubItem | null>(null)
   const [deletingItemIds, setDeletingItemIds] = useState<string[]>([])
+  const [searchInput, setSearchInput] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
-  const [folderWidth, setFolderWidth] = useState(() => readStoredHubWidth(HUB_FOLDER_WIDTH_KEY, 200))
   const [previewWidth, setPreviewWidth] = useState<number | null>(() =>
     readStoredHubWidth(HUB_PREVIEW_WIDTH_KEY, 440),
   )
 
   const workspaceRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const uploadFolderIdRef = useRef<string | null>(null)
   const uploadInFlightRef = useRef(false)
   const [dragOver, setDragOver] = useState(false)
-  const folderDragRef = useRef<{ startX: number; startWidth: number } | null>(null)
   const previewDragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
   const targetChatId = useMemo(() => {
@@ -105,87 +96,83 @@ export function DocumentHubView() {
     }
   }, [])
 
-  const folderById = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders])
+  const activeFolder = useMemo(
+    () => rootFolders.find((f) => f.id === folderId) ?? null,
+    [folderId, rootFolders],
+  )
 
-  const loadFolders = useCallback(async (): Promise<HubFolder[]> => {
-    const rows = await api.listHubFolders()
-    setFolders(rows)
-    setSelectedFolderId((prev) => {
-      if (prev && rows.some((f) => f.id === prev)) return prev
-      return rows[0]?.id ?? null
-    })
-    return rows
-  }, [])
-
-  const loadItems = useCallback(async (folderId: string) => {
-    const rows = await api.listHubItems(folderId)
-    setItems(rows)
-  }, [])
-
-  const refresh = useCallback(async () => {
-    setLoading(true)
+  const loadItems = useCallback(async (id: string, q?: string) => {
+    setItemsLoading(true)
     setError(null)
     try {
-      const rows = await loadFolders()
-      const folderId = selectedFolderId ?? rows[0]?.id ?? null
-      if (folderId) await loadItems(folderId)
+      const rows = await api.listHubItems(id, q?.trim() || undefined)
+      setItems(rows)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load Document Hub')
-    } finally {
-      setLoading(false)
-    }
-  }, [loadFolders, loadItems, selectedFolderId])
-
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        await loadFolders()
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load Document Hub')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [loadFolders])
-
-  useEffect(() => {
-    if (!selectedFolderId) {
       setItems([])
+      setError(err instanceof Error ? err.message : 'Failed to load files')
+    } finally {
+      setItemsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 250)
+    return () => window.clearTimeout(timer)
+  }, [searchInput])
+
+  useEffect(() => {
+    if (!folderId) {
+      setItems([])
+      setSelectedItem(null)
       return
     }
-    void loadItems(selectedFolderId).catch((err) => {
-      setError(err instanceof Error ? err.message : 'Failed to load files')
-    })
-  }, [loadItems, selectedFolderId])
+    storeHubFolderId(folderId)
+    setSelectedItem(null)
+    setParseDrawerItem(null)
+    void loadItems(folderId, debouncedSearch)
+  }, [debouncedSearch, folderId, loadItems])
+
+  const hasActiveParse = useMemo(
+    () =>
+      items.some((row) => {
+        const s = row.parse_status ?? 'pending'
+        return s === 'pending' || s === 'running'
+      }) || pendingUploads.length > 0,
+    [items, pendingUploads.length],
+  )
 
   useEffect(() => {
-    storeHubWidth(HUB_FOLDER_WIDTH_KEY, folderWidth)
-  }, [folderWidth])
+    if (!folderId || !hasActiveParse) return
+    const timer = window.setInterval(() => {
+      void loadItems(folderId, debouncedSearch).catch(() => {})
+    }, ATTACHMENT_PARSE_POLL_MS)
+    return () => window.clearInterval(timer)
+  }, [debouncedSearch, folderId, hasActiveParse, loadItems])
+
+  const toggleSearch = () => {
+    setSearchOpen((open) => {
+      const next = !open
+      if (next) {
+        window.setTimeout(() => searchInputRef.current?.focus(), 0)
+      } else {
+        setSearchInput('')
+      }
+      return next
+    })
+  }
 
   useEffect(() => {
     if (previewWidth != null) storeHubWidth(HUB_PREVIEW_WIDTH_KEY, previewWidth)
   }, [previewWidth])
-
-  const clampFolderWidth = useCallback((next: number) => {
-    return Math.min(Math.max(next, HUB_MIN_FOLDER_WIDTH), HUB_MAX_FOLDER_WIDTH)
-  }, [])
 
   const clampPreviewWidth = useCallback((next: number) => {
     const workspace = workspaceRef.current
     if (!workspace) return Math.max(HUB_MIN_PREVIEW_WIDTH, next)
     const total = workspace.getBoundingClientRect().width
     const max = Math.max(HUB_MIN_PREVIEW_WIDTH, total * HUB_MAX_PREVIEW_RATIO)
-    const maxByList = total - folderWidth - HUB_MIN_LIST_WIDTH - HUB_RESIZE_HANDLE_WIDTH * 2
+    const maxByList = total - HUB_MIN_LIST_WIDTH - HUB_RESIZE_HANDLE_WIDTH
     return Math.min(Math.max(next, HUB_MIN_PREVIEW_WIDTH), max, maxByList)
-  }, [folderWidth])
+  }, [])
 
   const handleSelectItem = (item: HubItem) => {
     if (hubItemShowsParseDrawer(item)) {
@@ -196,30 +183,6 @@ export function DocumentHubView() {
     setParseDrawerItem(null)
     setSelectedItem(item)
     setPreviewWidth((current) => (current != null ? clampPreviewWidth(current) : clampPreviewWidth(440)))
-  }
-
-  const selectFolder = (folderId: string) => {
-    setSelectedFolderId(folderId)
-    setSelectedItem(null)
-    setParseDrawerItem(null)
-  }
-
-  const onFolderResizeDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    folderDragRef.current = { startX: event.clientX, startWidth: folderWidth }
-    event.currentTarget.setPointerCapture(event.pointerId)
-  }
-
-  const onFolderResizeMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!folderDragRef.current) return
-    const delta = event.clientX - folderDragRef.current.startX
-    setFolderWidth(clampFolderWidth(folderDragRef.current.startWidth + delta))
-  }
-
-  const onFolderResizeUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!folderDragRef.current) return
-    folderDragRef.current = null
-    event.currentTarget.releasePointerCapture(event.pointerId)
   }
 
   const onPreviewResizeDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -242,17 +205,16 @@ export function DocumentHubView() {
   }
 
   useEffect(() => {
-    if (!parseDrawerItem) return
+    if (!parseDrawerItem || !folderId) return
     const status = parseDrawerItem.parse_status ?? 'pending'
     if (status === 'ready' || status === 'skipped' || status === 'failed') return
 
     const timer = window.setInterval(() => {
-      if (!selectedFolderId) return
-      void loadItems(selectedFolderId).catch(() => {})
+      void loadItems(folderId).catch(() => {})
     }, ATTACHMENT_PARSE_POLL_MS)
 
     return () => window.clearInterval(timer)
-  }, [loadItems, parseDrawerItem, selectedFolderId])
+  }, [folderId, loadItems, parseDrawerItem])
 
   useEffect(() => {
     if (!parseDrawerItem) return
@@ -287,49 +249,6 @@ export function DocumentHubView() {
     [parseDrawerItem],
   )
 
-  const handleCreateFolder = async () => {
-    const name = window.prompt('Folder name')
-    if (!name?.trim()) return
-    setError(null)
-    try {
-      const created = await api.createHubFolder({ name: name.trim(), parent_id: null })
-      await loadFolders()
-      setSelectedFolderId(created.id)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create folder')
-    }
-  }
-
-  const handleDeleteFolder = async (folderId: string, folderName: string) => {
-    if (!window.confirm(`Delete folder "${folderName}" and all contents? This cannot be undone.`)) return
-    setError(null)
-    try {
-      const rows = await api.listHubFolders()
-      const target = rows.find((f) => f.id === folderId)
-      if (!target) {
-        setError('That folder no longer exists. Refreshing the list.')
-        await loadFolders()
-        return
-      }
-      if (target.name !== folderName) {
-        setError(
-          `Folder list is out of sync (row says "${folderName}" but server has "${target.name}" for that id). Refresh and try again.`,
-        )
-        setFolders(rows)
-        return
-      }
-      await api.deleteHubFolder(folderId, folderName)
-      if (selectedFolderId === folderId) {
-        setSelectedFolderId(null)
-        setSelectedItem(null)
-        setItems([])
-      }
-      await loadFolders()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete folder')
-    }
-  }
-
   const handleDeleteItem = async (item: HubItem) => {
     if (deletingItemIds.includes(item.id)) return
     if (!window.confirm(`Delete "${item.filename}"?`)) return
@@ -339,7 +258,7 @@ export function DocumentHubView() {
       await api.deleteHubItem(item.id)
       if (selectedItem?.id === item.id) setSelectedItem(null)
       if (parseDrawerItem?.id === item.id) setParseDrawerItem(null)
-      if (selectedFolderId) await loadItems(selectedFolderId)
+      if (folderId) await loadItems(folderId)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete item')
     } finally {
@@ -347,10 +266,24 @@ export function DocumentHubView() {
     }
   }
 
+  const handleImportSelectedToChat = async () => {
+    if (!targetChatId || !selectedItem || importingToChat) return
+    setImportingToChat(true)
+    setError(null)
+    try {
+      await api.importHubToChat(targetChatId, [selectedItem.id])
+      setImportNotice(`"${selectedItem.filename}" added to the linked chat. Use @ in the message box to reference it.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import into chat')
+    } finally {
+      setImportingToChat(false)
+    }
+  }
+
   const handleMoveItem = async (item: HubItem) => {
-    const target = window.prompt(`Move to folder:\n${folders.map((f) => f.name).join(', ')}`)
+    const target = window.prompt(`Move to folder:\n${rootFolders.map((f) => f.name).join(', ')}`)
     if (!target?.trim()) return
-    const dest = folders.find((f) => f.name.toLowerCase() === target.trim().toLowerCase())
+    const dest = rootFolders.find((f) => f.name.toLowerCase() === target.trim().toLowerCase())
     if (!dest) {
       setError(`Folder not found: "${target.trim()}"`)
       return
@@ -358,28 +291,15 @@ export function DocumentHubView() {
     setError(null)
     try {
       await api.moveHubItem(item.id, dest.id)
-      if (selectedFolderId) await loadItems(selectedFolderId)
+      if (folderId) await loadItems(folderId)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to move item')
     }
   }
 
-  const uploadFolderId = useMemo((): string | null => {
-    if (selectedFolderId && folders.some((f) => f.id === selectedFolderId)) return selectedFolderId
-    return folders[0]?.id ?? null
-  }, [folders, selectedFolderId])
-
-  uploadFolderIdRef.current = uploadFolderId
-
   const doUploadFiles = async (files: File[]) => {
-    if (!files.length || uploadInFlightRef.current) return
-    const folderId = uploadFolderIdRef.current
-    if (!folderId) {
-      setError('Select or create a folder before uploading.')
-      return
-    }
+    if (!files.length || uploadInFlightRef.current || !folderId) return
     uploadInFlightRef.current = true
-    setSelectedFolderId((prev) => (prev === folderId ? prev : folderId))
 
     const placeholders = files.map((file) => ({ id: crypto.randomUUID(), filename: file.name }))
     setError(null)
@@ -407,8 +327,8 @@ export function DocumentHubView() {
 
   const handleUploadButtonClick = () => {
     if (uploadActive) return
-    if (!uploadFolderIdRef.current) {
-      setError('Select or create a folder before uploading.')
+    if (!folderId) {
+      setError('Choose a folder in the sidebar before uploading.')
       return
     }
     fileInputRef.current?.click()
@@ -424,7 +344,7 @@ export function DocumentHubView() {
   }
 
   const handleListDragOver = (event: DragEvent<HTMLDivElement>) => {
-    if (uploading || pendingUploads.length > 0 || !uploadFolderId) return
+    if (uploading || pendingUploads.length > 0 || !folderId) return
     if (!event.dataTransfer.types.includes('Files')) return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'copy'
@@ -446,18 +366,21 @@ export function DocumentHubView() {
   }
 
   const uploadActive = uploading || pendingUploads.length > 0
+  const loading = foldersLoading || (Boolean(folderId) && itemsLoading && items.length === 0 && !uploadActive)
 
   const showEmptyCenter =
     !loading &&
     !uploadActive &&
-    ((!selectedFolderId && folders.length === 0) ||
-      ((selectedFolderId ?? folders[0]?.id) && items.length === 0))
+    (folderId == null || rootFolders.length === 0 || items.length === 0)
 
-  const emptyMessage = !selectedFolderId
-    ? folders.length === 0
-      ? 'Create a folder to start uploading files.'
-      : 'Select a folder on the left.'
-    : 'No files in this folder yet. Click Upload or drop files here.'
+  const emptyMessage =
+    rootFolders.length === 0
+      ? 'Create a folder under Document Hub in the sidebar, then select it.'
+      : folderId == null
+        ? 'Select a folder in the sidebar to view files.'
+        : debouncedSearch
+          ? 'No files match your search.'
+          : 'No files in this folder yet. Click Upload or drop files here.'
 
   return (
     <div className="document-hub-view documents-view documents-view-agent-scoped">
@@ -470,11 +393,13 @@ export function DocumentHubView() {
         className="document-hub-hidden-file-input"
         onChange={handleFileInputChange}
       />
-      <header className="documents-view-header">
-        <div>
-          <h1 className="documents-view-title">Document Hub</h1>
+      <header className="documents-view-header document-hub-page-header">
+        <div className="document-hub-page-header-copy">
+          <h1 className="documents-view-title">{activeFolder?.name ?? 'Document Hub'}</h1>
           <p className="documents-view-subtitle">
-            Personal document library. Import into a chat before @ mentions and retrieval tools can use a file.
+            {activeFolder
+              ? 'Files in this folder. Import into a chat before @ mentions and retrieval tools can use them.'
+              : 'Personal document library — folders live in the left sidebar under Document Hub.'}
             {targetChatId ? ' · Session linked for import' : ''}
           </p>
         </div>
@@ -483,88 +408,88 @@ export function DocumentHubView() {
       {importNotice ? <div className="integrations-view-notice">{importNotice}</div> : null}
       {error ? <div className="integrations-view-error">{error}</div> : null}
 
-      <div className="document-hub-workspace" ref={workspaceRef}>
-        <aside className="document-hub-folder-pane" style={{ width: folderWidth }}>
-          <div className="document-hub-sidebar-head">
-            <span>Folders</span>
-            <button type="button" className="document-hub-icon-btn" onClick={() => void handleCreateFolder()} title="New folder">
-              +
-            </button>
-          </div>
-          <ul className="document-hub-folder-list">
-            {folders.map((folder) => {
-              const depth = folderDepth(folder, folderById)
-              const isSelected = selectedFolderId === folder.id
-              return (
-                <li key={folder.id} className="document-hub-folder-row">
-                  <button
-                    type="button"
-                    className={`document-hub-folder-btn${isSelected ? ' document-hub-folder-btn-active' : ''}${depth > 0 ? ' document-hub-folder-btn-nested' : ''}`}
-                    style={depth > 0 ? { paddingLeft: `${0.55 + depth * 0.65}rem` } : undefined}
-                    onClick={() => selectFolder(folder.id)}
-                  >
-                    {folder.name}
-                  </button>
-                  <button
-                    type="button"
-                    className={`document-hub-folder-delete${isSelected ? ' document-hub-folder-delete-visible' : ''}`}
-                    title={`Delete folder "${folder.name}"`}
-                    aria-label={`Delete folder ${folder.name}`}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      void handleDeleteFolder(folder.id, folder.name)
-                    }}
-                  >
-                    <Trash2 size={14} strokeWidth={1.75} />
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        </aside>
-
+      <div className="document-hub-workspace document-hub-workspace-files-only" ref={workspaceRef}>
         <div
-          className="documents-view-resize-handle"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize folders panel"
-          style={{ width: HUB_RESIZE_HANDLE_WIDTH }}
-          onPointerDown={onFolderResizeDown}
-          onPointerMove={onFolderResizeMove}
-          onPointerUp={onFolderResizeUp}
-          onPointerCancel={onFolderResizeUp}
-        />
-
-        <div
-          className={`document-hub-list-pane${dragOver ? ' document-hub-list-pane-drag-over' : ''}`}
+          className={`document-hub-list-pane document-hub-list-pane-full${dragOver ? ' document-hub-list-pane-drag-over' : ''}`}
           onDragOver={handleListDragOver}
           onDragLeave={handleListDragLeave}
           onDrop={handleListDrop}
         >
           <div className="document-hub-toolbar">
-            <button
-              type="button"
-              className="integration-tile-btn integration-tile-btn-primary"
-              disabled={uploadActive}
-              onClick={handleUploadButtonClick}
-            >
-              {uploading ? 'Uploading…' : 'Upload'}
-            </button>
-            <button
-              type="button"
-              className="integration-tile-btn integration-tile-btn-ghost"
-              disabled={uploadActive}
-              onClick={() => void refresh()}
-            >
-              Refresh
-            </button>
-            {uploadActive ? (
-              <span className="document-hub-toolbar-status">
-                <LoadingSpinner size="sm" /> Upload in progress…
-              </span>
-            ) : null}
+            <div className="document-hub-toolbar-primary">
+              <button
+                type="button"
+                className="integration-tile-btn integration-tile-btn-primary"
+                disabled={uploadActive || !folderId}
+                onClick={handleUploadButtonClick}
+              >
+                {uploading ? 'Uploading…' : 'Upload'}
+              </button>
+              <button
+                type="button"
+                className="integration-tile-btn integration-tile-btn-ghost"
+                disabled={uploadActive || !folderId}
+                onClick={() => folderId && void loadItems(folderId, debouncedSearch)}
+              >
+                Refresh
+              </button>
+              {targetChatId ? (
+                <button
+                  type="button"
+                  className="integration-tile-btn integration-tile-btn-primary"
+                  disabled={uploadActive || !selectedItem || importingToChat}
+                  title={
+                    selectedItem
+                      ? `Add "${selectedItem.filename}" to the chat you came from`
+                      : 'Select a file to import into the linked chat'
+                  }
+                  onClick={() => void handleImportSelectedToChat()}
+                >
+                  {importingToChat ? 'Adding…' : 'Add to chat'}
+                </button>
+              ) : null}
+              {uploadActive ? (
+                <span className="document-hub-toolbar-status">
+                  <LoadingSpinner size="sm" /> Upload in progress…
+                </span>
+              ) : null}
+            </div>
+            <div className="document-hub-toolbar-end">
+              {searchOpen ? (
+                <label className="documents-filter-search artifacts-search-inline">
+                  <Search size={14} aria-hidden="true" />
+                  <input
+                    ref={searchInputRef}
+                    type="search"
+                    value={searchInput}
+                    placeholder="Search by file name…"
+                    disabled={!folderId}
+                    onChange={(event) => setSearchInput(event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="artifacts-search-close"
+                    aria-label="Clear search"
+                    onClick={() => {
+                      setSearchInput('')
+                      setSearchOpen(false)
+                    }}
+                  >
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                </label>
+              ) : null}
+              <button
+                type="button"
+                className={`artifacts-search-toggle${searchOpen ? ' artifacts-search-toggle-active' : ''}`}
+                aria-label={searchOpen ? 'Close search' : 'Search files'}
+                aria-expanded={searchOpen}
+                disabled={!folderId}
+                onClick={toggleSearch}
+              >
+                <Search size={16} strokeWidth={1.75} aria-hidden="true" />
+              </button>
+            </div>
           </div>
 
           {loading ? (
@@ -731,7 +656,7 @@ export function DocumentHubView() {
             ? async (att) => {
                 const row = await api.retryHubItemParse(att.id)
                 setParseDrawerItem(row)
-                if (selectedFolderId) await loadItems(selectedFolderId)
+                if (folderId) await loadItems(folderId)
               }
             : undefined
         }

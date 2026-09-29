@@ -2,21 +2,34 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from app.platform.parse_pipeline.serialization import attachment_out_extras
 
 
-def attachment_metadata(att: Any) -> dict[str, Any]:
+def _is_hub_attachment_row(att: Any) -> bool:
+    return getattr(att, "folder_id", None) is not None and getattr(att, "chat_id", None) is None
+
+
+def attachment_metadata(att: Any, *, chat_id: uuid.UUID | None = None) -> dict[str, Any]:
+    att_chat_id = getattr(att, "chat_id", None)
+    resolved_chat_id = att_chat_id if att_chat_id is not None else chat_id
+    provider = getattr(att, "provider", None) or "inline"
+    if _is_hub_attachment_row(att):
+        provider = "hub"
     payload = {
         "id": str(att.id),
-        "chat_id": str(att.chat_id),
         "filename": att.filename,
         "mime_type": att.mime_type,
         "size_bytes": att.size_bytes,
-        "provider": att.provider,
+        "provider": provider,
         "provider_file_id": att.provider_file_id,
     }
+    if resolved_chat_id is not None:
+        payload["chat_id"] = str(resolved_chat_id)
+    if _is_hub_attachment_row(att):
+        payload["source"] = "hub_item"
     content_hash = getattr(att, "content_hash", None)
     if content_hash:
         payload["content_hash"] = content_hash

@@ -32,9 +32,13 @@ export function agentIntegrationsPath(agentId: string): string {
   return `${agentChatPath(agentId)}/integrations`
 }
 
-export function agentHubPath(agentId: string): string {
-  return `${agentChatPath(agentId)}/hub`
+export function agentHubPath(agentId: string, folderId?: string | null): string {
+  const base = `${agentChatPath(agentId)}/hub`
+  if (!folderId) return base
+  return `${base}?folder=${encodeURIComponent(folderId)}`
 }
+
+export const HUB_SIDEBAR_EXPANDED_KEY = 'document-hub:sidebar-expanded'
 
 export const HUB_TARGET_CHAT_STORAGE_KEY = 'document-hub:target-chat-id'
 
