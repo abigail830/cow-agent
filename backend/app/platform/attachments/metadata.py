@@ -5,11 +5,12 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from app.platform.attachments.source import is_hub_materialize_item
 from app.platform.parse_pipeline.serialization import attachment_out_extras
 
 
 def _is_hub_attachment_row(att: Any) -> bool:
-    return getattr(att, "folder_id", None) is not None and getattr(att, "chat_id", None) is None
+    return is_hub_materialize_item(att) and getattr(att, "chat_id", None) is None
 
 
 def attachment_metadata(att: Any, *, chat_id: uuid.UUID | None = None) -> dict[str, Any]:
@@ -30,6 +31,7 @@ def attachment_metadata(att: Any, *, chat_id: uuid.UUID | None = None) -> dict[s
         payload["chat_id"] = str(resolved_chat_id)
     if _is_hub_attachment_row(att):
         payload["source"] = "hub_item"
+        payload["user_id"] = str(att.user_id)
     content_hash = getattr(att, "content_hash", None)
     if content_hash:
         payload["content_hash"] = content_hash

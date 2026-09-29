@@ -28,3 +28,4 @@ def test_attachment_metadata_hub_item_uses_chat_context():
     assert meta["chat_id"] == str(chat_id)
     assert meta["source"] == "hub_item"
     assert meta["provider"] == "hub"
+    assert meta["user_id"] == str(item.user_id)

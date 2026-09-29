@@ -28,6 +28,10 @@ class AttachmentCapabilities:
     def pdf_file_id(self) -> bool:
         return self.pdf_via == "file_id"
 
+    # pdf_file_id / image_file_id apply to chat uploads registered with a provider
+    # Files API. Document Hub @ references use parse hydrate + doc_retrieval tools
+    # regardless of these flags (see attachments.source + materialize.should_hydrate).
+
 
 _BY_MODEL_ID: dict[str, AttachmentCapabilities] = {
     "gpt-5.4": AttachmentCapabilities(image_via="inline", pdf_via="file_id"),

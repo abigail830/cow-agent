@@ -27,12 +27,17 @@ from app.platform.attachments.kinds import AttachmentKind, classify_attachment, 
 
 _IMAGE_MIMES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
 from app.platform.attachments.pages import load_attachment_bytes
+from app.platform.attachments.source import (
+    attachment_document_kind,
+    attachment_materialize_source,
+    document_hydrate_kinds,
+    explicit_parse_ready,
+    parsed_content_md_exists,
+    raise_if_hub_document_blocked_from_inline,
+)
 from app.platform.attachments.storage import is_inline_provider_file_id
 from app.platform.doc_retrieval.context import get_doc_retrieval_context
 from app.platform.doc_retrieval.manifest import build_hydrate_text
-from app.platform.docstore.blob import parsed_artifact_exists, parsed_artifact_exists_scoped
-from app.platform.docstore.scope import DocumentScope
-from app.platform.docstore.models import PARSE_READY_STATUSES
 
 
 def _item_attr(item: Any, name: str, default: Any = "") -> Any:
@@ -297,17 +302,6 @@ def _should_rematerialize_from_disk(item: Any, caps: AttachmentCapabilities) -> 
     return False
 
 
-def _is_hub_item(item: Any) -> bool:
-    return hasattr(item, "user_id") and not hasattr(item, "chat_id")
-
-
-def _explicit_parse_ready(item: Any) -> bool:
-    status = _item_attr(item, "parse_status")
-    if not status:
-        return False
-    return str(status) in PARSE_READY_STATUSES
-
-
 def should_hydrate_parsed_document(
     item: Any,
     caps: AttachmentCapabilities,
@@ -317,36 +311,20 @@ def should_hydrate_parsed_document(
 ) -> bool:
     """Use parse artifacts + doc_retrieval tools instead of inline extract/raster."""
     settings = settings or get_settings()
-    if not _explicit_parse_ready(item):
+    if not explicit_parse_ready(item):
         return False
-    filename = str(_item_attr(item, "filename") or "attachment")
-    mime_type = str(_item_attr(item, "mime_type") or "application/octet-stream")
-    kind = classify_attachment(filename=filename, mime_type=mime_type)
+    kind = attachment_document_kind(item)
     if kind == AttachmentKind.IMAGE:
         return False
-    if chat_id is not None or _is_hub_item(item):
-        att_id = str(_item_attr(item, "id") or "").strip()
-        if not att_id:
-            return False
-        try:
-            if _is_hub_item(item):
-                uid = uuid.UUID(str(_item_attr(item, "user_id")))
-                if not parsed_artifact_exists_scoped(
-                    DocumentScope.hub(uid, uuid.UUID(att_id)),
-                    "content_md",
-                ):
-                    return False
-            elif chat_id is not None and not parsed_artifact_exists(chat_id, uuid.UUID(att_id), "content_md"):
-                return False
-        except (ValueError, FileNotFoundError):
-            return False
-    hydrate_kinds = (
-        AttachmentKind.TEXT,
-        AttachmentKind.SHEET,
-        AttachmentKind.PDF,
-        AttachmentKind.OFFICE,
-        AttachmentKind.AUDIO,
-    )
+    source = attachment_materialize_source(item)
+    if not parsed_content_md_exists(item, chat_id=chat_id, source=source):
+        return False
+    hydrate_kinds = document_hydrate_kinds()
+    # Hub: always hydrate parsed documents — never chat inline or provider file_id.
+    if source == "hub_item":
+        return kind in hydrate_kinds
+    # Chat upload: provider-native PDF (e.g. Claude file_id) may bypass hydrate.
+    # Keep this branch hub-agnostic; do not reuse caps.pdf_file_id for hub_item.
     if settings.document_hydrate_unified:
         return kind in hydrate_kinds
     if kind == AttachmentKind.PDF and caps.pdf_file_id:
@@ -492,6 +470,7 @@ def materialize_attachments(
             if key:
                 seen.add(key)
         else:
+            raise_if_hub_document_blocked_from_inline(item)
             parts = materialize_attachment(
                 item,
                 chat_id=chat_id,
@@ -676,6 +655,7 @@ def _materialize_attachment_parts_for_message(
                 parts.append(Content.from_text(hydrate_text))
             already_full_inlined.add(key)
             continue
+        raise_if_hub_document_blocked_from_inline(item)
         if key in existing_full and not _should_rematerialize_from_disk(item, caps):
             preserved = _existing_full_parts_for_item(message, item)
             if preserved:

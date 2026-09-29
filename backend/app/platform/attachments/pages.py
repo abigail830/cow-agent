@@ -7,7 +7,9 @@ from typing import Any
 
 from app.platform.attachments.convert.pdf_pages import count_pdf_pages
 from app.platform.attachments.kinds import AttachmentKind, classify_attachment, page_cost_for_kind
+from app.platform.attachments.source import attachment_materialize_source, hub_storage_user_id
 from app.platform.attachments.storage import load_inline_attachment
+from app.platform.document_hub.storage import load_hub_original
 
 
 def _item_id(item: Any) -> str:
@@ -24,7 +26,16 @@ def load_attachment_bytes(item: Any, *, chat_id: uuid.UUID) -> bytes:
     raw_id = _item_id(item)
     if not raw_id:
         raise ValueError("Attachment is missing id")
-    return load_inline_attachment(chat_id, uuid.UUID(raw_id))
+    item_id = uuid.UUID(raw_id)
+    if attachment_materialize_source(item) == "hub_item":
+        user_id = hub_storage_user_id(item)
+        try:
+            return load_hub_original(user_id, item_id)
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(
+                f"Document Hub original not found for item {raw_id}"
+            ) from exc
+    return load_inline_attachment(chat_id, item_id)
 
 
 def attachment_page_cost(item: Any, *, chat_id: uuid.UUID | None = None) -> int:
