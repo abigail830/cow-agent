@@ -15,11 +15,13 @@ from app.db.models import HubFolder, HubItem
 from app.db.repositories.chat_document_imports import ChatDocumentImportRepository
 from app.db.repositories.hub_folders import HubFolderRepository
 from app.db.repositories.hub_items import HubItemRepository
+from app.api.schemas import ParsedArtifactsOut
 from app.db.session import get_db
+from app.platform.docstore.manifest import parsed_artifacts_flags_from_manifest
 from app.platform.auth.current_user import get_current_user_id, get_owned_chat
 from app.platform.docstore.blob import load_parsed_artifact_scoped
 from app.platform.docstore.content_types import parsed_artifact_media_type
-from app.platform.docstore.figures import load_parsed_figure_scoped_resolved, normalize_figure_id
+from app.platform.docstore.figures import load_parsed_figure_scoped_resolved
 from app.platform.docstore.scope import DocumentScope
 from app.config import get_settings
 from app.platform.attachments.limits import attachment_limits
@@ -63,6 +65,7 @@ class HubItemOut(BaseModel):
     content_hash: str | None = None
     duplicate_of_existing: bool = False
     file_count: int = 1
+    parsed_artifacts: ParsedArtifactsOut = Field(default_factory=ParsedArtifactsOut)
 
 
 class HubUploadConfigOut(BaseModel):
@@ -117,6 +120,7 @@ def _folder_out(row: HubFolder) -> HubFolderOut:
 
 
 def _item_out(row: HubItem, *, file_count: int = 1, duplicate: bool = False) -> HubItemOut:
+    artifact_flags = parsed_artifacts_flags_from_manifest(row.parsed_artifact_manifest)
     return HubItemOut(
         id=row.id,
         folder_id=row.folder_id,
@@ -130,6 +134,7 @@ def _item_out(row: HubItem, *, file_count: int = 1, duplicate: bool = False) -> 
         parse_error_message=row.parse_error_message,
         parse_stage_snapshot=row.parse_stage_snapshot,
         content_hash=row.content_hash,
+        parsed_artifacts=ParsedArtifactsOut(**artifact_flags),
         duplicate_of_existing=duplicate,
         file_count=file_count,
     )
@@ -485,13 +490,11 @@ async def download_parsed_figure(
     row = await HubItemRepository(db).get_owned(user_id, item_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Item not found")
-    try:
-        normalized_figure_id = normalize_figure_id(figure_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid figure id") from exc
     scope = DocumentScope.hub(user_id, item_id)
     try:
-        data, media_type = load_parsed_figure_scoped_resolved(scope, normalized_figure_id)
+        data, media_type = load_parsed_figure_scoped_resolved(scope, figure_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid figure id") from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Figure not found") from exc
     return Response(

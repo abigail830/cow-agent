@@ -29,11 +29,13 @@ import {
   hubItemShowsParseDrawer,
   hubItemToAttachmentListItem,
 } from '../lib/hubItemParse'
-import { resolveHubParsedFigureSrc, rewriteHubParsedFigureRefs } from '../lib/parsedFigureRefs'
+import { hubItemParsedArtifacts } from '../lib/documentArtifacts'
+import { documentParseListBadge } from '../lib/documentParseDisplay'
+import { formatFileSize } from '../lib/formatBytes'
 import { FileImage, FileText, FolderInput, Trash2, Workflow } from 'lucide-react'
 import { AttachmentParseDrawer } from './AttachmentParseDrawer'
 import { LoadingSpinner } from './LoadingSpinner'
-import { MarkdownContent } from './MarkdownContent'
+import { ParsedDocumentPreview } from './ParsedDocumentPreview'
 
 type PendingUpload = { id: string; filename: string }
 
@@ -56,31 +58,6 @@ function HubFileIcon({ filename, mimeType }: { filename: string; mimeType: strin
   return <FileText size={14} />
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function hubParseStatus(item: HubItem): { label: string; detail: string | null } {
-  const status = item.parse_status ?? 'pending'
-  if (status === 'uploading') return { label: 'Uploading', detail: null }
-  if (status === 'ready' || status === 'skipped') return { label: 'Ready', detail: null }
-  if (status === 'failed') {
-    return { label: 'Failed', detail: item.parse_error_message ?? null }
-  }
-  const snap = item.parse_stage_snapshot
-  const message =
-    snap && typeof snap === 'object' && 'message' in snap ? String((snap as { message?: string }).message ?? '') : ''
-  if (status === 'running') {
-    return { label: 'Processing', detail: message || null }
-  }
-  if (status === 'pending') {
-    return { label: 'Queued', detail: message || null }
-  }
-  return { label: status, detail: message || null }
-}
-
 function folderDepth(folder: HubFolder, byId: Map<string, HubFolder>): number {
   let depth = 0
   let parentId = folder.parent_id
@@ -94,14 +71,6 @@ function folderDepth(folder: HubFolder, byId: Map<string, HubFolder>): number {
   return depth
 }
 
-function parseStatusBadgeClass(status: string | undefined): string {
-  const key = status ?? 'pending'
-  if (key === 'ready' || key === 'skipped') return 'documents-status-badge-ready'
-  if (key === 'failed') return 'documents-status-badge-failed'
-  if (key === 'running' || key === 'uploading') return 'documents-status-badge-running'
-  return 'documents-status-badge-pending'
-}
-
 export function DocumentHubView() {
   const [folders, setFolders] = useState<HubFolder[]>([])
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
@@ -111,10 +80,6 @@ export function DocumentHubView() {
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([])
   const [error, setError] = useState<string | null>(null)
   const [selectedItem, setSelectedItem] = useState<HubItem | null>(null)
-  const [previewTab, setPreviewTab] = useState<'original' | 'parsed'>('parsed')
-  const [parsedContent, setParsedContent] = useState<string | null>(null)
-  const [parsedLoading, setParsedLoading] = useState(false)
-  const [parsedView, setParsedView] = useState<'rendered' | 'source'>('rendered')
   const [importNotice, setImportNotice] = useState<string | null>(null)
   const [parseDrawerItem, setParseDrawerItem] = useState<HubItem | null>(null)
   const [deletingItemIds, setDeletingItemIds] = useState<string[]>([])
@@ -230,8 +195,6 @@ export function DocumentHubView() {
     }
     setParseDrawerItem(null)
     setSelectedItem(item)
-    setPreviewTab('parsed')
-    setParsedView('rendered')
     setPreviewWidth((current) => (current != null ? clampPreviewWidth(current) : clampPreviewWidth(440)))
   }
 
@@ -279,31 +242,6 @@ export function DocumentHubView() {
   }
 
   useEffect(() => {
-    if (!selectedItem || previewTab !== 'parsed' || !hubItemPreviewReady(selectedItem)) {
-      setParsedContent(null)
-      setParsedLoading(false)
-      return
-    }
-    let cancelled = false
-    setParsedLoading(true)
-    setParsedContent(null)
-    void api
-      .fetchHubParsedText(selectedItem.id, 'content_md')
-      .then((text) => {
-        if (!cancelled) setParsedContent(text)
-      })
-      .catch(() => {
-        if (!cancelled) setParsedContent(null)
-      })
-      .finally(() => {
-        if (!cancelled) setParsedLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [previewTab, selectedItem])
-
-  useEffect(() => {
     if (!parseDrawerItem) return
     const status = parseDrawerItem.parse_status ?? 'pending'
     if (status === 'ready' || status === 'skipped' || status === 'failed') return
@@ -347,20 +285,6 @@ export function DocumentHubView() {
   const parseDrawerAttachment = useMemo(
     () => (parseDrawerItem ? hubItemToAttachmentListItem(parseDrawerItem) : null),
     [parseDrawerItem],
-  )
-
-  const renderedParsedContent = useMemo(
-    () =>
-      selectedItem && parsedContent != null
-        ? rewriteHubParsedFigureRefs(parsedContent, selectedItem.id)
-        : null,
-    [parsedContent, selectedItem],
-  )
-
-  const resolveHubFigureSrc = useCallback(
-    (src: string | undefined) =>
-      selectedItem ? resolveHubParsedFigureSrc(src, selectedItem.id) : src,
-    [selectedItem],
   )
 
   const handleCreateFolder = async () => {
@@ -682,7 +606,7 @@ export function DocumentHubView() {
                   </li>
                 ))}
                 {items.map((item) => {
-                  const { label, detail } = hubParseStatus(item)
+                  const { label, detail, badgeClass } = documentParseListBadge(item)
                   const selected = selectedItem?.id === item.id
                   const isDeleting = deletingItemIds.includes(item.id)
                   return (
@@ -713,7 +637,7 @@ export function DocumentHubView() {
                               {item.filename}
                             </span>
                             <span
-                              className={`documents-status-badge ${isDeleting ? 'documents-status-badge-running' : parseStatusBadgeClass(item.parse_status)}`}
+                              className={`documents-status-badge ${isDeleting ? 'documents-status-badge-running' : badgeClass}`}
                             >
                               {isDeleting ? 'Deleting' : label}
                             </span>
@@ -785,89 +709,15 @@ export function DocumentHubView() {
               onPointerCancel={onPreviewResizeUp}
             />
             <div className="documents-view-preview-pane document-hub-preview-pane" style={{ width: previewWidth }}>
-              <div className="documents-preview-pane">
-                <header className="documents-preview-header">
-                  <h3 className="documents-preview-title" title={selectedItem.filename}>
-                    {selectedItem.filename}
-                  </h3>
-                  <button type="button" className="documents-preview-close" onClick={() => setSelectedItem(null)} aria-label="Close preview">
-                    ×
-                  </button>
-                </header>
-                <div className="documents-preview-toolbar">
-                  <div className="documents-preview-tabs">
-                    <button
-                      type="button"
-                      className={`documents-preview-tab${previewTab === 'original' ? ' documents-preview-tab-active' : ''}`}
-                      onClick={() => setPreviewTab('original')}
-                    >
-                      Original
-                    </button>
-                    <button
-                      type="button"
-                      className={`documents-preview-tab${previewTab === 'parsed' ? ' documents-preview-tab-active' : ''}`}
-                      onClick={() => setPreviewTab('parsed')}
-                    >
-                      Parsed
-                    </button>
-                  </div>
-                </div>
-                <div className="documents-preview-body document-hub-preview-body">
-                  <div className="document-hub-preview-surface">
-                    {previewTab === 'original' ? (
-                      <iframe
-                        className="documents-preview-frame document-hub-preview-frame"
-                        title={selectedItem.filename}
-                        src={api.hubOriginalUrl(selectedItem.id)}
-                      />
-                    ) : parsedLoading ? (
-                      <div className="document-hub-empty-center">
-                        <LoadingSpinner />
-                        <span>Loading parsed content…</span>
-                      </div>
-                    ) : parsedContent ? (
-                      <>
-                        <div className="documents-pageindex-toggle document-hub-parsed-toggle" role="tablist" aria-label="Parsed view">
-                          <button
-                            type="button"
-                            role="tab"
-                            aria-selected={parsedView === 'rendered'}
-                            className={`documents-pageindex-toggle-btn${
-                              parsedView === 'rendered' ? ' documents-pageindex-toggle-btn-active' : ''
-                            }`}
-                            onClick={() => setParsedView('rendered')}
-                          >
-                            Rendered
-                          </button>
-                          <button
-                            type="button"
-                            role="tab"
-                            aria-selected={parsedView === 'source'}
-                            className={`documents-pageindex-toggle-btn${
-                              parsedView === 'source' ? ' documents-pageindex-toggle-btn-active' : ''
-                            }`}
-                            onClick={() => setParsedView('source')}
-                          >
-                            Source
-                          </button>
-                        </div>
-                        {parsedView === 'rendered' ? (
-                          <MarkdownContent
-                            content={renderedParsedContent ?? ''}
-                            className="markdown-body documents-preview-markdown document-hub-preview-markdown"
-                            allowHtml
-                            resolveImageSrc={resolveHubFigureSrc}
-                          />
-                        ) : (
-                          <pre className="documents-preview-text document-hub-preview-text">{parsedContent}</pre>
-                        )}
-                      </>
-                    ) : (
-                      <p className="documents-preview-empty">No parsed content yet.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <ParsedDocumentPreview
+                documentRef={{ scope: 'hub', itemId: selectedItem.id }}
+                title={selectedItem.filename}
+                mimeType={selectedItem.mime_type}
+                artifacts={hubItemParsedArtifacts(selectedItem)}
+                onClose={() => setSelectedItem(null)}
+                markdownBodyClassName="markdown-body documents-preview-markdown document-hub-preview-markdown"
+                closeIcon="×"
+              />
             </div>
           </>
         ) : null}

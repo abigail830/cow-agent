@@ -4,12 +4,7 @@ import { FileText, Search } from 'lucide-react'
 import { captureMentionText, isAudioCaptureTranscript } from '../lib/attachmentMentions'
 import type { ChatAttachment } from '../types'
 import { formatAttachmentTimestamp } from '../lib/attachmentMentions'
-
-function formatFileSize(sizeBytes: number): string {
-  if (sizeBytes < 1024) return `${sizeBytes} B`
-  if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`
-  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
-}
+import { formatFileSize } from '../lib/formatBytes'
 
 interface AttachmentMentionPopupProps {
   open: boolean

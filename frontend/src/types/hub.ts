@@ -20,6 +20,11 @@ export type HubItem = {
   content_hash?: string | null
   duplicate_of_existing?: boolean
   file_count?: number
+  parsed_artifacts?: {
+    content_md: boolean
+    meta_json: boolean
+    pageindex_json: boolean
+  }
 }
 
 export type ChatDocumentImport = {

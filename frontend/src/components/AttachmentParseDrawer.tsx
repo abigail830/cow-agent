@@ -17,6 +17,7 @@ import {
   type ParseStageDisplayStatus,
   type ParseStageId,
 } from '../lib/attachmentParseProgress'
+import { formatFileSize } from '../lib/formatBytes'
 
 const STAGE_LABELS: Record<ParseStageId, string> = {
   fetch: 'Fetch source',
@@ -35,12 +36,6 @@ const STAGE_STATUS_LABELS: Record<ParseStageDisplayStatus, string> = {
   succeeded: 'done',
   failed: 'failed',
   skipped: 'skipped',
-}
-
-function formatFileSize(sizeBytes: number): string {
-  if (sizeBytes < 1024) return `${sizeBytes} B`
-  if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`
-  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function stageNodeClass(status: ParseStageDisplayStatus, active: boolean): string {

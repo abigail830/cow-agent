@@ -604,16 +604,14 @@ async def download_attachment_parsed_figure(
     chat: Chat = Depends(get_owned_chat),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    try:
-        normalized_figure_id = normalize_figure_id(figure_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid figure id") from exc
     repo = AttachmentRepository(db)
     row = await repo.get(attachment_id)
     if row is None or row.chat_id != chat.id:
         raise HTTPException(status_code=404, detail="Attachment not found")
     try:
-        data, media_type = load_parsed_figure_resolved(chat.id, attachment_id, normalized_figure_id)
+        data, media_type = load_parsed_figure_resolved(chat.id, attachment_id, figure_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid figure id") from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Figure not found") from exc
     return Response(

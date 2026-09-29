@@ -279,14 +279,8 @@ export const api = {
     attachmentId: string,
     artifactKey: 'content_md' | 'meta_json' | 'pageindex_json',
   ): Promise<string> => {
-    const res = await fetch(`${API}/chats/${chatId}/attachments/${attachmentId}/parsed/${artifactKey}`, {
-      ...defaultFetchInit,
-    })
-    if (!res.ok) {
-      const text = await res.text()
-      throw new Error(text || res.statusText)
-    }
-    return res.text()
+    const { fetchParsedArtifactText } = await import('../lib/documentArtifacts')
+    return fetchParsedArtifactText({ scope: 'chat', chatId, documentId: attachmentId }, artifactKey)
   },
 
   getProposalPreview: (chatId: string, draft = true) =>
@@ -470,9 +464,8 @@ export const api = {
   hubOriginalUrl: (itemId: string) => `${API}/document-hub/items/${itemId}/original`,
 
   fetchHubParsedText: async (itemId: string, artifactKey: 'content_md' | 'meta_json' | 'pageindex_json') => {
-    const res = await fetch(`${API}/document-hub/items/${itemId}/parsed/${artifactKey}`, { ...defaultFetchInit })
-    if (!res.ok) throw new Error(await res.text())
-    return res.text()
+    const { fetchParsedArtifactText } = await import('../lib/documentArtifacts')
+    return fetchParsedArtifactText({ scope: 'hub', itemId }, artifactKey)
   },
 
   listChatDocumentImports: (chatId: string) =>

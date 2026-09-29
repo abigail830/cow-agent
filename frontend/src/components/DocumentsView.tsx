@@ -1,45 +1,21 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { ExternalLink, FileImage, FileText, Search, Sparkles, Workflow, X } from 'lucide-react'
 import { api } from '../api/client'
 import { LoadingSpinner } from './LoadingSpinner'
-import { MarkdownContent } from './MarkdownContent'
 import { ArtifactPanelContent } from './ArtifactPanelHost'
+import { ParsedDocumentPreview } from './ParsedDocumentPreview'
 import { formatAttachmentTimestamp } from '../lib/attachmentMentions'
-import { parseStatusDisplayLabel } from '../lib/attachmentParseProgress'
+import { parseStatusDisplayLabel } from '../lib/documentParseDisplay'
 import { artifactCardSubtitle, isSidePanelArtifact } from '../lib/artifactKinds'
 import { downloadArtifactFile } from '../lib/artifactDownload'
-import { attachmentOriginalUrl } from '../lib/documentUrls'
-import { resolveParsedFigureSrc, rewriteParsedFigureRefs } from '../lib/parsedFigureRefs'
-import {
-  layoutPreviewText,
-  layoutTypeLabel,
-  parsePageIndex,
-  type PageIndexData,
-} from '../lib/pageIndexPreview'
-import type { ArtifactSpec } from '../types/artifact'
+import { formatFileSize } from '../lib/formatBytes'
 import type { Agent, AttachmentParseStatus, DocumentItem, DocumentSourceType } from '../types'
-
-const UDocArtifactViewer = lazy(async () => {
-  const mod = await import('./UDocArtifactViewer')
-  return { default: mod.UDocArtifactViewer }
-})
 
 type Props = {
   onOpenChat?: (chatId: string) => void
   /** When set, list is locked to this agent (no agent filter / column). */
   scopedAgentId?: string
 }
-
-type PreviewTab = 'original' | 'parsed' | 'meta' | 'pageindex'
 
 const RESIZE_HANDLE_WIDTH = 6
 const MIN_PREVIEW_WIDTH = 320
@@ -69,12 +45,6 @@ const SOURCE_FILTER_OPTIONS: { value: DocumentSourceType | 'all'; label: string 
   { value: 'attachment', label: 'Uploads' },
   { value: 'artifact', label: 'Generated' },
 ]
-
-function formatFileSize(sizeBytes: number): string {
-  if (sizeBytes < 1024) return `${sizeBytes} B`
-  if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`
-  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 function agentLabel(doc: DocumentItem): string {
   return doc.agent_name?.trim() || 'Unknown agent'
@@ -150,58 +120,6 @@ function DocumentFileIcon({ doc }: { doc: DocumentItem }) {
   return <FileText size={14} />
 }
 
-function canPreviewOriginal(mimeType: string): boolean {
-  const mime = mimeType.toLowerCase()
-  return mime.startsWith('image/') || mime === 'application/pdf' || mime.startsWith('text/')
-}
-
-function prettyJson(raw: string): string {
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2)
-  } catch {
-    return raw
-  }
-}
-
-function attachmentPreviewSpec(doc: DocumentItem): ArtifactSpec {
-  return {
-    kind: 'content_document',
-    title: doc.filename,
-    format: 'pdf',
-    content: '',
-    filename: doc.filename,
-    artifact_id: doc.id,
-    download_url: `/chats/${doc.chat_id}/attachments/${doc.id}/original`,
-  }
-}
-
-function AttachmentOriginalPreview({ doc }: { doc: DocumentItem }) {
-  const mime = (doc.mime_type ?? '').toLowerCase()
-  const inlineUrl = attachmentOriginalUrl(doc.chat_id, doc.id, { inline: true })
-
-  if (mime.startsWith('image/')) {
-    return <img className="documents-preview-image" src={inlineUrl} alt={doc.filename} />
-  }
-
-  if (mime === 'application/pdf') {
-    return (
-      <div className="documents-preview-udoc">
-        <Suspense
-          fallback={
-            <div className="documents-preview-loading">
-              <LoadingSpinner />
-            </div>
-          }
-        >
-          <UDocArtifactViewer spec={attachmentPreviewSpec(doc)} />
-        </Suspense>
-      </div>
-    )
-  }
-
-  return <iframe className="documents-preview-frame" src={inlineUrl} title={doc.filename} />
-}
-
 function readStoredPreviewWidth(): number | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -211,35 +129,6 @@ function readStoredPreviewWidth(): number | null {
   } catch {
     return null
   }
-}
-
-function PageIndexStructuredView({ data }: { data: PageIndexData }) {
-  const layouts = data.layouts ?? []
-  return (
-    <div className="documents-pageindex-view">
-      <div className="documents-pageindex-summary">
-        <span>{layouts.length} layout block{layouts.length === 1 ? '' : 's'}</span>
-        {data.external_job_id ? (
-          <span className="documents-pageindex-job">Job {data.external_job_id}</span>
-        ) : null}
-      </div>
-      {layouts.length === 0 ? (
-        <p className="documents-preview-empty">Page index file is empty.</p>
-      ) : (
-        <ol className="documents-pageindex-list">
-          {layouts.map((layout, index) => (
-            <li key={index} className="documents-pageindex-item">
-              <div className="documents-pageindex-item-head">
-                <span className="documents-pageindex-item-index">#{index + 1}</span>
-                <span className="documents-pageindex-item-type">{layoutTypeLabel(layout)}</span>
-              </div>
-              <pre className="documents-pageindex-item-body">{layoutPreviewText(layout)}</pre>
-            </li>
-          ))}
-        </ol>
-      )}
-    </div>
-  )
 }
 
 function DocumentPreviewPane({
@@ -252,257 +141,27 @@ function DocumentPreviewPane({
   onOpenChat?: (chatId: string) => void
 }) {
   const artifacts = doc.parsed_artifacts ?? {
-    content_md: doc.has_parsed_content,
+    content_md: Boolean(doc.has_parsed_content),
     meta_json: false,
     pageindex_json: false,
   }
-  const hasPageIndex = artifacts.pageindex_json
-
-  const [tab, setTab] = useState<PreviewTab>(() =>
-    artifacts.content_md ? 'parsed' : 'original',
-  )
-  const [parsedContent, setParsedContent] = useState<string | null>(null)
-  const [metaContent, setMetaContent] = useState<string | null>(null)
-  const [pageindexData, setPageindexData] = useState<PageIndexData | null>(null)
-  const [pageindexRaw, setPageindexRaw] = useState<string | null>(null)
-  const [pageindexView, setPageindexView] = useState<'structured' | 'raw'>('structured')
-  const [parsedView, setParsedView] = useState<'rendered' | 'source'>('rendered')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const downloadUrl = attachmentOriginalUrl(doc.chat_id, doc.id)
-  const resolveFigureSrc = useCallback(
-    (src: string | undefined) => resolveParsedFigureSrc(src, doc.chat_id, doc.id),
-    [doc.chat_id, doc.id],
-  )
-  const renderedParsedContent = useMemo(
-    () => (parsedContent != null ? rewriteParsedFigureRefs(parsedContent, doc.chat_id, doc.id) : null),
-    [parsedContent, doc.chat_id, doc.id],
-  )
-
-  useEffect(() => {
-    setTab(artifacts.content_md ? 'parsed' : 'original')
-    setParsedContent(null)
-    setMetaContent(null)
-    setPageindexData(null)
-    setPageindexRaw(null)
-    setParsedView('rendered')
-    setError(null)
-  }, [artifacts.content_md, doc.id])
-
-  useEffect(() => {
-    if (tab !== 'parsed' && tab !== 'meta' && tab !== 'pageindex') return
-    if (tab === 'parsed' && !artifacts.content_md) return
-    if (tab === 'meta' && !artifacts.meta_json) return
-    if (tab === 'pageindex' && !hasPageIndex) return
-
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-
-    void (async () => {
-      try {
-        if (tab === 'parsed') {
-          const text = await api.fetchAttachmentParsedText(doc.chat_id, doc.id, 'content_md')
-          if (!cancelled) setParsedContent(text)
-        } else if (tab === 'meta') {
-          const text = await api.fetchAttachmentParsedText(doc.chat_id, doc.id, 'meta_json')
-          if (!cancelled) setMetaContent(prettyJson(text))
-        } else {
-          const text = await api.fetchAttachmentParsedText(doc.chat_id, doc.id, 'pageindex_json')
-          if (!cancelled) {
-            setPageindexRaw(text)
-            setPageindexData(parsePageIndex(text))
-          }
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load preview')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [tab, artifacts.content_md, artifacts.meta_json, doc.chat_id, doc.id, hasPageIndex])
-
-  const showOriginalPreview = tab === 'original' && canPreviewOriginal(doc.mime_type ?? '')
-  const gistLine = attachmentGistLine(doc)
 
   return (
-    <div className="documents-preview-pane">
-      <header className="documents-preview-header">
-        <div className="documents-preview-heading">
-          <h3 className="documents-preview-title">{doc.filename}</h3>
-          {gistLine ? <p className="documents-preview-meta documents-preview-gist">{gistLine}</p> : null}
-        </div>
-        <button type="button" className="documents-preview-close" onClick={onClose} aria-label="Close preview">
-          <X size={18} aria-hidden="true" />
-        </button>
-      </header>
-
-      <div className="documents-preview-toolbar">
-        <div className="documents-preview-tabs" role="tablist" aria-label="Preview mode">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'original'}
-            className={`documents-preview-tab${tab === 'original' ? ' documents-preview-tab-active' : ''}`}
-            onClick={() => setTab('original')}
-          >
-            Original
+    <ParsedDocumentPreview
+      documentRef={{ scope: 'chat', chatId: doc.chat_id, documentId: doc.id }}
+      title={doc.filename}
+      mimeType={doc.mime_type ?? ''}
+      artifacts={artifacts}
+      onClose={onClose}
+      subtitle={attachmentGistLine(doc)}
+      toolbarActions={
+        onOpenChat ? (
+          <button type="button" className="documents-preview-link-btn" onClick={() => onOpenChat(doc.chat_id)}>
+            Open session
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'parsed'}
-            disabled={!artifacts.content_md}
-            className={`documents-preview-tab${tab === 'parsed' ? ' documents-preview-tab-active' : ''}`}
-            onClick={() => setTab('parsed')}
-          >
-            Parsed
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'meta'}
-            disabled={!artifacts.meta_json}
-            className={`documents-preview-tab${tab === 'meta' ? ' documents-preview-tab-active' : ''}`}
-            onClick={() => setTab('meta')}
-          >
-            Meta
-          </button>
-          {hasPageIndex ? (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === 'pageindex'}
-              className={`documents-preview-tab${tab === 'pageindex' ? ' documents-preview-tab-active' : ''}`}
-              onClick={() => setTab('pageindex')}
-            >
-              Page Index
-            </button>
-          ) : null}
-        </div>
-        <div className="documents-preview-actions">
-          {onOpenChat ? (
-            <button type="button" className="documents-preview-link-btn" onClick={() => onOpenChat(doc.chat_id)}>
-              Open session
-            </button>
-          ) : null}
-          <a className="documents-preview-link-btn" href={downloadUrl} target="_blank" rel="noreferrer">
-            Download
-            <ExternalLink size={12} aria-hidden="true" />
-          </a>
-        </div>
-      </div>
-
-      <div className="documents-preview-body">
-        {loading ? (
-          <div className="documents-preview-loading">
-            <LoadingSpinner />
-          </div>
-        ) : error ? (
-          <p className="documents-preview-error">{error}</p>
-        ) : tab === 'original' ? (
-          showOriginalPreview ? (
-            <AttachmentOriginalPreview doc={doc} />
-          ) : (
-            <div className="documents-preview-placeholder">
-              <FileText size={28} aria-hidden="true" />
-              <p>Inline preview is not available for this file type.</p>
-              <a className="documents-preview-download" href={downloadUrl} target="_blank" rel="noreferrer">
-                Download original
-              </a>
-            </div>
-          )
-        ) : tab === 'parsed' ? (
-          parsedContent != null ? (
-            <>
-              <div className="documents-pageindex-toggle" role="tablist" aria-label="Parsed content view">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={parsedView === 'rendered'}
-                  className={`documents-pageindex-toggle-btn${
-                    parsedView === 'rendered' ? ' documents-pageindex-toggle-btn-active' : ''
-                  }`}
-                  onClick={() => setParsedView('rendered')}
-                >
-                  Rendered
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={parsedView === 'source'}
-                  className={`documents-pageindex-toggle-btn${
-                    parsedView === 'source' ? ' documents-pageindex-toggle-btn-active' : ''
-                  }`}
-                  onClick={() => setParsedView('source')}
-                >
-                  Source
-                </button>
-              </div>
-              {parsedView === 'rendered' ? (
-                <MarkdownContent
-                  content={renderedParsedContent ?? ''}
-                  className="markdown-body artifact-markdown-body documents-preview-markdown"
-                  allowHtml
-                  resolveImageSrc={resolveFigureSrc}
-                />
-              ) : (
-                <pre className="documents-preview-text">{parsedContent}</pre>
-              )}
-            </>
-          ) : (
-            <p className="documents-preview-empty">No parsed content.</p>
-          )
-        ) : tab === 'pageindex' ? (
-          pageindexData || pageindexRaw ? (
-            <>
-              <div className="documents-pageindex-toggle" role="tablist" aria-label="Page index view">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={pageindexView === 'structured'}
-                  className={`documents-pageindex-toggle-btn${
-                    pageindexView === 'structured' ? ' documents-pageindex-toggle-btn-active' : ''
-                  }`}
-                  onClick={() => setPageindexView('structured')}
-                >
-                  Structured
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={pageindexView === 'raw'}
-                  className={`documents-pageindex-toggle-btn${
-                    pageindexView === 'raw' ? ' documents-pageindex-toggle-btn-active' : ''
-                  }`}
-                  onClick={() => setPageindexView('raw')}
-                >
-                  Raw JSON
-                </button>
-              </div>
-              {pageindexView === 'structured' && pageindexData ? (
-                <PageIndexStructuredView data={pageindexData} />
-              ) : (
-                <pre className="documents-preview-text">{pageindexRaw != null ? prettyJson(pageindexRaw) : ''}</pre>
-              )}
-            </>
-          ) : (
-            <p className="documents-preview-empty">No page index available.</p>
-          )
-        ) : metaContent != null ? (
-          <pre className="documents-preview-text">{metaContent}</pre>
-        ) : (
-          <p className="documents-preview-empty">No parse metadata.</p>
-        )}
-      </div>
-    </div>
+        ) : null
+      }
+    />
   )
 }
 

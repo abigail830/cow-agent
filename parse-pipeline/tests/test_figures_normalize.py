@@ -35,6 +35,25 @@ def test_mirror_markdown_figures_preserves_relative_paths() -> None:
     assert not result.warnings
 
 
+def test_mirror_markdown_figures_hydrates_hash_filename_from_layout_urls() -> None:
+    stem = "9ae33cb7502d788c42d6a014752613a7"
+    content = f"Intro\n\n![]({stem}.jpeg)\n\nDone"
+    remote = f"https://example.com/docmind/{stem}.jpeg?Expires=1"
+    fake_response = MagicMock()
+    fake_response.headers = {"content-type": "image/jpeg"}
+    fake_response.content = b"\xff\xd8\xfffake-jpeg"
+    fake_response.raise_for_status = MagicMock()
+
+    with patch("parse_pipeline.normalize.figures.httpx.Client") as client_cls:
+        client = client_cls.return_value.__enter__.return_value
+        client.get.return_value = fake_response
+        result = mirror_markdown_figures(content, remote_url_by_hash={stem: remote})
+
+    assert "figure:f1" in result.content_md
+    assert stem not in result.content_md
+    assert len(result.figures) == 1
+
+
 def test_mirror_markdown_figures_warns_on_oversized_data_uri() -> None:
     oversized = "A" * ((_FIGURE_MAX_BYTES // 3) * 4 + 4)
     content = f"![big](data:image/png;base64,{oversized})"

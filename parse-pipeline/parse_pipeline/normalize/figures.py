@@ -21,6 +21,8 @@ _DATA_IMAGE_URI_RE = re.compile(
 )
 _FIGURE_REF_SCHEME = "figure:"
 _FIGURE_MAX_BYTES = 4 * 1024 * 1024
+_HASH_IMAGE_STEM_RE = re.compile(r"^[a-f0-9]{32,64}$", re.IGNORECASE)
+_IMAGE_EXTENSIONS = ("jpeg", "jpg", "png", "gif", "webp")
 
 
 @dataclass(frozen=True)
@@ -81,6 +83,56 @@ def _validate_image_magic(data: bytes, mime_type: str) -> bool:
 def _is_remote_image_url(url: str) -> bool:
     parsed = urlparse(url.strip())
     return parsed.scheme in {"http", "https"}
+
+
+def _hash_image_stem(value: str) -> str | None:
+    candidate = value.strip()
+    if not candidate:
+        return None
+    if "?" in candidate:
+        candidate = candidate.split("?", 1)[0]
+    if "/" in candidate or "\\" in candidate:
+        candidate = candidate.rsplit("/", 1)[-1]
+        candidate = candidate.rsplit("\\", 1)[-1]
+    if "." in candidate:
+        ext = candidate.rsplit(".", 1)[-1].lower()
+        if ext not in _IMAGE_EXTENSIONS:
+            return None
+        candidate = candidate.rsplit(".", 1)[0]
+    if _HASH_IMAGE_STEM_RE.match(candidate):
+        return candidate.lower()
+    return None
+
+
+def _collect_remote_url_by_hash(markdown: str, out: dict[str, str]) -> None:
+    for match in _MARKDOWN_IMAGE_RE.finditer(markdown):
+        alt = match.group(1).strip()
+        url = match.group(2).strip()
+        if not _is_remote_image_url(url):
+            continue
+        path_name = urlparse(url).path.rsplit("/", 1)[-1]
+        for piece in (alt, path_name):
+            stem = _hash_image_stem(piece)
+            if stem:
+                out.setdefault(stem, url)
+
+
+def build_document_mind_remote_url_by_hash(
+    content_md: str,
+    pageindex_json: dict[str, Any] | None,
+) -> dict[str, str]:
+    """Map Document Mind hash image basenames to fetchable OSS URLs from layouts."""
+    out: dict[str, str] = {}
+    _collect_remote_url_by_hash(content_md, out)
+    layouts = (pageindex_json or {}).get("layouts") or []
+    if isinstance(layouts, list):
+        for layout in layouts:
+            if not isinstance(layout, dict):
+                continue
+            md = layout.get("markdownContent") or layout.get("markdown_content") or ""
+            if isinstance(md, str) and md:
+                _collect_remote_url_by_hash(md, out)
+    return out
 
 
 def _is_data_image_uri(url: str) -> bool:
@@ -148,7 +200,11 @@ def _materialize_figure(
     )
 
 
-def mirror_markdown_figures(content_md: str) -> FigureMirrorResult:
+def mirror_markdown_figures(
+    content_md: str,
+    *,
+    remote_url_by_hash: dict[str, str] | None = None,
+) -> FigureMirrorResult:
     """Materialize remote and data-URI markdown images as figure:fN refs."""
 
     warnings: list[str] = []
@@ -212,7 +268,37 @@ def mirror_markdown_figures(content_md: str) -> FigureMirrorResult:
                     warnings.append(f"figure_mirror_failed:{figure_id}:{exc}")
                     pieces.append(match.group(0))
             else:
-                pieces.append(match.group(0))
+                hash_stem = _hash_image_stem(url) or _hash_image_stem(alt)
+                remote_url = remote_url_by_hash.get(hash_stem) if hash_stem and remote_url_by_hash else None
+                if hash_stem and remote_url:
+                    figure_index += 1
+                    figure_id = f"f{figure_index}"
+                    try:
+                        data, mime_type = _download_image(remote_url)
+                        if len(data) > _FIGURE_MAX_BYTES:
+                            raise ValueError(f"downloaded image exceeds {_FIGURE_MAX_BYTES} bytes")
+                        figures.append(
+                            _materialize_figure(
+                                alt=alt,
+                                line_no=line_no,
+                                figure_id=figure_id,
+                                url=remote_url,
+                                data=data,
+                                mime_type=mime_type,
+                            )
+                        )
+                        pieces.append(f"![{alt}]({_FIGURE_REF_SCHEME}{figure_id})")
+                    except Exception as exc:
+                        logger.warning(
+                            "figure hash mirror failed stem=%s url=%s error=%s",
+                            hash_stem,
+                            remote_url[:120],
+                            exc,
+                        )
+                        warnings.append(f"figure_hash_mirror_failed:{figure_id}:{exc}")
+                        pieces.append(match.group(0))
+                else:
+                    pieces.append(match.group(0))
             cursor = end
         pieces.append(line[cursor:])
         output_lines.append("".join(pieces))

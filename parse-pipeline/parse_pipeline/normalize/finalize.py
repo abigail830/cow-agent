@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from parse_pipeline.normalize.artifacts import NormalizedArtifacts
-from parse_pipeline.normalize.figures import figures_to_meta, mirror_markdown_figures
+from parse_pipeline.normalize.figures import (
+    build_document_mind_remote_url_by_hash,
+    figures_to_meta,
+    mirror_markdown_figures,
+)
 from parse_pipeline.normalize.line_index import build_line_index
 from parse_pipeline.normalize.pageindex_pages import build_pages_from_pageindex
 from parse_pipeline.normalize.pageindex_synthetic import build_pageindex_from_markdown
@@ -18,7 +22,11 @@ def finalize_normalized_artifacts(
     mirrored_figures = ()
 
     if mirror_figures:
-        mirror_result = mirror_markdown_figures(content)
+        remote_url_by_hash = build_document_mind_remote_url_by_hash(
+            content,
+            artifacts.pageindex_json,
+        )
+        mirror_result = mirror_markdown_figures(content, remote_url_by_hash=remote_url_by_hash)
         content = mirror_result.content_md
         warnings.extend(mirror_result.warnings)
         mirrored_figures = mirror_result.figures
