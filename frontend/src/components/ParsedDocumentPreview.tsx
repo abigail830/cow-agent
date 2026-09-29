@@ -155,8 +155,9 @@ export function ParsedDocumentPreview({
 
   const downloadUrl = originalDocumentUrl(documentRef)
   const resolveFigureSrc = useCallback(
-    (src: string | undefined) => resolveParsedMarkdownFigureSrc(src, documentRef, parsedFigureMeta),
-    [documentRef, parsedFigureMeta],
+    (src: string | undefined) =>
+      resolveParsedMarkdownFigureSrc(src, documentRef, parsedFigureMeta, parsedContent),
+    [documentRef, parsedContent, parsedFigureMeta],
   )
   const renderedParsedContent = useMemo(
     () =>
@@ -190,7 +191,7 @@ export function ParsedDocumentPreview({
         if (tab === 'parsed') {
           const text = await fetchParsedArtifactText(documentRef, 'content_md')
           if (!cancelled) setParsedContent(text)
-          if (!cancelled && artifacts.meta_json) {
+          if (!cancelled) {
             try {
               const metaText = await fetchParsedArtifactText(documentRef, 'meta_json')
               if (!cancelled) {
@@ -199,8 +200,6 @@ export function ParsedDocumentPreview({
             } catch {
               if (!cancelled) setParsedFigureMeta(undefined)
             }
-          } else if (!cancelled) {
-            setParsedFigureMeta(undefined)
           }
         } else if (tab === 'meta') {
           const text = await fetchParsedArtifactText(documentRef, 'meta_json')

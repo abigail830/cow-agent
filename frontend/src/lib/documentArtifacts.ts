@@ -72,11 +72,13 @@ export function resolveParsedMarkdownFigureSrc(
   src: string | undefined,
   ref: ParsedDocumentRef,
   meta?: ParsedFigureMeta,
+  parsedContent?: string | null,
 ): string | undefined {
+  const contentForMap = parsedContent ?? undefined
   if (ref.scope === 'chat') {
-    return resolveParsedFigureSrc(src, ref.chatId, ref.documentId, meta)
+    return resolveParsedFigureSrc(src, ref.chatId, ref.documentId, meta, contentForMap)
   }
-  return resolveHubParsedFigureSrc(src, ref.itemId, meta)
+  return resolveHubParsedFigureSrc(src, ref.itemId, meta, contentForMap)
 }
 
 export function emptyParsedArtifacts(): ParsedArtifactsAvailability {

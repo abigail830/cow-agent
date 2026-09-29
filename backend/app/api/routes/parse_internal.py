@@ -12,7 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.platform.attachments.storage import load_inline_attachment
 from app.platform.docstore.blob import save_parsed_artifact, save_parsed_figure
-from app.platform.docstore.figures import load_parsed_figure_resolved, normalize_figure_id
+from app.platform.docstore.figures import (
+    load_parsed_figure_resolved,
+    load_parsed_figure_scoped_resolved,
+    normalize_figure_id,
+)
 from app.platform.docstore.repository import DocstoreRepository, ParsedArtifactRecord
 from app.platform.parse_pipeline.job_builder import hash_run_token
 from app.platform.parse_pipeline.repository import ParseJobRepository
@@ -324,20 +328,40 @@ async def put_figure(
     figure_id = _normalize_figure_id(figure_id)
     token = _extract_bearer(authorization)
     jobs = ParseJobRepository(db)
-    row = await jobs.get_run_for_attachment_token(attachment_id, hash_run_token(token))
+    row = await jobs.get_run_for_related_attachment_token(attachment_id, hash_run_token(token))
     if row is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     content_type = request.headers.get("content-type")
     extension = _extension_from_content_type(content_type)
     data = await request.body()
-    save_parsed_figure(
-        row.chat_id,
-        attachment_id,
-        figure_id,
-        extension,
-        data,
-        content_type=content_type or "application/octet-stream",
-    )
+    media_type = content_type or "application/octet-stream"
+    is_hub = getattr(row, "document_scope", "chat") == "hub"
+    if is_hub:
+        from app.db.models import HubItem
+        from app.platform.docstore.blob import save_parsed_figure_scoped
+        from app.platform.docstore.scope import DocumentScope
+
+        hub_item = await db.get(HubItem, attachment_id)
+        if hub_item is None:
+            raise HTTPException(status_code=404, detail="hub item not found")
+        save_parsed_figure_scoped(
+            DocumentScope.hub(hub_item.user_id, attachment_id),
+            figure_id,
+            extension,
+            data,
+            content_type=media_type,
+        )
+    else:
+        if row.chat_id is None:
+            raise HTTPException(status_code=400, detail="chat_id missing")
+        save_parsed_figure(
+            row.chat_id,
+            attachment_id,
+            figure_id,
+            extension,
+            data,
+            content_type=media_type,
+        )
     return {"status": "ok", "figure": figure_id, "extension": extension}
 
 
@@ -353,11 +377,26 @@ async def get_figure(
     figure_id = _normalize_figure_id(figure_id)
     token = _extract_bearer(authorization)
     jobs = ParseJobRepository(db)
-    row = await jobs.get_run_for_attachment_token(attachment_id, hash_run_token(token))
+    row = await jobs.get_run_for_related_attachment_token(attachment_id, hash_run_token(token))
     if row is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    is_hub = getattr(row, "document_scope", "chat") == "hub"
     try:
-        data, media_type = load_parsed_figure_resolved(row.chat_id, attachment_id, figure_id)
+        if is_hub:
+            from app.db.models import HubItem
+            from app.platform.docstore.scope import DocumentScope
+
+            hub_item = await db.get(HubItem, attachment_id)
+            if hub_item is None:
+                raise HTTPException(status_code=404, detail="hub item not found")
+            data, media_type = load_parsed_figure_scoped_resolved(
+                DocumentScope.hub(hub_item.user_id, attachment_id),
+                figure_id,
+            )
+        else:
+            if row.chat_id is None:
+                raise HTTPException(status_code=400, detail="chat_id missing")
+            data, media_type = load_parsed_figure_resolved(row.chat_id, attachment_id, figure_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="invalid figure_id") from exc
     except FileNotFoundError as exc:

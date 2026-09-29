@@ -53,7 +53,16 @@ def resolve_figure_storage_id(raw: str, meta: dict[str, Any] | None) -> str:
             continue
         sha256 = str(fig.get("sha256") or "").lower()
         filename = str(fig.get("filename") or "").lower()
-        if sha256.startswith(stem_lower) or stem_lower in filename or filename.startswith(stem_lower):
+        alt = str(fig.get("alt") or "").lower()
+        source_ref = str(fig.get("source_ref") or "").lower()
+        if (
+            sha256.startswith(stem_lower)
+            or stem_lower in filename
+            or filename.startswith(stem_lower)
+            or stem_lower in alt
+            or source_ref == stem_lower
+            or source_ref.startswith(stem_lower)
+        ):
             return figure_id
 
     return stem

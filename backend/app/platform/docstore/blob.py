@@ -135,6 +135,26 @@ def parsed_artifact_exists_scoped(scope: DocumentScope, artifact_key: str) -> bo
     return path.is_file()
 
 
+def save_parsed_figure_scoped(
+    scope: DocumentScope,
+    figure_id: str,
+    extension: str,
+    data: bytes,
+    *,
+    content_type: str = "application/octet-stream",
+) -> None:
+    if blob_storage_enabled():
+        blob_put(
+            scoped_blob_figure_object_name(scope, figure_id, extension),
+            data,
+            content_type=content_type,
+        )
+        return
+    path = scoped_parsed_figure_path(scope, figure_id, extension)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+
+
 def load_parsed_figure_scoped(
     scope: DocumentScope,
     figure_id: str,

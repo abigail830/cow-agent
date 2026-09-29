@@ -311,8 +311,10 @@ def mirror_markdown_figures(
 
 
 def figures_to_meta(figures: tuple[MirroredFigure, ...]) -> list[dict[str, Any]]:
-    return [
-        {
+    rows: list[dict[str, Any]] = []
+    for fig in figures:
+        source_ref = _hash_image_stem(fig.alt) or _hash_image_stem(fig.source_url)
+        row: dict[str, Any] = {
             "id": fig.figure_id,
             "line": fig.line,
             "alt": fig.alt,
@@ -321,5 +323,7 @@ def figures_to_meta(figures: tuple[MirroredFigure, ...]) -> list[dict[str, Any]]
             "sha256": fig.sha256,
             "filename": f"{fig.figure_id}.{fig.extension}",
         }
-        for fig in figures
-    ]
+        if source_ref:
+            row["source_ref"] = source_ref
+        rows.append(row)
+    return rows
