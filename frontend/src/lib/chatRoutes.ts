@@ -1,6 +1,6 @@
 /** Agent-scoped workspace routes under `/chat/:agentId`. */
 
-export type ChatWorkspaceView = 'chat' | 'documents' | 'integrations'
+export type ChatWorkspaceView = 'chat' | 'documents' | 'integrations' | 'hub'
 
 const LAST_AGENT_STORAGE_KEY = 'agent-platform:last-agent-id'
 
@@ -32,6 +32,12 @@ export function agentIntegrationsPath(agentId: string): string {
   return `${agentChatPath(agentId)}/integrations`
 }
 
+export function agentHubPath(agentId: string): string {
+  return `${agentChatPath(agentId)}/hub`
+}
+
+export const HUB_TARGET_CHAT_STORAGE_KEY = 'document-hub:target-chat-id'
+
 export type ParsedChatRoute = {
   agentId: string | null
   view: ChatWorkspaceView
@@ -54,11 +60,14 @@ export function parseChatRoute(pathname: string): ParsedChatRoute {
   if (path === '/chat/integrations') {
     return { agentId: null, view: 'integrations' }
   }
+  if (path === '/chat/hub') {
+    return { agentId: null, view: 'hub' }
+  }
   if (path === '/chat') {
     return { agentId: null, view: 'chat' }
   }
 
-  const match = path.match(/^\/chat\/([^/]+)(?:\/(documents|integrations))?$/)
+  const match = path.match(/^\/chat\/([^/]+)(?:\/(documents|integrations|hub))?$/)
   if (!match) {
     return { agentId: null, view: 'chat' }
   }
@@ -67,6 +76,7 @@ export function parseChatRoute(pathname: string): ParsedChatRoute {
   const sub = match[2]
   if (sub === 'documents') return { agentId, view: 'documents' }
   if (sub === 'integrations') return { agentId, view: 'integrations' }
+  if (sub === 'hub') return { agentId, view: 'hub' }
   return { agentId, view: 'chat' }
 }
 
@@ -79,6 +89,7 @@ export function resolveLegacyChatPath(
   if (!id) return null
   if (view === 'documents') return agentDocumentsPath(id)
   if (view === 'integrations') return agentIntegrationsPath(id)
+  if (view === 'hub') return agentHubPath(id)
   return agentChatPath(id)
 }
 

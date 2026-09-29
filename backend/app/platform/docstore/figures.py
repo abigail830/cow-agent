@@ -5,7 +5,8 @@ from __future__ import annotations
 import re
 import uuid
 
-from app.platform.docstore.blob import load_parsed_figure
+from app.platform.docstore.blob import load_parsed_figure, load_parsed_figure_scoped
+from app.platform.docstore.scope import DocumentScope
 
 _FIGURE_ID_RE = re.compile(r"^f\d+$")
 _FIGURE_EXTENSIONS = ("jpeg", "jpg", "png", "gif", "webp")
@@ -38,6 +39,24 @@ def load_parsed_figure_resolved(
     for extension in _FIGURE_EXTENSIONS:
         try:
             data = load_parsed_figure(chat_id, attachment_id, normalized_id, extension)
+        except FileNotFoundError as exc:
+            last_error = exc
+            continue
+        media_type = _EXT_MEDIA_TYPES.get(extension, "application/octet-stream")
+        return data, media_type
+    raise FileNotFoundError(f"{normalized_id}") from last_error
+
+
+def load_parsed_figure_scoped_resolved(
+    scope: DocumentScope,
+    figure_id: str,
+) -> tuple[bytes, str]:
+    """Load scoped figure bytes, probing known extensions."""
+    normalized_id = normalize_figure_id(figure_id)
+    last_error: FileNotFoundError | None = None
+    for extension in _FIGURE_EXTENSIONS:
+        try:
+            data = load_parsed_figure_scoped(scope, normalized_id, extension)
         except FileNotFoundError as exc:
             last_error = exc
             continue

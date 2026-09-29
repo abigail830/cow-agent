@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.platform.doc_retrieval.context import init_doc_retrieval_context, reset_doc_retrieval_context
-from app.platform.doc_retrieval.store import build_chat_library
+from app.platform.doc_retrieval.store import build_session_document_library
 from app.platform.doc_retrieval.tools import DOC_RETRIEVAL_TOOL_NAMES
 from app.platform.runtime.plugin import AgentPlugin, RunContext
 
@@ -17,7 +17,7 @@ class DocRetrievalPlugin(AgentPlugin):
         return True
 
     async def on_run_start(self, ctx: RunContext) -> None:
-        library = await build_chat_library(ctx.db, ctx.chat_id)
+        library = await build_session_document_library(ctx.db, ctx.chat_id)
         init_doc_retrieval_context(
             chat_id=ctx.chat_id,
             library=library,

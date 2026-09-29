@@ -18,6 +18,9 @@ import { AgentIcon } from '../components/AgentIcon'
 import { ChatHistoryPanel } from '../components/ChatHistoryPanel'
 import { DocumentsView } from '../components/DocumentsView'
 import { IntegrationsView } from '../components/IntegrationsView'
+import { DocumentHubView } from '../components/DocumentHubView'
+import type { ChatDocumentImport } from '../types/hub'
+import { importsToMentionAttachments } from '../lib/sessionDocuments'
 import { MemoryPanel } from '../components/MemoryPanel'
 import { ProposalLivePanel } from '../components/ProposalLivePanel'
 import { ProposalPanelShell, readProposalPanelWidth, type ProposalPanelTab } from '../components/ProposalPanelShell'
@@ -213,6 +216,7 @@ export function ChatPage() {
   const { agentId: routeAgentId, view: workspaceView } = parseChatRoute(location.pathname)
   const documentsOpen = workspaceView === 'documents'
   const integrationsOpen = workspaceView === 'integrations'
+  const hubOpen = workspaceView === 'hub'
   const [agents, setAgents] = useState<Agent[]>([])
   const [agentsLoading, setAgentsLoading] = useState(true)
   const [agentsError, setAgentsError] = useState<string | null>(null)
@@ -1114,6 +1118,32 @@ export function ChatPage() {
     [chatAttachments],
   )
 
+  const [sessionImports, setSessionImports] = useState<ChatDocumentImport[]>([])
+
+  const loadSessionImports = useCallback(async (id: string) => {
+    try {
+      const rows = await api.listChatDocumentImports(id)
+      setSessionImports(rows)
+    } catch {
+      setSessionImports([])
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!chatId) {
+      setSessionImports([])
+      return
+    }
+    void loadSessionImports(chatId)
+  }, [chatId, loadSessionImports])
+
+  const mentionAttachments = useMemo(() => {
+    if (sessionImports.length > 0) {
+      return importsToMentionAttachments(sessionImports, chatAttachments)
+    }
+    return readyChatAttachments
+  }, [sessionImports, chatAttachments, readyChatAttachments])
+
   useEffect(() => {
     stagedAttachmentIdsRef.current = stagedAttachmentIds
   }, [stagedAttachmentIds])
@@ -1189,7 +1219,7 @@ export function ChatPage() {
 
   const refreshMentionTrigger = useCallback(
     (value: string, cursorPos: number) => {
-      const next = detectMentionTrigger(value, cursorPos, readyChatAttachments)
+      const next = detectMentionTrigger(value, cursorPos, mentionAttachments)
       if (next && mentionDismissedStartRef.current === next.start) {
         setMentionTrigger(null)
         return
@@ -1199,7 +1229,7 @@ export function ChatPage() {
       }
       setMentionTrigger(next)
     },
-    [readyChatAttachments],
+    [mentionAttachments],
   )
 
   const closeMentionPopup = useCallback(() => {
@@ -1214,12 +1244,12 @@ export function ChatPage() {
     const session = getAgentSession(sessionsRef.current, selectedId)
     const cursor = textareaRef.current?.selectionStart ?? session.input.length
     refreshMentionTrigger(session.input, cursor)
-  }, [readyChatAttachments, refreshMentionTrigger, selectedId])
+  }, [mentionAttachments, refreshMentionTrigger, selectedId])
 
   const mentionFilteredAttachments = useMemo(() => {
     if (!mentionTrigger) return []
-    return filterAttachmentsForMention(readyChatAttachments, mentionTrigger.query)
-  }, [mentionTrigger, readyChatAttachments])
+    return filterAttachmentsForMention(mentionAttachments, mentionTrigger.query)
+  }, [mentionTrigger, mentionAttachments])
 
   useEffect(() => {
     if (!mentionTrigger) return
@@ -1725,7 +1755,7 @@ export function ChatPage() {
       const row = chatAttachmentsRef.current.find((item) => item.id === id)
       return row != null && isAttachmentReady(row)
     })
-    const mentionIds = parseAttachmentMentionIds(text, attachmentRows)
+    const mentionIds = parseAttachmentMentionIds(text, mentionAttachments)
     const attachmentIds = mergeAttachmentIdsForSend(readyStagedIdsForSend, mentionIds)
     if (attachmentIds.length > attachmentLimits.max_files_per_message) {
       patchSession(agentId, {
@@ -1756,7 +1786,12 @@ export function ChatPage() {
 
     patchSession(agentId, (prev) => {
       const nextSequence = prev.messages.reduce((max, row) => Math.max(max, row.sequence), 0) + 1
-      const referenced = attachmentRows.filter((row) => attachmentIds.includes(row.id))
+      const referenced = [
+        ...attachmentRows.filter((row) => attachmentIds.includes(row.id)),
+        ...mentionAttachments.filter(
+          (row) => attachmentIds.includes(row.id) && !attachmentRows.some((a) => a.id === row.id),
+        ),
+      ]
       const optimistic: Message = {
         id: `tmp-${Date.now()}`,
         chat_id: activeChatId,
@@ -2277,7 +2312,7 @@ export function ChatPage() {
                   aria-label="Back to home"
                   onClick={() => navigate('/')}
                 >
-                  FDE-DESK
+                  AGENT TEAM
                 </button>
                 <span className="agent-sidebar-agent-brand-name">
                   {formatAgentLabel(sidebarAgent)}
@@ -2287,7 +2322,11 @@ export function ChatPage() {
           </div>
         </div>
 
-        <SidebarUtilityNav collapsed={sidebarCollapsed} agentId={routeAgentId ?? selectedId} />
+        <SidebarUtilityNav
+          collapsed={sidebarCollapsed}
+          agentId={routeAgentId ?? selectedId}
+          activeChatId={chatId}
+        />
 
         <div className="agent-sidebar-spacer" aria-hidden="true" />
 
@@ -2315,6 +2354,8 @@ export function ChatPage() {
           />
         ) : integrationsOpen ? (
           <IntegrationsView />
+        ) : hubOpen ? (
+          <DocumentHubView />
         ) : showChat && sidebarAgent ? (
           <div className={`chat-main-layout${isProposalComposer ? ' chat-main-layout-proposal' : ''}`}>
             <div className="chat-main-inner">
@@ -2505,7 +2546,7 @@ export function ChatPage() {
                         <ComposerMentionInput
                           textareaRef={textareaRef}
                           value={input}
-                          attachments={readyChatAttachments}
+                          attachments={mentionAttachments}
                           placeholder="Message… (type @ to reference attachments)"
                           disabled={loading || chatSessionLoading}
                           onChange={handleComposerInputChange}

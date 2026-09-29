@@ -29,7 +29,6 @@ async def enqueue_capture_parse_job(
         asr_context=asr_context,
         job_id=job_id,
         webhook_secret=webhook_secret,
-        use_internal_http=True,
     )
     return await enqueue_parse_job(
         session,

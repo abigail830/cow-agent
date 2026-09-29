@@ -6,11 +6,11 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import ChatAttachment
+from app.db.models import ChatAttachment, HubItem
 from app.platform.attachments.kinds import AttachmentKind, classify_attachment
 from app.platform.docstore.models import PARSE_READY_STATUSES, ParseStatus
 from app.platform.docstore.repository import DocstoreRepository
-from app.platform.parse_pipeline.enqueue import enqueue_parse_job
+from app.platform.parse_pipeline.enqueue import enqueue_hub_parse_job, enqueue_parse_job
 from app.platform.parse_pipeline.router import PipelineRoute, resolve_pipeline
 
 
@@ -68,3 +68,30 @@ async def retry_attachment_parse(
     pipeline_id = resolution.pipeline_id
     assert pipeline_id is not None
     return await enqueue_parse_job(session, row, pipeline_id=pipeline_id)
+
+
+async def finalize_hub_item_parse(
+    session: AsyncSession,
+    row: HubItem,
+    *,
+    kind: AttachmentKind,
+) -> HubItem:
+    resolution = resolve_pipeline(kind)
+    docstore = DocstoreRepository(session)
+
+    if resolution.action == PipelineRoute.SKIP.value:
+        updated = await docstore.mark_parse_ready(row.id, skipped=True)
+        return updated or row  # type: ignore[return-value]
+
+    if resolution.action == PipelineRoute.REJECT.value:
+        raise ValueError(f"Unsupported file type for parse: {row.mime_type or row.filename}")
+
+    pipeline_id = resolution.pipeline_id
+    assert pipeline_id is not None
+
+    status = str(getattr(row, "parse_status", None) or ParseStatus.READY.value)
+    if status in PARSE_READY_STATUSES and row.parse_pipeline_id == pipeline_id:
+        return row
+
+    updated = await enqueue_hub_parse_job(session, row, pipeline_id=pipeline_id)
+    return updated

@@ -30,7 +30,8 @@ from app.platform.attachments.pages import load_attachment_bytes
 from app.platform.attachments.storage import is_inline_provider_file_id
 from app.platform.doc_retrieval.context import get_doc_retrieval_context
 from app.platform.doc_retrieval.manifest import build_hydrate_text
-from app.platform.docstore.blob import parsed_artifact_exists
+from app.platform.docstore.blob import parsed_artifact_exists, parsed_artifact_exists_scoped
+from app.platform.docstore.scope import DocumentScope
 from app.platform.docstore.models import PARSE_READY_STATUSES
 
 
@@ -296,6 +297,10 @@ def _should_rematerialize_from_disk(item: Any, caps: AttachmentCapabilities) -> 
     return False
 
 
+def _is_hub_item(item: Any) -> bool:
+    return hasattr(item, "user_id") and not hasattr(item, "chat_id")
+
+
 def _explicit_parse_ready(item: Any) -> bool:
     status = _item_attr(item, "parse_status")
     if not status:
@@ -319,12 +324,19 @@ def should_hydrate_parsed_document(
     kind = classify_attachment(filename=filename, mime_type=mime_type)
     if kind == AttachmentKind.IMAGE:
         return False
-    if chat_id is not None:
+    if chat_id is not None or _is_hub_item(item):
         att_id = str(_item_attr(item, "id") or "").strip()
         if not att_id:
             return False
         try:
-            if not parsed_artifact_exists(chat_id, uuid.UUID(att_id), "content_md"):
+            if _is_hub_item(item):
+                uid = uuid.UUID(str(_item_attr(item, "user_id")))
+                if not parsed_artifact_exists_scoped(
+                    DocumentScope.hub(uid, uuid.UUID(att_id)),
+                    "content_md",
+                ):
+                    return False
+            elif chat_id is not None and not parsed_artifact_exists(chat_id, uuid.UUID(att_id), "content_md"):
                 return False
         except (ValueError, FileNotFoundError):
             return False

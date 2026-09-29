@@ -48,25 +48,35 @@ async def report_parse_run_status(
     if row is None:
         return None
 
+    from app.db.models import ChatAttachment, HubItem
+
     snapshot = stage_snapshot if stage_snapshot is not None else _snapshot_from_row(row)
+    chat_id = getattr(row, "chat_id", None) if isinstance(row, ChatAttachment) else None
     out = {
         "attachment_id": str(row.id),
-        "chat_id": str(row.chat_id),
         "parse_status": row.parse_status,
         "parse_pipeline_id": row.parse_pipeline_id,
         "parse_job_id": row.parse_job_id,
         "parse_error_message": row.parse_error_message,
         "parse_progress": snapshot,
     }
-    from app.platform.audio_capture.webhook import sync_capture_from_parse_webhook
+    if chat_id is not None:
+        out["chat_id"] = str(chat_id)
+    if isinstance(row, HubItem):
+        out["document_scope"] = "hub"
+        out["hub_item_id"] = str(row.id)
 
-    await sync_capture_from_parse_webhook(
-        session,
-        attachment_id=run_row.attachment_id,
-        parse_status=parse_status,
-        error_code=error_code,
-        error_message=error_message,
-    )
+    if isinstance(row, ChatAttachment):
+        from app.platform.audio_capture.webhook import sync_capture_from_parse_webhook
 
-    publish_attachment_parse_updated(str(row.chat_id), out)
+        await sync_capture_from_parse_webhook(
+            session,
+            attachment_id=run_row.attachment_id,
+            parse_status=parse_status,
+            error_code=error_code,
+            error_message=error_message,
+        )
+
+    if chat_id is not None:
+        publish_attachment_parse_updated(str(chat_id), out)
     return out

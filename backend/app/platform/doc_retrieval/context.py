@@ -15,6 +15,8 @@ class ChatAttachmentIndexEntry:
     mime_type: str
     kind: str
     parse_status: str
+    source: str = "chat_attachment"
+    storage_scope_id: str = ""
     line_count: int | None = None
     page_count: int | None = None
     figure_count: int = 0

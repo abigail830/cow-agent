@@ -33,15 +33,28 @@ def _b64url_decode(data: str) -> bytes:
     return base64.urlsafe_b64decode(data + padding)
 
 
-def mint_asr_file_token(*, chat_id: uuid.UUID, attachment_id: uuid.UUID) -> tuple[str, int]:
+def mint_asr_file_token(
+    *,
+    attachment_id: uuid.UUID,
+    chat_id: uuid.UUID | None = None,
+    user_id: uuid.UUID | None = None,
+    document_scope: str = "chat",
+) -> tuple[str, int]:
     settings = get_settings()
     ttl = max(300, int(settings.asr_signed_url_ttl_sec))
     expires_at = int(time.time()) + ttl
-    payload = {
-        "chat_id": str(chat_id),
+    payload: dict[str, str | int] = {
         "attachment_id": str(attachment_id),
         "exp": expires_at,
+        "document_scope": document_scope,
     }
+    if document_scope == "hub" and user_id is not None:
+        payload["user_id"] = str(user_id)
+    elif chat_id is not None:
+        payload["chat_id"] = str(chat_id)
+        payload["document_scope"] = "chat"
+    else:
+        raise ValueError("chat_id or user_id required for ASR token")
     body = _b64url_encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode())
     sig = hmac.new(_secret(), body.encode(), hashlib.sha256).hexdigest()
     return f"{body}.{sig}", expires_at
@@ -61,10 +74,21 @@ def verify_asr_file_token(token: str) -> dict[str, Any]:
     return payload
 
 
-def public_asr_file_url(*, chat_id: uuid.UUID, attachment_id: uuid.UUID) -> str:
+def public_asr_file_url(
+    *,
+    attachment_id: uuid.UUID,
+    chat_id: uuid.UUID | None = None,
+    user_id: uuid.UUID | None = None,
+    document_scope: str = "chat",
+) -> str:
     settings = get_settings()
     public_base = (settings.parse_pipeline_public_base_url or "http://127.0.0.1:8000").strip()
-    token, _ = mint_asr_file_token(chat_id=chat_id, attachment_id=attachment_id)
+    token, _ = mint_asr_file_token(
+        chat_id=chat_id,
+        user_id=user_id,
+        attachment_id=attachment_id,
+        document_scope=document_scope,
+    )
     return f"{public_base.rstrip('/')}/api/v1/public/asr-files/{token}"
 
 
@@ -85,3 +109,24 @@ def mint_asr_download_url(*, chat_id: uuid.UUID, attachment_id: uuid.UUID) -> tu
                 exc,
             )
     return public_asr_file_url(chat_id=chat_id, attachment_id=attachment_id), expires_at
+
+
+def mint_hub_asr_download_url(*, user_id: uuid.UUID, item_id: uuid.UUID) -> tuple[str, int]:
+    settings = get_settings()
+    ttl_sec = max(300, int(settings.asr_signed_url_ttl_sec))
+    expires_at = int(time.time()) + ttl_sec
+    if blob_storage_enabled():
+        pathname = f"document-hub/{user_id}/{item_id}"
+        try:
+            url = blob_presigned_get_url(pathname, valid_until_ms=expires_at * 1000)
+            return url, expires_at
+        except Exception as exc:
+            logger.warning("Hub blob presigned ASR URL failed for %s: %s", pathname, exc)
+    return (
+        public_asr_file_url(
+            user_id=user_id,
+            attachment_id=item_id,
+            document_scope="hub",
+        ),
+        expires_at,
+    )

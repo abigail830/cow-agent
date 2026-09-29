@@ -28,3 +28,7 @@ export function attachmentParsedFigureUrl(
     `/chats/${chatId}/attachments/${attachmentId}/parsed/figures/${figureId}`,
   )
 }
+
+export function hubParsedFigureUrl(hubItemId: string, figureId: string): string {
+  return resolveApiPath(`/document-hub/items/${hubItemId}/parsed/figures/${figureId}`)
+}

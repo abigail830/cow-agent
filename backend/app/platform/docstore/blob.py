@@ -11,7 +11,12 @@ from app.platform.docstore.paths import (
     parsed_artifact_dir,
     parsed_artifact_path,
     parsed_figure_path,
+    scoped_blob_figure_object_name,
+    scoped_blob_parsed_object_name,
+    scoped_parsed_artifact_path,
+    scoped_parsed_figure_path,
 )
+from app.platform.docstore.scope import DocumentScope
 
 
 def save_parsed_artifact(
@@ -85,12 +90,62 @@ def load_parsed_figure(
     figure_id: str,
     extension: str,
 ) -> bytes:
+    return load_parsed_figure_scoped(
+        DocumentScope.chat(chat_id, attachment_id),
+        figure_id,
+        extension,
+    )
+
+
+def save_parsed_artifact_scoped(
+    scope: DocumentScope,
+    artifact_key: str,
+    data: bytes,
+    *,
+    content_type: str = "application/octet-stream",
+) -> None:
     if blob_storage_enabled():
-        raw = blob_get(blob_figure_object_name(chat_id, attachment_id, figure_id, extension))
+        blob_put(
+            scoped_blob_parsed_object_name(scope, artifact_key),
+            data,
+            content_type=content_type,
+        )
+        return
+    path = scoped_parsed_artifact_path(scope, artifact_key)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+
+
+def load_parsed_artifact_scoped(scope: DocumentScope, artifact_key: str) -> bytes:
+    if blob_storage_enabled():
+        raw = blob_get(scoped_blob_parsed_object_name(scope, artifact_key))
+        if raw is None:
+            raise FileNotFoundError(artifact_key)
+        return raw
+    path = scoped_parsed_artifact_path(scope, artifact_key)
+    if not path.is_file():
+        raise FileNotFoundError(artifact_key)
+    return path.read_bytes()
+
+
+def parsed_artifact_exists_scoped(scope: DocumentScope, artifact_key: str) -> bool:
+    if blob_storage_enabled():
+        return blob_exists(scoped_blob_parsed_object_name(scope, artifact_key))
+    path = scoped_parsed_artifact_path(scope, artifact_key)
+    return path.is_file()
+
+
+def load_parsed_figure_scoped(
+    scope: DocumentScope,
+    figure_id: str,
+    extension: str,
+) -> bytes:
+    if blob_storage_enabled():
+        raw = blob_get(scoped_blob_figure_object_name(scope, figure_id, extension))
         if raw is None:
             raise FileNotFoundError(f"{figure_id}.{extension}")
         return raw
-    path = parsed_figure_path(chat_id, attachment_id, figure_id, extension)
+    path = scoped_parsed_figure_path(scope, figure_id, extension)
     if not path.is_file():
         raise FileNotFoundError(f"{figure_id}.{extension}")
     return path.read_bytes()

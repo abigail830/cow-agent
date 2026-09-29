@@ -64,6 +64,4 @@ Backend .env (service dispatch — HTTP + webhook, unified with standalone deplo
 
 parse-pipeline/.env: DOCUMENT_MIND_* for PDF; OFFICE_MARKITDOWN_ENABLED=true for docx.
 
-Legacy PARSE_PIPELINE_DISPATCH=inline (subprocess) is deprecated.
-
 EOF

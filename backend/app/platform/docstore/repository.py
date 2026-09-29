@@ -6,16 +6,24 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import ChatAttachment
-from app.platform.docstore.manifest import merge_parsed_artifact_record
+from app.db.models import ChatAttachment, HubItem
+from app.platform.docstore.manifest import merge_hub_parsed_artifact_record, merge_parsed_artifact_record
 from app.platform.docstore.models import ParseStatus
 
 ParsedArtifactRecord = tuple[str, int, str]  # artifact_key, size_bytes, content_type
+
+ParseDocumentRow = ChatAttachment | HubItem
 
 
 class DocstoreRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def _get_parse_row(self, document_id: uuid.UUID) -> ParseDocumentRow | None:
+        row = await self._session.get(ChatAttachment, document_id)
+        if row is not None:
+            return row
+        return await self._session.get(HubItem, document_id)
 
     async def mark_parse_ready(
         self,
@@ -23,8 +31,8 @@ class DocstoreRepository:
         *,
         pipeline_id: str | None = None,
         skipped: bool = False,
-    ) -> ChatAttachment | None:
-        row = await self._session.get(ChatAttachment, attachment_id)
+    ) -> ParseDocumentRow | None:
+        row = await self._get_parse_row(attachment_id)
         if row is None:
             return None
         row.parse_status = ParseStatus.SKIPPED.value if skipped else ParseStatus.READY.value
@@ -46,8 +54,8 @@ class DocstoreRepository:
         *,
         pipeline_id: str,
         job_id: str,
-    ) -> ChatAttachment | None:
-        row = await self._session.get(ChatAttachment, attachment_id)
+    ) -> ParseDocumentRow | None:
+        row = await self._get_parse_row(attachment_id)
         if row is None:
             return None
         row.parse_status = ParseStatus.PENDING.value
@@ -95,11 +103,35 @@ class DocstoreRepository:
         self,
         attachment_id: uuid.UUID,
         *,
-        chat_id: uuid.UUID,
+        chat_id: uuid.UUID | None = None,
+        user_id: uuid.UUID | None = None,
         artifacts: list[ParsedArtifactRecord],
-    ) -> ChatAttachment | None:
+    ) -> ParseDocumentRow | None:
         """Merge all parsed artifact keys in one locked transaction (no lost updates)."""
         if not artifacts:
+            return None
+        if user_id is not None:
+            result = await self._session.execute(
+                select(HubItem).where(HubItem.id == attachment_id).with_for_update()
+            )
+            row = result.scalar_one_or_none()
+            if row is None or row.user_id != user_id:
+                return None
+            manifest = row.parsed_artifact_manifest
+            for artifact_key, size_bytes, content_type in artifacts:
+                manifest = merge_hub_parsed_artifact_record(
+                    manifest,
+                    user_id=user_id,
+                    item_id=attachment_id,
+                    artifact_key=artifact_key,
+                    size_bytes=size_bytes,
+                    content_type=content_type,
+                )
+            row.parsed_artifact_manifest = manifest
+            await self._session.flush()
+            return row
+
+        if chat_id is None:
             return None
         result = await self._session.execute(
             select(ChatAttachment)
@@ -131,8 +163,8 @@ class DocstoreRepository:
         stage_snapshot: dict[str, Any] | None,
         error_code: str | None = None,
         error_message: str | None = None,
-    ) -> ChatAttachment | None:
-        row = await self._session.get(ChatAttachment, attachment_id)
+    ) -> ParseDocumentRow | None:
+        row = await self._get_parse_row(attachment_id)
         if row is None:
             return None
         row.parse_status = status

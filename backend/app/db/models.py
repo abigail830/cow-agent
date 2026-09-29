@@ -299,7 +299,8 @@ class ParseJobRun(Base):
 
     job_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     attachment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    chat_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    chat_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    document_scope: Mapped[str] = mapped_column(String(16), nullable=False, server_default="chat")
     run_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     webhook_secret: Mapped[str] = mapped_column(String(128), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -307,6 +308,118 @@ class ParseJobRun(Base):
     github_run_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="queued")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class HubFolder(Base):
+    __tablename__ = "hub_folders"
+    __table_args__ = (
+        Index("idx_hub_folders_user_id", "user_id"),
+        Index("uq_hub_folders_user_parent_name", "user_id", "parent_id", "name", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("hub_folders.id", ondelete="CASCADE"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class HubItem(Base):
+    __tablename__ = "hub_items"
+    __table_args__ = (
+        Index("idx_hub_items_user_id", "user_id"),
+        Index("idx_hub_items_folder_id", "folder_id"),
+        Index("idx_hub_items_content_hash", "user_id", "content_hash"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    folder_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("hub_folders.id", ondelete="CASCADE"), nullable=False
+    )
+    item_kind: Mapped[str] = mapped_column(String(32), nullable=False, server_default="file")
+    filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(255), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False, server_default="inline")
+    provider_file_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    gist: Mapped[str | None] = mapped_column(Text, nullable=True)
+    gist_content_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    gist_generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    parse_status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="ready")
+    parse_pipeline_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    parse_job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    parse_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    parse_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    parse_stage_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    parsed_artifact_manifest: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    capture_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("hub_audio_captures.id", ondelete="SET NULL"), nullable=True
+    )
+    attachment_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class HubAudioCapture(Base):
+    __tablename__ = "hub_audio_captures"
+    __table_args__ = (Index("idx_hub_audio_captures_user_id", "user_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    folder_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("hub_folders.id", ondelete="CASCADE"), nullable=False
+    )
+    host_item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("hub_items.id", ondelete="CASCADE"), nullable=False
+    )
+    parse_job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="pending")
+    context_snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ChatDocumentImport(Base):
+    __tablename__ = "chat_document_imports"
+    __table_args__ = (
+        Index("idx_chat_document_imports_chat_id", "chat_id"),
+        Index("uq_chat_document_imports_chat_source_ref", "chat_id", "source", "ref_id", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    chat_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chats.id", ondelete="CASCADE"), nullable=False
+    )
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    ref_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    imported_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    last_mentioned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class UserIntegration(Base):

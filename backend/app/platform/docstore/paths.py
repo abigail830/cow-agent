@@ -6,6 +6,9 @@ import uuid
 from pathlib import Path
 
 from app.platform.attachments.storage import INLINE_ATTACHMENTS_ROOT
+from app.platform.docstore.scope import DocumentScope
+
+HUB_STORAGE_ROOT = INLINE_ATTACHMENTS_ROOT.parent / "document-hub"
 
 _ARTIFACT_NAMES = {
     "content_md": "content.md",
@@ -52,3 +55,39 @@ def blob_figure_object_name(
     extension: str,
 ) -> str:
     return f"{blob_parsed_prefix(chat_id, attachment_id)}/figures/{figure_id}.{extension}"
+
+
+def _hub_parsed_dir(user_id: uuid.UUID, item_id: uuid.UUID) -> Path:
+    base = (HUB_STORAGE_ROOT / str(user_id) / "parsed" / str(item_id)).resolve()
+    root = HUB_STORAGE_ROOT.resolve()
+    if root not in base.parents and base != root:
+        raise ValueError("Invalid hub parsed artifact path")
+    return base
+
+
+def scoped_parsed_artifact_path(scope: DocumentScope, artifact_key: str) -> Path:
+    filename = _ARTIFACT_NAMES.get(artifact_key, artifact_key)
+    if scope.kind == "chat":
+        return parsed_artifact_path(scope.scope_id, scope.document_id, artifact_key)
+    return _hub_parsed_dir(scope.scope_id, scope.document_id) / filename
+
+
+def scoped_blob_parsed_prefix(scope: DocumentScope) -> str:
+    if scope.kind == "chat":
+        return blob_parsed_prefix(scope.scope_id, scope.document_id)
+    return f"document-hub/{scope.scope_id}/parsed/{scope.document_id}"
+
+
+def scoped_blob_parsed_object_name(scope: DocumentScope, artifact_key: str) -> str:
+    filename = _ARTIFACT_NAMES.get(artifact_key, artifact_key)
+    return f"{scoped_blob_parsed_prefix(scope)}/{filename}"
+
+
+def scoped_blob_figure_object_name(scope: DocumentScope, figure_id: str, extension: str) -> str:
+    return f"{scoped_blob_parsed_prefix(scope)}/figures/{figure_id}.{extension}"
+
+
+def scoped_parsed_figure_path(scope: DocumentScope, figure_id: str, extension: str) -> Path:
+    if scope.kind == "chat":
+        return parsed_figure_path(scope.scope_id, scope.document_id, figure_id, extension)
+    return _hub_parsed_dir(scope.scope_id, scope.document_id) / "figures" / f"{figure_id}.{extension}"

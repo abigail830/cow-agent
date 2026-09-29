@@ -103,8 +103,29 @@ class ChatRunService:
     ) -> list:
         if not attachment_ids:
             return []
-        service = AttachmentService(self._db)
-        return await service.resolve_for_message(chat.id, attachment_ids)
+        from app.db.repositories.chat_document_imports import ChatDocumentImportRepository
+        from app.db.repositories.hub_items import HubItemRepository
+
+        import_repo = ChatDocumentImportRepository(self._db)
+        hub_repo = HubItemRepository(self._db)
+        chat_ids: list[uuid.UUID] = []
+        resolved: list = []
+        for aid in attachment_ids:
+            hub_imp = await import_repo.get_by_ref(chat.id, source="hub_item", ref_id=aid)
+            if hub_imp is not None:
+                hub_row = await hub_repo.get_owned(chat.user_id, aid)
+                if hub_row is None:
+                    raise ValueError(f"Hub item not found: {aid}")
+                from app.platform.docstore.gate import assert_parse_ready
+
+                assert_parse_ready([hub_row])
+                resolved.append(hub_row)
+                continue
+            chat_ids.append(aid)
+        if chat_ids:
+            service = AttachmentService(self._db)
+            resolved.extend(await service.resolve_for_message(chat.id, chat_ids))
+        return resolved
 
     async def _prepare_user_turn_metadata(
         self,

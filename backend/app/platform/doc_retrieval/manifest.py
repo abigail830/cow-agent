@@ -7,7 +7,11 @@ from typing import Any
 
 from app.config import get_settings
 from app.platform.doc_retrieval.context import ChatAttachmentIndexEntry, DocRetrievalContext
-from app.platform.doc_retrieval.store import cached_meta, is_document_kind, load_content_md
+from app.platform.doc_retrieval.store import (
+    cached_meta,
+    is_document_kind,
+    load_content_md_for_entry,
+)
 
 
 def _section_preview(meta: dict[str, Any], *, max_items: int = 8) -> str:
@@ -89,7 +93,7 @@ def build_turn_manifest_text(
             try:
                 att_uuid = uuid.UUID(att_id)
                 meta = cached_meta(ctx, att_uuid)
-                content_preview = load_content_md(ctx.chat_id, att_uuid)
+                content_preview = load_content_md_for_entry(entry)
             except Exception:
                 meta = None
         blocks.append(
@@ -115,7 +119,7 @@ def build_library_index_text(ctx: DocRetrievalContext | None) -> str:
         key=lambda entry: entry.created_at or "",
         reverse=True,
     )
-    lines = ["### Chat attachment library"]
+    lines = ["### Session document library (imported)"]
     shown = entries[:max_items]
     for entry in shown:
         page_part = f"{entry.page_count}p" if entry.page_count else f"{entry.line_count}L" if entry.line_count else "-"

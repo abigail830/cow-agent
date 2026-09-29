@@ -4,6 +4,7 @@ from enum import StrEnum
 
 
 class ParseStatus(StrEnum):
+    UPLOADING = "uploading"
     PENDING = "pending"
     RUNNING = "running"
     READY = "ready"

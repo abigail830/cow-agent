@@ -135,7 +135,18 @@ async def get_original_file(
     if row is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     try:
-        data = load_inline_attachment(row.chat_id, attachment_id)
+        if getattr(row, "document_scope", "chat") == "hub":
+            from app.db.models import HubItem
+            from app.platform.document_hub.storage import load_hub_original
+
+            item = await db.get(HubItem, attachment_id)
+            if item is None:
+                raise HTTPException(status_code=404, detail="hub item not found")
+            data = load_hub_original(item.user_id, item.id)
+        else:
+            if row.chat_id is None:
+                raise HTTPException(status_code=404, detail="chat_id missing")
+            data = load_inline_attachment(row.chat_id, attachment_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="original not found") from exc
     return Response(content=data, media_type="application/octet-stream")
@@ -162,16 +173,39 @@ async def put_artifacts_batch(
     pageindex_data = await pageindex_json.read() if pageindex_json is not None else None
 
     chat_id = run_row.chat_id
+    is_hub = getattr(run_row, "document_scope", "chat") == "hub"
+    hub_user_id: uuid.UUID | None = None
+    if is_hub:
+        from app.db.models import HubItem
+
+        hub_item = await db.get(HubItem, attachment_id)
+        if hub_item is None:
+            raise HTTPException(status_code=404, detail="hub item not found")
+        hub_user_id = hub_item.user_id
 
     async def _save_blob(key: str, data: bytes, content_type: str) -> ParsedArtifactRecord:
-        await asyncio.to_thread(
-            save_parsed_artifact,
-            chat_id,
-            attachment_id,
-            key,
-            data,
-            content_type=content_type,
-        )
+        if is_hub and hub_user_id is not None:
+            from app.platform.docstore.blob import save_parsed_artifact_scoped
+            from app.platform.docstore.scope import DocumentScope
+
+            await asyncio.to_thread(
+                save_parsed_artifact_scoped,
+                DocumentScope.hub(hub_user_id, attachment_id),
+                key,
+                data,
+                content_type=content_type,
+            )
+        else:
+            if chat_id is None:
+                raise HTTPException(status_code=400, detail="chat_id missing")
+            await asyncio.to_thread(
+                save_parsed_artifact,
+                chat_id,
+                attachment_id,
+                key,
+                data,
+                content_type=content_type,
+            )
         return (key, len(data), content_type)
 
     blob_tasks = [
@@ -185,11 +219,20 @@ async def put_artifacts_batch(
     artifact_records = await asyncio.gather(*blob_tasks)
 
     docstore = DocstoreRepository(db)
-    updated = await docstore.record_parsed_artifacts_batch(
-        attachment_id,
-        chat_id=chat_id,
-        artifacts=list(artifact_records),
-    )
+    if is_hub and hub_user_id is not None:
+        updated = await docstore.record_parsed_artifacts_batch(
+            attachment_id,
+            user_id=hub_user_id,
+            artifacts=list(artifact_records),
+        )
+    else:
+        if chat_id is None:
+            raise HTTPException(status_code=400, detail="chat_id missing")
+        updated = await docstore.record_parsed_artifacts_batch(
+            attachment_id,
+            chat_id=chat_id,
+            artifacts=list(artifact_records),
+        )
     if updated is None:
         raise HTTPException(status_code=404, detail="attachment not found")
 
@@ -222,20 +265,43 @@ async def put_artifact(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     data = await request.body()
     content_type = _ARTIFACT_CONTENT_TYPES[artifact_key]
-    save_parsed_artifact(
-        row.chat_id,
-        attachment_id,
-        artifact_key,
-        data,
-        content_type=content_type,
-    )
-    await DocstoreRepository(db).record_parsed_artifact(
-        attachment_id,
-        chat_id=row.chat_id,
-        artifact_key=artifact_key,
-        size_bytes=len(data),
-        content_type=content_type,
-    )
+    is_hub = getattr(row, "document_scope", "chat") == "hub"
+    if is_hub:
+        from app.db.models import HubItem
+        from app.platform.docstore.blob import save_parsed_artifact_scoped
+        from app.platform.docstore.scope import DocumentScope
+
+        hub_item = await db.get(HubItem, attachment_id)
+        if hub_item is None:
+            raise HTTPException(status_code=404, detail="hub item not found")
+        save_parsed_artifact_scoped(
+            DocumentScope.hub(hub_item.user_id, attachment_id),
+            artifact_key,
+            data,
+            content_type=content_type,
+        )
+        await DocstoreRepository(db).record_parsed_artifacts_batch(
+            attachment_id,
+            user_id=hub_item.user_id,
+            artifacts=[(artifact_key, len(data), content_type)],
+        )
+    else:
+        if row.chat_id is None:
+            raise HTTPException(status_code=400, detail="chat_id missing")
+        save_parsed_artifact(
+            row.chat_id,
+            attachment_id,
+            artifact_key,
+            data,
+            content_type=content_type,
+        )
+        await DocstoreRepository(db).record_parsed_artifact(
+            attachment_id,
+            chat_id=row.chat_id,
+            artifact_key=artifact_key,
+            size_bytes=len(data),
+            content_type=content_type,
+        )
     from app.platform.audio_capture.webhook import maybe_finalize_capture_after_parsed_artifact
 
     await maybe_finalize_capture_after_parsed_artifact(
@@ -318,10 +384,24 @@ async def mint_asr_files(
     for attachment_id in body.attachment_ids:
         if not jobs.payload_allows_attachment(run_row, attachment_id):
             raise HTTPException(status_code=403, detail=f"attachment not in job: {attachment_id}")
-        download_url, expires_at = mint_asr_download_url(
-            chat_id=run_row.chat_id,
-            attachment_id=attachment_id,
-        )
+        if getattr(run_row, "document_scope", "chat") == "hub":
+            from app.db.models import HubItem
+            from app.platform.audio_capture.signed_urls import mint_hub_asr_download_url
+
+            part = await db.get(HubItem, attachment_id)
+            if part is None:
+                raise HTTPException(status_code=404, detail="hub part not found")
+            download_url, expires_at = mint_hub_asr_download_url(
+                user_id=part.user_id,
+                item_id=attachment_id,
+            )
+        else:
+            if run_row.chat_id is None:
+                raise HTTPException(status_code=400, detail="chat_id missing")
+            download_url, expires_at = mint_asr_download_url(
+                chat_id=run_row.chat_id,
+                attachment_id=attachment_id,
+            )
         urls.append(
             {
                 "attachment_id": str(attachment_id),

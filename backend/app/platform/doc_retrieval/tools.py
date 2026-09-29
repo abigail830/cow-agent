@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from agent_framework import tool
 
 from app.platform.doc_retrieval.context import require_doc_retrieval_context
 from app.platform.doc_retrieval.find import find_attachments
-from app.platform.doc_retrieval.figures import read_figure_payload
+from app.platform.doc_retrieval.figures import read_figure_payload_for_entry
 from app.platform.doc_retrieval.grep import grep_content, grep_matches_to_dict
 from app.platform.doc_retrieval.read import read_content_slice
 from app.platform.doc_retrieval.sections import list_sections
@@ -18,8 +18,9 @@ from app.platform.doc_retrieval.store import (
     assert_chat_library_access,
     cached_meta,
     is_document_kind,
-    load_content_md,
-    load_pageindex_json,
+    library_for_scope,
+    load_content_md_for_entry,
+    load_pageindex_json_for_entry,
 )
 
 DOC_RETRIEVAL_TOOL_NAMES = frozenset(
@@ -48,18 +49,23 @@ def _parse_attachment_id(attachment_id: str) -> uuid.UUID:
 @tool(
     name="attachment_find",
     description=(
-        "Find chat attachments by fuzzy filename, kind, or topic when attachment_id is unknown. "
-        "Returns top candidates with attachment_id for follow-up grep/read."
+        "Find imported session documents by fuzzy filename, kind, or topic. "
+        "scope=session searches all imports in this chat; scope=turn limits to this message."
     ),
 )
 def attachment_find_tool(
     query: Annotated[str, "Natural language or keywords describing the attachment."],
     limit: Annotated[int, "Max candidates (default 5)."] = 5,
+    scope: Annotated[
+        Literal["session", "turn"],
+        "session = full import list; turn = this message only.",
+    ] = "session",
 ) -> dict[str, Any]:
     try:
         ctx = require_doc_retrieval_context()
-        candidates = find_attachments(ctx.library, query, limit=max(1, min(limit, 10)))
-        return {"status": "ok", "query": query, "candidates": candidates}
+        subset = library_for_scope(ctx, scope)
+        candidates = find_attachments(subset, query, limit=max(1, min(limit, 10)))
+        return {"status": "ok", "query": query, "scope": scope, "candidates": candidates}
     except DocRetrievalError as exc:
         return _error_payload(exc.code, exc.message)
     except RuntimeError as exc:
@@ -68,17 +74,24 @@ def attachment_find_tool(
 
 @tool(
     name="attachment_list_chat",
-    description="List all parse-ready attachments in this chat (compact catalog).",
+    description="List parse-ready documents in the session import list (compact catalog).",
 )
-def attachment_list_chat_tool() -> dict[str, Any]:
+def attachment_list_chat_tool(
+    scope: Annotated[
+        Literal["session", "turn"],
+        "session = full import list; turn = this message only.",
+    ] = "session",
+) -> dict[str, Any]:
     try:
         ctx = require_doc_retrieval_context()
+        subset = library_for_scope(ctx, scope)
         items = [
             {
                 "attachment_id": entry.attachment_id,
                 "filename": entry.filename,
                 "kind": entry.kind,
                 "mime_type": entry.mime_type,
+                "source": entry.source,
                 "page_count": entry.page_count,
                 "line_count": entry.line_count,
                 "figure_count": entry.figure_count,
@@ -86,12 +99,12 @@ def attachment_list_chat_tool() -> dict[str, Any]:
                 "created_at": entry.created_at,
             }
             for entry in sorted(
-                ctx.library.values(),
+                subset.values(),
                 key=lambda row: row.created_at or "",
                 reverse=True,
             )
         ]
-        return {"status": "ok", "count": len(items), "attachments": items}
+        return {"status": "ok", "scope": scope, "count": len(items), "attachments": items}
     except RuntimeError as exc:
         return _error_payload("no_context", str(exc))
 
@@ -111,8 +124,8 @@ def attachment_grep_tool(
         entry = assert_chat_library_access(ctx, attachment_id)
         if not is_document_kind(entry.kind):
             return _error_payload("unsupported_kind", "grep applies to parsed documents, not user images")
-        att_uuid = _parse_attachment_id(attachment_id)
-        content = load_content_md(ctx.chat_id, att_uuid)
+        _parse_attachment_id(attachment_id)
+        content = load_content_md_for_entry(entry)
         matches = grep_content(content, pattern, ignore_case=ignore_case, head_limit=max(1, min(head_limit, 50)))
         return {
             "status": "ok",
@@ -145,7 +158,7 @@ def attachment_read_tool(
         if not is_document_kind(entry.kind):
             return _error_payload("unsupported_kind", "read applies to parsed documents, not user images")
         att_uuid = _parse_attachment_id(attachment_id)
-        content = load_content_md(ctx.chat_id, att_uuid)
+        content = load_content_md_for_entry(entry)
         meta = cached_meta(ctx, att_uuid)
         result = read_content_slice(
             content,
@@ -177,7 +190,7 @@ def attachment_list_sections_tool(
         entry = assert_chat_library_access(ctx, attachment_id)
         att_uuid = _parse_attachment_id(attachment_id)
         meta = cached_meta(ctx, att_uuid)
-        pageindex = load_pageindex_json(ctx.chat_id, att_uuid)
+        pageindex = load_pageindex_json_for_entry(entry)
         outline = list_sections(meta, pageindex)
         return {
             "status": "ok",
@@ -205,9 +218,8 @@ def attachment_read_figure_tool(
         entry = assert_chat_library_access(ctx, attachment_id)
         att_uuid = _parse_attachment_id(attachment_id)
         meta = cached_meta(ctx, att_uuid)
-        payload = read_figure_payload(
-            chat_id=ctx.chat_id,
-            attachment_id=att_uuid,
+        payload = read_figure_payload_for_entry(
+            entry=entry,
             figure_id=str(figure_id).strip(),
             meta=meta,
         )

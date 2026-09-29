@@ -23,6 +23,7 @@ import type {
   FulfillmentFormActionResponse,
   FulfillmentFormsResponse,
 } from '../types/fulfillmentForms'
+import type { ChatDocumentImport, HubFolder, HubItem } from '../types/hub'
 import { API_V1 } from '../lib/apiBase'
 
 const API = API_V1
@@ -359,6 +360,133 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+
+  listHubFolders: () => request<HubFolder[]>('/document-hub/folders'),
+
+  createHubFolder: (body: { name: string; parent_id?: string | null }) =>
+    request<HubFolder>('/document-hub/folders', { method: 'POST', body: JSON.stringify(body) }),
+
+  listHubItems: (folderId: string, q?: string) => {
+    const search = new URLSearchParams({ folder_id: folderId })
+    if (q?.trim()) search.set('q', q.trim())
+    return request<HubItem[]>(`/document-hub/items?${search}`)
+  },
+
+  getHubUploadConfig: () =>
+    request<{
+      mode: 'blob' | 'multipart'
+      max_bytes_per_file: number
+      blob_upload_url?: string | null
+      blob_access?: string | null
+    }>('/document-hub/upload-config'),
+
+  uploadHubItemMultipart: async (folderId: string, file: File): Promise<HubItem> => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await fetch(`${API}/document-hub/items/upload?folder_id=${encodeURIComponent(folderId)}`, {
+      ...defaultFetchInit,
+      method: 'POST',
+      body: form,
+    })
+    if (!res.ok) throw new Error(await res.text())
+    return res.json() as Promise<HubItem>
+  },
+
+  uploadHubItemBlob: async (folderId: string, file: File): Promise<HubItem> => {
+    const config = await api.getHubUploadConfig()
+    const prepare = await request<{
+      item_id: string
+      user_id: string
+      pathname: string
+      upload_mode: string
+    }>('/document-hub/items/prepare-upload', {
+      method: 'POST',
+      body: JSON.stringify({
+        folder_id: folderId,
+        filename: file.name,
+        mime_type: file.type || 'application/octet-stream',
+        size_bytes: file.size,
+      }),
+    })
+
+    const { upload } = await import('@vercel/blob/client')
+    const access = config.blob_access === 'public' ? 'public' : 'private'
+    const handleUploadUrl = config.blob_upload_url?.startsWith('http')
+      ? config.blob_upload_url
+      : `${API}${config.blob_upload_url ?? '/document-hub/blob-upload'}`
+
+    await upload(prepare.pathname, file, {
+      access,
+      handleUploadUrl,
+      clientPayload: JSON.stringify({ user_id: prepare.user_id, item_id: prepare.item_id }),
+      contentType: file.type || 'application/octet-stream',
+      multipart: file.size > 5 * 1024 * 1024,
+      fetch: (url, options) => fetch(url, { ...options, credentials: 'include' }),
+    })
+
+    return request<HubItem>(`/document-hub/items/${prepare.item_id}/complete-upload`, {
+      method: 'POST',
+      body: JSON.stringify({ size_bytes: file.size }),
+    })
+  },
+
+  uploadHubItem: async (folderId: string, file: File): Promise<HubItem> => {
+    let config: Awaited<ReturnType<typeof api.getHubUploadConfig>>
+    try {
+      config = await api.getHubUploadConfig()
+    } catch {
+      return api.uploadHubItemMultipart(folderId, file)
+    }
+    if (config.mode === 'multipart') {
+      return api.uploadHubItemMultipart(folderId, file)
+    }
+    try {
+      return await api.uploadHubItemBlob(folderId, file)
+    } catch (blobErr) {
+      try {
+        return await api.uploadHubItemMultipart(folderId, file)
+      } catch {
+        throw blobErr instanceof Error ? blobErr : new Error('Upload failed')
+      }
+    }
+  },
+
+  retryHubItemParse: (itemId: string) =>
+    request<HubItem>(`/document-hub/items/${itemId}/retry-parse`, { method: 'POST' }),
+
+  deleteHubItem: (itemId: string) =>
+    request<void>(`/document-hub/items/${itemId}`, { method: 'DELETE' }),
+
+  moveHubItem: (itemId: string, folderId: string) =>
+    request<HubItem>(`/document-hub/items/${itemId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ folder_id: folderId }),
+    }),
+
+  deleteHubFolder: (folderId: string, confirmName: string) => {
+    const params = new URLSearchParams({ confirm_name: confirmName })
+    return request<void>(`/document-hub/folders/${folderId}?${params}`, { method: 'DELETE' })
+  },
+
+  hubOriginalUrl: (itemId: string) => `${API}/document-hub/items/${itemId}/original`,
+
+  fetchHubParsedText: async (itemId: string, artifactKey: 'content_md' | 'meta_json' | 'pageindex_json') => {
+    const res = await fetch(`${API}/document-hub/items/${itemId}/parsed/${artifactKey}`, { ...defaultFetchInit })
+    if (!res.ok) throw new Error(await res.text())
+    return res.text()
+  },
+
+  listChatDocumentImports: (chatId: string) =>
+    request<ChatDocumentImport[]>(`/document-hub/chats/${chatId}/imports`),
+
+  importHubToChat: (chatId: string, hubItemIds: string[]) =>
+    request<ChatDocumentImport[]>(`/document-hub/chats/${chatId}/imports`, {
+      method: 'POST',
+      body: JSON.stringify({ hub_item_ids: hubItemIds }),
+    }),
+
+  removeChatDocumentImport: (chatId: string, importId: string) =>
+    request<void>(`/document-hub/chats/${chatId}/imports/${importId}`, { method: 'DELETE' }),
 }
 
 export async function streamChat(

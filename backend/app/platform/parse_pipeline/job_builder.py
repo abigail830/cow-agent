@@ -7,8 +7,8 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 
 from app.config import get_settings
-from app.db.models import ChatAttachment
-from app.platform.docstore.storage_spec import build_file_storage_spec, build_internal_storage_spec
+from app.db.models import ChatAttachment, HubItem
+from app.platform.docstore.storage_spec import build_internal_storage_spec
 
 
 def _new_job_id() -> str:
@@ -33,37 +33,24 @@ def build_job_payload(
     pipeline_id: str,
     job_id: str,
     webhook_secret: str,
-    use_internal_http: bool,
     source_extra: dict | None = None,
     options_extra: dict | None = None,
 ) -> tuple[dict, str]:
     settings = get_settings()
     run_token = _new_run_token()
     public_base = (settings.parse_pipeline_public_base_url or "").strip()
-
-    if use_internal_http:
-        if not public_base:
-            raise ValueError("PARSE_PIPELINE_PUBLIC_BASE_URL is required for HTTP storage")
-        storage = build_internal_storage_spec(
-            public_base_url=public_base,
-            attachment_id=row.id,
-            filename=row.filename,
-            mime_type=row.mime_type,
-            size_bytes=row.size_bytes,
-            content_hash=row.content_hash,
-            run_token=run_token,
-        )
-        webhook_url = f"{public_base.rstrip('/')}{settings.parse_pipeline_webhook_path}"
-    else:
-        storage = build_file_storage_spec(
-            chat_id=row.chat_id,
-            attachment_id=row.id,
-            filename=row.filename,
-            mime_type=row.mime_type,
-            size_bytes=row.size_bytes,
-            content_hash=row.content_hash,
-        )
-        webhook_url = None
+    if not public_base:
+        raise ValueError("PARSE_PIPELINE_PUBLIC_BASE_URL is required for parse jobs")
+    storage = build_internal_storage_spec(
+        public_base_url=public_base,
+        attachment_id=row.id,
+        filename=row.filename,
+        mime_type=row.mime_type,
+        size_bytes=row.size_bytes,
+        content_hash=row.content_hash,
+        run_token=run_token,
+    )
+    webhook_url = f"{public_base.rstrip('/')}{settings.parse_pipeline_webhook_path}"
 
     idempotency_key = None
     if row.content_hash:
@@ -105,6 +92,71 @@ def build_job_payload(
     return payload, run_token
 
 
+def build_hub_job_payload(
+    row: HubItem,
+    *,
+    pipeline_id: str,
+    job_id: str,
+    webhook_secret: str,
+    source_extra: dict | None = None,
+    options_extra: dict | None = None,
+) -> tuple[dict, str]:
+    settings = get_settings()
+    run_token = _new_run_token()
+    public_base = (settings.parse_pipeline_public_base_url or "").strip()
+    if not public_base:
+        raise ValueError("PARSE_PIPELINE_PUBLIC_BASE_URL is required for parse jobs")
+    storage = build_internal_storage_spec(
+        public_base_url=public_base,
+        attachment_id=row.id,
+        filename=row.filename,
+        mime_type=row.mime_type,
+        size_bytes=row.size_bytes,
+        content_hash=row.content_hash,
+        run_token=run_token,
+    )
+    webhook_url = f"{public_base.rstrip('/')}{settings.parse_pipeline_webhook_path}"
+
+    idempotency_key = None
+    if row.content_hash:
+        idempotency_key = f"sha256:hub:{row.user_id}:{row.id}:{row.content_hash}"
+
+    payload = {
+        "schema_version": "1.0",
+        "job_id": job_id,
+        "idempotency_key": idempotency_key,
+        "pipeline_id": pipeline_id,
+        "storage": storage,
+        "source": {
+            "source_type": "hub_item",
+            "source_id": str(row.id),
+            "tenant_id": str(row.user_id),
+            "filename": row.filename,
+            "mime_type": row.mime_type,
+            "size_bytes": row.size_bytes,
+            "content_hash": row.content_hash,
+            **(source_extra or {}),
+        },
+        "options": {
+            "office": {
+                "markitdown_enabled": settings.office_markitdown_enabled,
+            },
+            "document_mind": {
+                "llm_enhancement": True,
+                "enhancement_mode": "VLM",
+                "output_formats": ["markdown", "visualLayoutInfo"],
+            },
+            **(options_extra or {}),
+        },
+        "callbacks": {
+            "webhook_url": webhook_url,
+            "webhook_secret": webhook_secret,
+            "events": ["stage.updated", "job.completed", "job.failed"],
+        },
+    }
+    return payload, run_token
+
+
 def run_expires_at() -> datetime:
     settings = get_settings()
     ttl = max(300, int(settings.parse_pipeline_run_token_ttl_sec))
@@ -119,6 +171,44 @@ def new_webhook_secret() -> str:
     return _new_webhook_secret()
 
 
+def build_hub_capture_job_payload(
+    host_row: HubItem,
+    *,
+    capture_id: uuid.UUID,
+    parts: list[dict],
+    pipeline_id: str,
+    asr_context: str | None,
+    job_id: str | None = None,
+    webhook_secret: str | None = None,
+) -> tuple[dict, str]:
+    resolved_job_id = job_id or _new_job_id()
+    resolved_webhook_secret = webhook_secret or _new_webhook_secret()
+    source_extra = {
+        "capture": {
+            "capture_id": str(capture_id),
+            "parts": parts,
+        }
+    }
+    options_extra = {
+        "asr": {
+            "provider": get_settings().asr_provider,
+            "fallback_providers": list(get_settings().asr_fallback_providers),
+            "context_text": asr_context,
+            "enable_words": False,
+            "diarization_enabled": get_settings().asr_diarization_enabled,
+            "speaker_count": get_settings().asr_speaker_count,
+        }
+    }
+    return build_hub_job_payload(
+        host_row,
+        pipeline_id=pipeline_id,
+        job_id=resolved_job_id,
+        webhook_secret=resolved_webhook_secret,
+        source_extra=source_extra,
+        options_extra=options_extra,
+    )
+
+
 def build_capture_job_payload(
     host_row: ChatAttachment,
     *,
@@ -128,7 +218,6 @@ def build_capture_job_payload(
     asr_context: str | None,
     job_id: str | None = None,
     webhook_secret: str | None = None,
-    use_internal_http: bool = True,
 ) -> tuple[dict, str]:
     settings = get_settings()
     resolved_job_id = job_id or _new_job_id()
@@ -149,13 +238,11 @@ def build_capture_job_payload(
             "speaker_count": settings.asr_speaker_count,
         }
     }
-    payload, run_token = build_job_payload(
+    return build_job_payload(
         host_row,
         pipeline_id=pipeline_id,
         job_id=resolved_job_id,
         webhook_secret=resolved_webhook_secret,
-        use_internal_http=use_internal_http,
         source_extra=source_extra,
         options_extra=options_extra,
     )
-    return payload, run_token

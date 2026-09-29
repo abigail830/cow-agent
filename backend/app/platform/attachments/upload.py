@@ -138,6 +138,14 @@ class AttachmentUploader:
             existing = await finalize_attachment_parse(
                 self._db, existing, kind=kind
             )
+            from app.platform.session_documents.imports import auto_import_chat_attachment
+
+            await auto_import_chat_attachment(
+                self._db,
+                chat_id=chat_id,
+                attachment_id=existing.id,
+                user_id=chat.user_id,
+            )
             await self._db.commit()
             await self._db.refresh(existing)
             return attachment_metadata(existing)
@@ -165,6 +173,14 @@ class AttachmentUploader:
             content_hash=content_hash,
         )
         row = await finalize_attachment_parse(self._db, row, kind=kind)
+        from app.platform.session_documents.imports import auto_import_chat_attachment
+
+        await auto_import_chat_attachment(
+            self._db,
+            chat_id=chat_id,
+            attachment_id=row.id,
+            user_id=chat.user_id,
+        )
         await self._db.commit()
         await self._db.refresh(row)
         return attachment_metadata(row)

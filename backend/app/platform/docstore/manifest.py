@@ -26,6 +26,24 @@ def parsed_artifact_prefix(chat_id: uuid.UUID, attachment_id: uuid.UUID) -> str:
     return f"chat-attachments/{chat_id}/parsed/{attachment_id}"
 
 
+def hub_parsed_artifact_prefix(user_id: uuid.UUID, item_id: uuid.UUID) -> str:
+    return f"document-hub/{user_id}/parsed/{item_id}"
+
+
+def hub_parsed_artifact_storage_path(user_id: uuid.UUID, item_id: uuid.UUID, artifact_key: str) -> str:
+    filename = _ARTIFACT_FILENAMES.get(artifact_key, artifact_key)
+    return f"{hub_parsed_artifact_prefix(user_id, item_id)}/{filename}"
+
+
+def empty_hub_parsed_artifact_manifest(user_id: uuid.UUID, item_id: uuid.UUID) -> dict[str, Any]:
+    return {
+        "version": _MANIFEST_VERSION,
+        "storage": parsed_storage_backend(),
+        "prefix": hub_parsed_artifact_prefix(user_id, item_id),
+        "artifacts": {},
+    }
+
+
 def parsed_artifact_storage_path(
     chat_id: uuid.UUID,
     attachment_id: uuid.UUID,
@@ -67,6 +85,33 @@ def merge_parsed_artifact_record(
     base["version"] = _MANIFEST_VERSION
     base["storage"] = parsed_storage_backend()
     base["prefix"] = parsed_artifact_prefix(chat_id, attachment_id)
+    base["artifacts"] = artifacts
+    return base
+
+
+def merge_hub_parsed_artifact_record(
+    manifest: dict[str, Any] | None,
+    *,
+    user_id: uuid.UUID,
+    item_id: uuid.UUID,
+    artifact_key: str,
+    size_bytes: int,
+    content_type: str | None = None,
+) -> dict[str, Any]:
+    base = dict(manifest or empty_hub_parsed_artifact_manifest(user_id, item_id))
+    artifacts = dict(base.get("artifacts") or {})
+    filename = _ARTIFACT_FILENAMES.get(artifact_key, artifact_key)
+    artifacts[artifact_key] = {
+        "artifact_key": artifact_key,
+        "relative_path": filename,
+        "storage_path": hub_parsed_artifact_storage_path(user_id, item_id, artifact_key),
+        "size_bytes": int(size_bytes),
+        "content_type": content_type or parsed_artifact_media_type(artifact_key),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    base["version"] = _MANIFEST_VERSION
+    base["storage"] = parsed_storage_backend()
+    base["prefix"] = hub_parsed_artifact_prefix(user_id, item_id)
     base["artifacts"] = artifacts
     return base
 

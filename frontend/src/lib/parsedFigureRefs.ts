@@ -1,4 +1,4 @@
-import { attachmentParsedFigureUrl } from './documentUrls'
+import { attachmentParsedFigureUrl, hubParsedFigureUrl } from './documentUrls'
 
 const FIGURE_REF_PREFIX = 'figure:'
 const FIGURE_MARKDOWN_RE = /!\[([^\]]*)\]\(figure:(f\d+)\)/gi
@@ -28,6 +28,28 @@ export function rewriteParsedFigureRefs(
   })
   return withMarkdown.replace(FIGURE_HTML_SRC_RE, (_match, quote, figureId) => {
     const url = attachmentParsedFigureUrl(chatId, attachmentId, figureId)
+    return `src=${quote}${url}${quote}`
+  })
+}
+
+export function resolveHubParsedFigureSrc(
+  src: string | undefined,
+  hubItemId: string,
+): string | undefined {
+  if (!src) return src
+  if (!src.startsWith(FIGURE_REF_PREFIX)) return src
+  const figureId = src.slice(FIGURE_REF_PREFIX.length).trim()
+  if (!figureId) return src
+  return hubParsedFigureUrl(hubItemId, figureId)
+}
+
+export function rewriteHubParsedFigureRefs(content: string, hubItemId: string): string {
+  const withMarkdown = content.replace(FIGURE_MARKDOWN_RE, (_match, alt, figureId) => {
+    const url = hubParsedFigureUrl(hubItemId, figureId)
+    return `![${alt}](${url})`
+  })
+  return withMarkdown.replace(FIGURE_HTML_SRC_RE, (_match, quote, figureId) => {
+    const url = hubParsedFigureUrl(hubItemId, figureId)
     return `src=${quote}${url}${quote}`
   })
 }
