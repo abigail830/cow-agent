@@ -1784,24 +1784,16 @@ body {
   z-index: 2;
 }
 
-.document-hub-upload-label-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  margin: 0;
-  cursor: pointer;
-}
-
-.document-hub-upload-label-wrap .document-hub-upload-input {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
+/* Off-screen but not display:none — reliable with button.click() + onChange in Chrome */
+.document-hub-hidden-file-input {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 1px;
+  height: 1px;
   opacity: 0;
-  cursor: pointer;
-  font-size: 1rem;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .document-hub-list-pane-drag-over {
@@ -1875,6 +1867,39 @@ body {
 .document-hub-file-card-pending {
   opacity: 0.85;
   cursor: default;
+}
+
+.document-hub-file-card-deleting {
+  cursor: wait;
+  pointer-events: none;
+  opacity: 0.88;
+}
+
+.document-hub-file-card-deleting::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+}
+
+.document-hub-file-card-deleting .document-hub-file-name,
+.document-hub-file-card-deleting .document-hub-file-detail {
+  color: var(--color-muted);
+}
+
+.document-hub-file-card-busy {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  align-self: center;
+  color: var(--color-brand-600);
 }
 
 .document-hub-file-card-type-icon {

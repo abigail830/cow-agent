@@ -117,6 +117,7 @@ export function DocumentHubView() {
   const [parsedView, setParsedView] = useState<'rendered' | 'source'>('rendered')
   const [importNotice, setImportNotice] = useState<string | null>(null)
   const [parseDrawerItem, setParseDrawerItem] = useState<HubItem | null>(null)
+  const [deletingItemIds, setDeletingItemIds] = useState<string[]>([])
 
   const [folderWidth, setFolderWidth] = useState(() => readStoredHubWidth(HUB_FOLDER_WIDTH_KEY, 200))
   const [previewWidth, setPreviewWidth] = useState<number | null>(() =>
@@ -124,6 +125,9 @@ export function DocumentHubView() {
   )
 
   const workspaceRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const uploadFolderIdRef = useRef<string | null>(null)
+  const uploadInFlightRef = useRef(false)
   const [dragOver, setDragOver] = useState(false)
   const folderDragRef = useRef<{ startX: number; startWidth: number } | null>(null)
   const previewDragRef = useRef<{ startX: number; startWidth: number } | null>(null)
@@ -403,14 +407,19 @@ export function DocumentHubView() {
   }
 
   const handleDeleteItem = async (item: HubItem) => {
+    if (deletingItemIds.includes(item.id)) return
     if (!window.confirm(`Delete "${item.filename}"?`)) return
     setError(null)
+    setDeletingItemIds((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]))
     try {
       await api.deleteHubItem(item.id)
       if (selectedItem?.id === item.id) setSelectedItem(null)
+      if (parseDrawerItem?.id === item.id) setParseDrawerItem(null)
       if (selectedFolderId) await loadItems(selectedFolderId)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete item')
+    } finally {
+      setDeletingItemIds((prev) => prev.filter((id) => id !== item.id))
     }
   }
 
@@ -436,53 +445,58 @@ export function DocumentHubView() {
     return folders[0]?.id ?? null
   }, [folders, selectedFolderId])
 
-  const uploadFiles = useCallback(
-    async (files: File[]) => {
-      if (!files.length || uploading || pendingUploads.length > 0) return
-      const folderId = uploadFolderId
-      if (!folderId) {
-        setError('Select or create a folder before uploading.')
-        return
-      }
-      if (!selectedFolderId || selectedFolderId !== folderId) setSelectedFolderId(folderId)
+  uploadFolderIdRef.current = uploadFolderId
 
-      const placeholders = files.map((file) => ({ id: crypto.randomUUID(), filename: file.name }))
-      setError(null)
-      setImportNotice(null)
-      setUploading(true)
-      setPendingUploads(placeholders)
-      try {
-        for (let i = 0; i < files.length; i += 1) {
-          const file = files[i]
-          const row = await api.uploadHubItem(folderId, file)
-          if (row.duplicate_of_existing) {
-            setImportNotice(`"${file.name}" already exists in your library.`)
-          }
-          setPendingUploads((prev) => prev.filter((p) => p.id !== placeholders[i]?.id))
+  const doUploadFiles = async (files: File[]) => {
+    if (!files.length || uploadInFlightRef.current) return
+    const folderId = uploadFolderIdRef.current
+    if (!folderId) {
+      setError('Select or create a folder before uploading.')
+      return
+    }
+    uploadInFlightRef.current = true
+    setSelectedFolderId((prev) => (prev === folderId ? prev : folderId))
+
+    const placeholders = files.map((file) => ({ id: crypto.randomUUID(), filename: file.name }))
+    setError(null)
+    setImportNotice(null)
+    setUploading(true)
+    setPendingUploads(placeholders)
+    try {
+      for (let i = 0; i < files.length; i += 1) {
+        const file = files[i]
+        const row = await api.uploadHubItem(folderId, file)
+        if (row.duplicate_of_existing) {
+          setImportNotice(`"${file.name}" already exists in your library.`)
         }
-        await loadItems(folderId)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Upload failed')
-      } finally {
-        setUploading(false)
-        setPendingUploads([])
+        setPendingUploads((prev) => prev.filter((p) => p.id !== placeholders[i]?.id))
       }
-    },
-    [loadItems, pendingUploads.length, selectedFolderId, uploadFolderId, uploading],
-  )
-
-  const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const fileList = event.target.files
-    event.target.value = ''
-    if (!fileList?.length) return
-    void uploadFiles(Array.from(fileList))
+      await loadItems(folderId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      uploadInFlightRef.current = false
+      setUploading(false)
+      setPendingUploads([])
+    }
   }
 
-  const handleUploadPlaceholderClick = () => {
-    if (uploading || pendingUploads.length > 0) return
-    if (!uploadFolderId) {
+  const handleUploadButtonClick = () => {
+    if (uploadActive) return
+    if (!uploadFolderIdRef.current) {
       setError('Select or create a folder before uploading.')
+      return
     }
+    fileInputRef.current?.click()
+  }
+
+  const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget
+    const fileList = input.files
+    if (!fileList?.length) return
+    const picked = Array.from(fileList)
+    input.value = ''
+    void doUploadFiles(picked)
   }
 
   const handleListDragOver = (event: DragEvent<HTMLDivElement>) => {
@@ -504,7 +518,7 @@ export function DocumentHubView() {
     if (uploading || pendingUploads.length > 0) return
     const dropped = event.dataTransfer.files
     if (!dropped?.length) return
-    void uploadFiles(Array.from(dropped))
+    void doUploadFiles(Array.from(dropped))
   }
 
   const uploadActive = uploading || pendingUploads.length > 0
@@ -523,6 +537,15 @@ export function DocumentHubView() {
 
   return (
     <div className="document-hub-view documents-view documents-view-agent-scoped">
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        tabIndex={-1}
+        aria-hidden
+        className="document-hub-hidden-file-input"
+        onChange={handleFileInputChange}
+      />
       <header className="documents-view-header">
         <div>
           <h1 className="documents-view-title">Document Hub</h1>
@@ -597,26 +620,14 @@ export function DocumentHubView() {
           onDrop={handleListDrop}
         >
           <div className="document-hub-toolbar">
-            {uploadFolderId && !uploadActive ? (
-              <label className="integration-tile-btn integration-tile-btn-primary document-hub-upload-label-wrap">
-                Upload
-                <input
-                  type="file"
-                  multiple
-                  className="document-hub-upload-input"
-                  onChange={handleFileInputChange}
-                />
-              </label>
-            ) : (
-              <button
-                type="button"
-                className="integration-tile-btn integration-tile-btn-primary"
-                disabled={uploadActive}
-                onClick={handleUploadPlaceholderClick}
-              >
-                {uploading ? 'Uploading…' : 'Upload'}
-              </button>
-            )}
+            <button
+              type="button"
+              className="integration-tile-btn integration-tile-btn-primary"
+              disabled={uploadActive}
+              onClick={handleUploadButtonClick}
+            >
+              {uploading ? 'Uploading…' : 'Upload'}
+            </button>
             <button
               type="button"
               className="integration-tile-btn integration-tile-btn-ghost"
@@ -673,14 +684,20 @@ export function DocumentHubView() {
                 {items.map((item) => {
                   const { label, detail } = hubParseStatus(item)
                   const selected = selectedItem?.id === item.id
+                  const isDeleting = deletingItemIds.includes(item.id)
                   return (
                     <li key={item.id}>
                       <div
-                        className={`document-hub-file-card${selected ? ' document-hub-file-card-selected' : ''}`}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => handleSelectItem(item)}
+                        className={`document-hub-file-card${selected ? ' document-hub-file-card-selected' : ''}${isDeleting ? ' document-hub-file-card-deleting' : ''}`}
+                        role={isDeleting ? undefined : 'button'}
+                        tabIndex={isDeleting ? -1 : 0}
+                        aria-busy={isDeleting}
+                        onClick={() => {
+                          if (isDeleting) return
+                          handleSelectItem(item)
+                        }}
                         onKeyDown={(e) => {
+                          if (isDeleting) return
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault()
                             handleSelectItem(item)
@@ -696,12 +713,14 @@ export function DocumentHubView() {
                               {item.filename}
                             </span>
                             <span
-                              className={`documents-status-badge ${parseStatusBadgeClass(item.parse_status)}`}
+                              className={`documents-status-badge ${isDeleting ? 'documents-status-badge-running' : parseStatusBadgeClass(item.parse_status)}`}
                             >
-                              {label}
+                              {isDeleting ? 'Deleting' : label}
                             </span>
                           </div>
-                          {detail ? (
+                          {isDeleting ? (
+                            <span className="document-hub-file-detail">Removing file…</span>
+                          ) : detail ? (
                             <span className="document-hub-file-detail" title={detail}>
                               {detail}
                             </span>
@@ -709,32 +728,38 @@ export function DocumentHubView() {
                             <span className="document-hub-file-detail">{formatFileSize(item.size_bytes)}</span>
                           )}
                         </div>
-                        <div className="document-hub-file-card-icons">
-                          <button
-                            type="button"
-                            className="document-hub-file-icon-btn"
-                            title="Move to another folder"
-                            aria-label={`Move ${item.filename}`}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              void handleMoveItem(item)
-                            }}
-                          >
-                            <FolderInput size={15} strokeWidth={1.75} />
-                          </button>
-                          <button
-                            type="button"
-                            className="document-hub-file-icon-btn document-hub-file-icon-btn-danger"
-                            title="Delete file"
-                            aria-label={`Delete ${item.filename}`}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              void handleDeleteItem(item)
-                            }}
-                          >
-                            <Trash2 size={15} strokeWidth={1.75} />
-                          </button>
-                        </div>
+                        {isDeleting ? (
+                          <div className="document-hub-file-card-busy" aria-hidden>
+                            <LoadingSpinner size="sm" />
+                          </div>
+                        ) : (
+                          <div className="document-hub-file-card-icons">
+                            <button
+                              type="button"
+                              className="document-hub-file-icon-btn"
+                              title="Move to another folder"
+                              aria-label={`Move ${item.filename}`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void handleMoveItem(item)
+                              }}
+                            >
+                              <FolderInput size={15} strokeWidth={1.75} />
+                            </button>
+                            <button
+                              type="button"
+                              className="document-hub-file-icon-btn document-hub-file-icon-btn-danger"
+                              title="Delete file"
+                              aria-label={`Delete ${item.filename}`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void handleDeleteItem(item)
+                              }}
+                            >
+                              <Trash2 size={15} strokeWidth={1.75} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </li>
                   )
