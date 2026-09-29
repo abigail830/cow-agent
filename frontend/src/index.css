@@ -2460,9 +2460,31 @@ label.integration-tile-btn-disabled {
   flex: 1;
 }
 
-.documents-view-agent-scoped .documents-view-title {
+.documents-view-agent-scoped .documents-view-title:not(.document-hub-view-title) {
   color: var(--color-brand-500);
   font-weight: 700;
+}
+
+.document-hub-view-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.document-hub-view-title-root {
+  color: var(--color-brand-600);
+  font-weight: 700;
+}
+
+.document-hub-view-title-sep {
+  color: var(--color-subtle);
+  font-weight: 400;
+}
+
+.document-hub-view-title-folder {
+  color: var(--color-ink);
+  font-weight: 600;
 }
 
 .documents-view-header {

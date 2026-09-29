@@ -10,7 +10,6 @@ import {
 } from 'react'
 import { api } from '../api/client'
 import type { HubItem } from '../types/hub'
-import { HUB_TARGET_CHAT_STORAGE_KEY } from '../lib/chatRoutes'
 import { useHubFolders } from '../context/HubFoldersContext'
 import {
   HUB_MAX_PREVIEW_RATIO,
@@ -70,7 +69,6 @@ export function DocumentHubView({ folderId }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [selectedItem, setSelectedItem] = useState<HubItem | null>(null)
   const [importNotice, setImportNotice] = useState<string | null>(null)
-  const [importingToChat, setImportingToChat] = useState(false)
   const [parseDrawerItem, setParseDrawerItem] = useState<HubItem | null>(null)
   const [deletingItemIds, setDeletingItemIds] = useState<string[]>([])
   const [searchInput, setSearchInput] = useState('')
@@ -87,14 +85,6 @@ export function DocumentHubView({ folderId }: Props) {
   const uploadInFlightRef = useRef(false)
   const [dragOver, setDragOver] = useState(false)
   const previewDragRef = useRef<{ startX: number; startWidth: number } | null>(null)
-
-  const targetChatId = useMemo(() => {
-    try {
-      return sessionStorage.getItem(HUB_TARGET_CHAT_STORAGE_KEY)
-    } catch {
-      return null
-    }
-  }, [])
 
   const activeFolder = useMemo(
     () => rootFolders.find((f) => f.id === folderId) ?? null,
@@ -266,20 +256,6 @@ export function DocumentHubView({ folderId }: Props) {
     }
   }
 
-  const handleImportSelectedToChat = async () => {
-    if (!targetChatId || !selectedItem || importingToChat) return
-    setImportingToChat(true)
-    setError(null)
-    try {
-      await api.importHubToChat(targetChatId, [selectedItem.id])
-      setImportNotice(`"${selectedItem.filename}" added to the linked chat. Use @ in the message box to reference it.`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to import into chat')
-    } finally {
-      setImportingToChat(false)
-    }
-  }
-
   const handleMoveItem = async (item: HubItem) => {
     const target = window.prompt(`Move to folder:\n${rootFolders.map((f) => f.name).join(', ')}`)
     if (!target?.trim()) return
@@ -395,12 +371,21 @@ export function DocumentHubView({ folderId }: Props) {
       />
       <header className="documents-view-header document-hub-page-header">
         <div className="document-hub-page-header-copy">
-          <h1 className="documents-view-title">{activeFolder?.name ?? 'Document Hub'}</h1>
+          <h1 className="documents-view-title document-hub-view-title">
+            <span className="document-hub-view-title-root">Document Hub</span>
+            {activeFolder ? (
+              <>
+                <span className="document-hub-view-title-sep" aria-hidden="true">
+                  |
+                </span>
+                <span className="document-hub-view-title-folder">{activeFolder.name}</span>
+              </>
+            ) : null}
+          </h1>
           <p className="documents-view-subtitle">
             {activeFolder
-              ? 'Files in this folder. Import into a chat before @ mentions and retrieval tools can use them.'
-              : 'Personal document library — folders live in the left sidebar under Document Hub.'}
-            {targetChatId ? ' · Session linked for import' : ''}
+              ? 'Upload and manage files in this folder. To use a document in chat, import it from the conversation message box.'
+              : 'Personal document library — select a folder in the sidebar.'}
           </p>
         </div>
       </header>
@@ -433,21 +418,6 @@ export function DocumentHubView({ folderId }: Props) {
               >
                 Refresh
               </button>
-              {targetChatId ? (
-                <button
-                  type="button"
-                  className="integration-tile-btn integration-tile-btn-primary"
-                  disabled={uploadActive || !selectedItem || importingToChat}
-                  title={
-                    selectedItem
-                      ? `Add "${selectedItem.filename}" to the chat you came from`
-                      : 'Select a file to import into the linked chat'
-                  }
-                  onClick={() => void handleImportSelectedToChat()}
-                >
-                  {importingToChat ? 'Adding…' : 'Add to chat'}
-                </button>
-              ) : null}
               {uploadActive ? (
                 <span className="document-hub-toolbar-status">
                   <LoadingSpinner size="sm" /> Upload in progress…
