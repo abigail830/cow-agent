@@ -41,6 +41,17 @@ function friendlyMessage(text: string): string {
   if (lower.includes('rate_limit') || lower.includes('rate limit')) {
     return 'Too many requests. Please wait and try again.'
   }
+  if (
+    lower.includes('input length') ||
+    lower.includes('invalidparameter') ||
+    text.includes('983016') ||
+    text.includes('983015')
+  ) {
+    return 'Prompt or attachments exceed this model’s input limit. Shorten the message, use fewer @ references, or start a new chat.'
+  }
+  if (lower.includes('service failed to complete the prompt')) {
+    return 'The model could not finish this request. Try again with fewer attachments or a shorter prompt.'
+  }
   return text
 }
 

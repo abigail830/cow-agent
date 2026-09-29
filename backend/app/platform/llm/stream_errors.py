@@ -3,6 +3,21 @@
 from __future__ import annotations
 
 
+def is_leaked_model_service_text(text: str) -> bool:
+    """True when MAF/framework exception repr was streamed as assistant text."""
+    stripped = (text or "").strip()
+    if not stripped:
+        return False
+    lower = stripped.lower()
+    if "service failed to complete the prompt" in lower:
+        return True
+    if "openaicompatiblereasoningclient" in lower:
+        return True
+    if "(*<class" in stripped and "app.platform.llm" in stripped:
+        return True
+    return False
+
+
 def user_facing_stream_error(exc: Exception | str) -> str:
     text = str(exc).strip() or (type(exc).__name__ if isinstance(exc, Exception) else "Error")
     lower = text.lower()
@@ -35,6 +50,16 @@ def user_facing_stream_error(exc: Exception | str) -> str:
         return (
             "Legacy Redis history error (removed). Chat transcript now lives in PostgreSQL. "
             "If this persists, restart the backend after alembic upgrade and check DATABASE_URL."
+        )
+    if "input length" in lower or "invalidparameter" in lower or "983016" in text or "983015" in text:
+        return (
+            "Prompt or attachments exceed this model’s input limit. "
+            "Shorten the message, use fewer @ references, or start a new chat."
+        )
+    if "service failed to complete the prompt" in lower:
+        return (
+            "The model could not finish this request. "
+            "Try again with fewer attachments or a shorter prompt."
         )
     if "mcp server" in lower and "failed to initialize" in lower:
         if "cancel scope" in lower or "cancelled" in lower:

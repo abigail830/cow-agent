@@ -4463,6 +4463,14 @@ label.integration-tile-btn-disabled {
   color: var(--color-muted, #64748b);
 }
 
+.chat-standby-status {
+  margin: 0.75rem 0 0;
+  text-align: center;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--color-brand-600);
+}
+
 .panel-loading-state {
   display: flex;
   flex: 1;

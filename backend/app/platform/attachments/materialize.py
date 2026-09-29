@@ -33,6 +33,7 @@ from app.platform.attachments.source import (
     document_hydrate_kinds,
     explicit_parse_ready,
     parsed_content_md_exists,
+    block_hub_document_binary_materialize,
     raise_if_hub_document_blocked_from_inline,
 )
 from app.platform.attachments.storage import is_inline_provider_file_id
@@ -470,7 +471,7 @@ def materialize_attachments(
             if key:
                 seen.add(key)
         else:
-            raise_if_hub_document_blocked_from_inline(item)
+            block_hub_document_binary_materialize(item)
             parts = materialize_attachment(
                 item,
                 chat_id=chat_id,
@@ -655,7 +656,7 @@ def _materialize_attachment_parts_for_message(
                 parts.append(Content.from_text(hydrate_text))
             already_full_inlined.add(key)
             continue
-        raise_if_hub_document_blocked_from_inline(item)
+        block_hub_document_binary_materialize(item)
         if key in existing_full and not _should_rematerialize_from_disk(item, caps):
             preserved = _existing_full_parts_for_item(message, item)
             if preserved:

@@ -42,7 +42,7 @@ from app.platform.chat.title_service import maybe_schedule_chat_title_generation
 from app.platform.chat.user_message_commit import build_user_maf_message, persist_user_maf_message
 from app.platform.attachments.service import AttachmentService
 from app.platform.llm.chat_model import resolve_chat_model
-from app.platform.llm.stream_errors import user_facing_stream_error
+from app.platform.llm.stream_errors import is_leaked_model_service_text, user_facing_stream_error
 from app.platform.chat.run_manager import get_run_manager
 from app.platform.agent.plugin_registry import (
     run_plugin_end,
@@ -1018,6 +1018,10 @@ class StreamTurnAccumulator:
         self._text_buffer = ""
 
     def _append_text(self, chunk: str) -> None:
+        if is_leaked_model_service_text(chunk):
+            return
+        if self._text_buffer and is_leaked_model_service_text(self._text_buffer + chunk):
+            return
         if not self._text_buffer:
             self._text_buffer = chunk
             return

@@ -17,7 +17,7 @@ def test_should_hydrate_deepseek_pdf_when_parse_ready(monkeypatch):
         "parse_status": "ready",
     }
     monkeypatch.setattr(
-        "app.platform.attachments.materialize.parsed_artifact_exists",
+        "app.platform.attachments.source.parsed_artifact_exists",
         lambda *_args, **_kwargs: True,
     )
     assert should_hydrate_parsed_document(item, caps, chat_id=chat_id) is True
@@ -61,7 +61,7 @@ def test_materialize_hydrate_emits_manifest_not_raster(monkeypatch):
     }
 
     monkeypatch.setattr(
-        "app.platform.attachments.materialize.parsed_artifact_exists",
+        "app.platform.attachments.source.parsed_artifact_exists",
         lambda _chat_id, _att_id, key: key == "content_md",
     )
     parts = materialize_attachments(

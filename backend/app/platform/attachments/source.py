@@ -115,12 +115,30 @@ def raise_if_hub_document_blocked_from_inline(item: Any) -> None:
     kind = attachment_document_kind(item)
     if kind not in document_hydrate_kinds():
         return
+    filename = str(_item_attr(item, "filename") or "attachment")
     if not explicit_parse_ready(item):
-        return
+        raise HubDocumentMaterializeError(
+            f"Hub document «{filename}» is not parsed yet. "
+            "Wait until Document Hub shows Ready, then @ reference again."
+        )
     if parsed_content_md_exists(item, chat_id=None):
         return
-    filename = str(_item_attr(item, "filename") or "attachment")
     raise HubDocumentMaterializeError(
         f"Hub document «{filename}» is marked parse-ready but parsed markdown is missing. "
         "Re-run parse in Document Hub, then @ reference again."
+    )
+
+
+def block_hub_document_binary_materialize(item: Any) -> None:
+    """Never inline Hub originals (PDF bytes / raster) — hydrate + doc tools only."""
+    if not is_hub_materialize_item(item):
+        return
+    kind = attachment_document_kind(item)
+    if kind not in document_hydrate_kinds():
+        return
+    raise_if_hub_document_blocked_from_inline(item)
+    filename = str(_item_attr(item, "filename") or "attachment")
+    raise HubDocumentMaterializeError(
+        f"Hub document «{filename}» must use parse hydrate (attachment_grep / attachment_read), "
+        "not inline file bytes."
     )

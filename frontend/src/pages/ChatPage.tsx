@@ -95,6 +95,7 @@ import {
 } from '../lib/attachmentMentions'
 import { formatApiError } from '../lib/apiErrorMessage'
 import { formatUserFacingError } from '../lib/userFacingError'
+import { splitAssistantStreamLeak } from '../lib/streamTextLeak'
 import {
   applyStreamArtifact,
   applyStreamReasoning,
@@ -254,6 +255,11 @@ export function ChatPage() {
   const [forkingChat, setForkingChat] = useState(false)
   const [deletingChatIds, setDeletingChatIds] = useState<string[]>([])
   const chatBootstrapTaskRef = useRef(new Map<string, Promise<string | null>>())
+  const chatBootstrapGenRef = useRef(new Map<string, number>())
+  const sendInFlightRef = useRef(false)
+  const lastSendAttemptRef = useRef<{ key: string; at: number } | null>(null)
+  const [sendSubmitting, setSendSubmitting] = useState(false)
+  const [chatBootstrapActive, setChatBootstrapActive] = useState(false)
   const [forkBannerByChatId, setForkBannerByChatId] = useState<Record<string, ForkBannerState>>({})
   const messagesScrollRef = useRef<HTMLDivElement>(null)
   const pinToBottomRef = useRef(true)
@@ -301,7 +307,6 @@ export function ChatPage() {
   const activeAgentId = routeAgentId ?? selectedId
   const session = getAgentSession(sessions, activeAgentId)
   const {
-    initialized: sessionInitialized,
     chatId,
     warmupStatus,
     messages,
@@ -347,7 +352,8 @@ export function ChatPage() {
 
   const turnSyncHint =
     turnSyncStatusLabel(turnSyncPhase) ??
-    (loading && warmupStatus === 'connecting' ? 'Connecting tools…' : null)
+    (chatBootstrapActive && !loading ? 'Preparing session…' : null) ??
+    (warmupStatus === 'connecting' && !loading && chatId ? 'Connecting tools…' : null)
 
   const navAgentState = (location.state as { agent?: Agent } | null)?.agent ?? null
 
@@ -364,7 +370,6 @@ export function ChatPage() {
   const isProposalComposer = sidebarAgent?.slug === PROPOSAL_COMPOSER_SLUG
   const isYlWorker2 = sidebarAgent?.slug === YL_WORKER2_SLUG
   const showChat = activeAgentId != null && sidebarAgent != null
-  const isStandby = sessionInitialized && chatId === null && !chatSessionLoading
   /**
    * Centered greeting + composer until the first message exists.
    * Decoupled from chatId / warmup so early bootstrap does not jump layout.
@@ -741,6 +746,20 @@ export function ChatPage() {
     if (pending) await pending
   }, [])
 
+  const resolveReadyChatId = useCallback(
+    async (agentId: string): Promise<string | null> => {
+      await waitForChatBootstrap(agentId)
+      const fromSession = getAgentSession(sessionsRef.current, agentId).chatId
+      if (fromSession) return fromSession
+      try {
+        return await ensureChatId(agentId)
+      } catch {
+        return null
+      }
+    },
+    [ensureChatId, waitForChatBootstrap],
+  )
+
   const resolveChatIdForComposer = useCallback(
     async (agentId: string): Promise<string> => {
       await waitForChatBootstrap(agentId)
@@ -810,10 +829,20 @@ export function ChatPage() {
     }
   }, [discardVisibleChatAttachments, resetProposalPanel, patchSession])
 
+  const invalidateChatBootstrap = useCallback((agentId: string) => {
+    const next = (chatBootstrapGenRef.current.get(agentId) ?? 0) + 1
+    chatBootstrapGenRef.current.set(agentId, next)
+    chatBootstrapTaskRef.current.delete(agentId)
+  }, [])
+
   const createAndOpenChat = useCallback(
-    async (agentId: string, options?: { preserveInput?: boolean; background?: boolean }) => {
+    async (
+      agentId: string,
+      options?: { preserveInput?: boolean; background?: boolean; bootstrapGen?: number },
+    ) => {
       const current = getAgentSession(sessionsRef.current, agentId)
       const background = options?.background === true
+      const bootstrapGen = options?.bootstrapGen
       if (current.chatId) {
         streamRegistryRef.current.abort(current.chatId)
       }
@@ -838,6 +867,24 @@ export function ChatPage() {
       }
       try {
         const chat = await api.createChat(agentId)
+        const bootstrapStale =
+          bootstrapGen != null && chatBootstrapGenRef.current.get(agentId) !== bootstrapGen
+        if (bootstrapStale) {
+          const latest = getAgentSession(sessionsRef.current, agentId)
+          if (!latest.chatId) {
+            streamRegistryRef.current.bindChat(chat.id, agentId)
+            patchSession(agentId, {
+              chatId: chat.id,
+              messages: background ? latest.messages : [],
+              chatSessionLoading: false,
+              initialized: true,
+              warmupStatus: 'idle',
+              error: null,
+              contextUsage: null,
+            })
+          }
+          return chat.id
+        }
         streamRegistryRef.current.bindChat(chat.id, agentId)
         patchSession(agentId, {
           chatId: chat.id,
@@ -915,6 +962,59 @@ export function ChatPage() {
     [loadChat, patchSession],
   )
 
+  /** Create empty chat + MCP warmup (deduped per agent while in flight). */
+  const bootstrapChatSession = useCallback(
+    async (
+      agentId: string,
+      options?: { preserveInput?: boolean; background?: boolean },
+    ): Promise<string | null> => {
+      const inFlight = chatBootstrapTaskRef.current.get(agentId)
+      if (inFlight) {
+        return inFlight
+      }
+
+      const task = (async (): Promise<string | null> => {
+        const bootstrapGen = chatBootstrapGenRef.current.get(agentId) ?? 0
+        setChatBootstrapActive(true)
+        setHistoryOpen(false)
+        proposalFetchKeyRef.current = null
+        fulfillment.resetFetchKey()
+        try {
+          const newChatId = await createAndOpenChat(agentId, { ...options, bootstrapGen })
+          const sessionAfterCreate = getAgentSession(sessionsRef.current, agentId)
+          const resolvedChatId = sessionAfterCreate.chatId ?? newChatId
+          if ((chatBootstrapGenRef.current.get(agentId) ?? 0) !== bootstrapGen) {
+            return resolvedChatId
+          }
+          if (newChatId) {
+            void startChatWarmup(agentId, newChatId)
+          }
+          patchSession(agentId, {
+            proposalPanelTab: 'preview',
+            proposalPanelCollapsed: isProposalComposer ? false : true,
+            ...fulfillment.newChatPatch(),
+          })
+          return resolvedChatId
+        } catch {
+          /* error patched in createAndOpenChat */
+          return null
+        } finally {
+          setChatBootstrapActive(false)
+        }
+      })()
+
+      chatBootstrapTaskRef.current.set(agentId, task)
+      try {
+        return await task
+      } finally {
+        if (chatBootstrapTaskRef.current.get(agentId) === task) {
+          chatBootstrapTaskRef.current.delete(agentId)
+        }
+      }
+    },
+    [createAndOpenChat, fulfillment, isProposalComposer, patchSession, startChatWarmup],
+  )
+
   const activateAgent = useCallback(
     async (agent: Agent) => {
       const sameAgent = agent.id === selectedId
@@ -934,6 +1034,15 @@ export function ChatPage() {
       setHistoryOpen(false)
       try {
         await loadAgentStandby(agent.id)
+        const afterLoad = getAgentSession(sessionsRef.current, agent.id)
+        if (!afterLoad.chatId) {
+          void bootstrapChatSession(agent.id, { preserveInput: false, background: true })
+        } else if (
+          afterLoad.warmupStatus !== 'ready' &&
+          afterLoad.warmupStatus !== 'connecting'
+        ) {
+          void startChatWarmup(agent.id, afterLoad.chatId)
+        }
       } catch (e) {
         patchSession(agent.id, {
           chatSessionLoading: false,
@@ -941,7 +1050,7 @@ export function ChatPage() {
         })
       }
     },
-    [loadAgentStandby, patchSession, selectedId],
+    [bootstrapChatSession, loadAgentStandby, patchSession, selectedId, startChatWarmup],
   )
 
   const loadAgents = useCallback(async (options?: { autoSelect?: boolean }) => {
@@ -1176,6 +1285,7 @@ export function ChatPage() {
   const composerCanSend =
     !loading &&
     !chatSessionLoading &&
+    !sendSubmitting &&
     !stagedUploading &&
     !stagedParsing &&
     (input.trim().length > 0 || stagedReadyCount > 0)
@@ -1546,9 +1656,6 @@ export function ChatPage() {
 
   const handleAttachFilesClick = () => {
     if (loading || chatSessionLoading) return
-    if (isStandby) {
-      void beginConversationFromStandby()
-    }
     fileInputRef.current?.click()
   }
 
@@ -1569,9 +1676,6 @@ export function ChatPage() {
     event.preventDefault()
     setComposerDragOver(false)
     if (loading || chatSessionLoading) return
-    if (isStandby) {
-      void beginConversationFromStandby()
-    }
     const files = Array.from(event.dataTransfer.files ?? [])
     for (const file of files) {
       uploadToLibrary(file)
@@ -1591,18 +1695,12 @@ export function ChatPage() {
     const files = readPastedAttachmentFiles(event.clipboardData)
     if (files.length === 0) return
     event.preventDefault()
-    if (isStandby) {
-      void beginConversationFromStandby()
-    }
     for (const file of files) {
       uploadToLibrary(file)
     }
   }
 
   const handleComposerInputChange = (value: string) => {
-    if (selectedId && !chatId && value.length > 0) {
-      void beginConversationFromStandby()
-    }
     setInputForSelected(value)
   }
 
@@ -1641,87 +1739,115 @@ export function ChatPage() {
   }
 
   const send = async () => {
-    if (!selectedId || loading) return
+    if (!selectedId || loading || sendInFlightRef.current) return
+    sendInFlightRef.current = true
+    setSendSubmitting(true)
     const agentId = selectedId
+    try {
     const agentSlug = agents.find((a) => a.id === agentId)?.slug
     const composer = agentSlug === PROPOSAL_COMPOSER_SLUG
     const ylWorker = agentSlug === YL_WORKER2_SLUG
     let currentSession = getAgentSession(sessionsRef.current, agentId)
+    const readyStagedIds = stagedAttachmentIdsRef.current.filter((id) => {
+      const row = chatAttachmentsRef.current.find((item) => item.id === id)
+      return row != null && isAttachmentReady(row)
+    })
+    const text = currentSession.input.trim()
+    if (!text && readyStagedIds.length === 0) return
+
     if (!currentSession.chatId) {
       try {
-        await beginConversationFromStandby()
+        const resolved = await resolveReadyChatId(agentId)
+        if (!resolved) {
+          patchSession(agentId, {
+            error: 'Could not start a conversation. Try again.',
+          })
+          return
+        }
       } catch {
         return
       }
       currentSession = getAgentSession(sessionsRef.current, agentId)
     }
-    const existingChatId = currentSession.chatId
-    const text = currentSession.input.trim()
-    const readyStagedIds = stagedAttachmentIdsRef.current.filter((id) => {
-      const row = chatAttachmentsRef.current.find((item) => item.id === id)
-      return row != null && isAttachmentReady(row)
-    })
-    if (!text && readyStagedIds.length === 0) return
-
-    patchSession(agentId, {
-      input: '',
-      loading: true,
-      proposalTurnSyncing: false,
-      turnSyncPhase: null,
-      error: null,
-    })
-    pinToBottomRef.current = true
-
-    let activeChatId: string
-    try {
-      activeChatId = existingChatId ?? (await resolveChatIdForComposer(agentId))
-    } catch (e) {
+    const activeChatId = currentSession.chatId
+    if (!activeChatId) {
       patchSession(agentId, {
-        loading: false,
-        error: e instanceof Error ? e.message : 'Failed to start conversation',
+        error: 'Could not start a conversation. Try again.',
       })
       return
     }
 
-    if (!existingChatId) {
-      startChatWarmup(agentId, activeChatId)
+    const sendFingerprint = `${activeChatId}\0${text}\0${readyStagedIds.join(',')}`
+    const sendAttemptAt = Date.now()
+    const lastSendAttempt = lastSendAttemptRef.current
+    if (
+      lastSendAttempt &&
+      lastSendAttempt.key === sendFingerprint &&
+      sendAttemptAt - lastSendAttempt.at < 2500
+    ) {
+      return
     }
+    lastSendAttemptRef.current = { key: sendFingerprint, at: sendAttemptAt }
 
+    void startChatWarmup(agentId, activeChatId)
     streamRegistryRef.current.bindChat(activeChatId, agentId)
-
-    const pendingReload = reloadInFlightRef.current.get(activeChatId)
-    if (pendingReload) {
-      try {
-        await pendingReload
-      } catch {
-        /* ignore reload failure */
-      }
-    }
 
     const previousStream = streamRegistryRef.current.get(activeChatId)
     streamRegistryRef.current.abort(activeChatId)
 
+    const pendingReload = reloadInFlightRef.current.get(activeChatId)
+    if (pendingReload) {
+      void pendingReload.catch(() => {})
+    }
     if (
       previousStream?.streamIdleSeen &&
       !previousStream.reloadedAfterStream &&
       !previousStream.messagesSyncedFromDone
     ) {
-      try {
-        await reloadMessagesAfterStream(agentId, activeChatId)
+      void reloadMessagesAfterStream(agentId, activeChatId).then(() => {
         previousStream.reloadedAfterStream = true
-      } catch {
-        /* ignore reload failure */
-      }
+      })
     }
 
-    // Drop only active SSE placeholders from an aborted/incomplete stream.
-    patchSession(agentId, (prev) => ({
-      messages: prev.messages.filter((msg) => !isActiveStreamPlaceholder(msg)),
-    }))
+    const optimisticId = `tmp-${Date.now()}`
+    pinToBottomRef.current = true
+    patchSession(agentId, (prev) => {
+      const nextSequence = prev.messages.reduce((max, row) => Math.max(max, row.sequence), 0) + 1
+      const optimistic: Message = {
+        id: optimisticId,
+        chat_id: activeChatId,
+        role: 'user',
+        message_type: 'text',
+        content: text,
+        metadata: {},
+        parent_id: null,
+        sequence: nextSequence,
+        created_at: new Date().toISOString(),
+      }
+      return {
+        input: '',
+        loading: true,
+        proposalTurnSyncing: false,
+        turnSyncPhase: null,
+        error: null,
+        messages: [
+          ...prev.messages.filter((msg) => !isActiveStreamPlaceholder(msg)),
+          optimistic,
+        ],
+      }
+    })
+
+    const failSend = (errorMessage: string) => {
+      patchSession(agentId, (prev) => ({
+        loading: false,
+        input: text,
+        error: errorMessage,
+        messages: prev.messages.filter((msg) => msg.id !== optimisticId),
+      }))
+    }
 
     let attachmentRows = readyAttachments(chatAttachmentsRef.current)
     if (
-      existingChatId &&
       attachmentRows.length === 0 &&
       chatAttachmentsRef.current.length === 0 &&
       (stagedAttachmentIdsRef.current.length > 0 || text.includes('@'))
@@ -1730,17 +1856,14 @@ export function ChatPage() {
         const rows = await api.listChatAttachments(activeChatId)
         const latestChatId = getAgentSession(sessionsRef.current, agentId).chatId
         if (latestChatId !== activeChatId) {
-          patchSession(agentId, { loading: false })
+          failSend('Conversation changed while sending. Try again.')
           return
         }
         chatAttachmentsRef.current = rows
         setChatAttachments(rows)
         attachmentRows = rows
       } catch (e) {
-        patchSession(agentId, {
-          loading: false,
-          error: formatApiError(e, 'Failed to load reference materials'),
-        })
+        failSend(formatApiError(e, 'Failed to load reference materials'))
         return
       }
     } else {
@@ -1752,10 +1875,7 @@ export function ChatPage() {
       return row != null && (row.upload_status === 'uploading' || isPendingAttachmentId(row.id))
     })
     if (stillUploadingStaged) {
-      patchSession(agentId, {
-        loading: false,
-        error: 'Wait for attachment uploads to finish before sending.',
-      })
+      failSend('Wait for attachment uploads to finish before sending.')
       return
     }
 
@@ -1766,10 +1886,7 @@ export function ChatPage() {
     const mentionIds = parseAttachmentMentionIds(text, mentionAttachments)
     const attachmentIds = mergeAttachmentIdsForSend(readyStagedIdsForSend, mentionIds)
     if (attachmentIds.length > attachmentLimits.max_files_per_message) {
-      patchSession(agentId, {
-        loading: false,
-        error: `At most ${attachmentLimits.max_files_per_message} attachments per message`,
-      })
+      failSend(`At most ${attachmentLimits.max_files_per_message} attachments per message`)
       return
     }
 
@@ -1780,55 +1897,43 @@ export function ChatPage() {
         mentionAttachments,
       )
       if (!att) {
-        patchSession(agentId, {
-          loading: false,
-          error: 'Referenced attachment was not found in this chat',
-        })
+        failSend('Referenced attachment was not found in this chat')
         return
       }
       const compat = isAttachmentReferenceCompatible(att)
       if (!compat.compatible) {
-        patchSession(agentId, {
-          loading: false,
-          error: compat.reason ?? 'Referenced attachment is not compatible with the current mode',
-        })
+        failSend(compat.reason ?? 'Referenced attachment is not compatible with the current mode')
         return
       }
     }
 
-    patchSession(agentId, (prev) => {
-      const nextSequence = prev.messages.reduce((max, row) => Math.max(max, row.sequence), 0) + 1
+    if (attachmentIds.length > 0) {
       const referenced = [
         ...attachmentRows.filter((row) => attachmentIds.includes(row.id)),
         ...mentionAttachments.filter(
           (row) => attachmentIds.includes(row.id) && !attachmentRows.some((a) => a.id === row.id),
         ),
       ]
-      const optimistic: Message = {
-        id: `tmp-${Date.now()}`,
-        chat_id: activeChatId,
-        role: 'user',
-        message_type: 'text',
-        content: text,
-        metadata:
-          referenced.length > 0
+      patchSession(agentId, (prev) => ({
+        messages: prev.messages.map((msg) =>
+          msg.id === optimisticId
             ? {
-                attachments: referenced.map((item) => ({
-                  id: item.id,
-                  filename: item.filename,
-                  mime_type: item.mime_type,
-                  size_bytes: item.size_bytes,
-                  provider: item.provider,
-                  provider_file_id: item.provider_file_id,
-                })),
+                ...msg,
+                metadata: {
+                  attachments: referenced.map((item) => ({
+                    id: item.id,
+                    filename: item.filename,
+                    mime_type: item.mime_type,
+                    size_bytes: item.size_bytes,
+                    provider: item.provider,
+                    provider_file_id: item.provider_file_id,
+                  })),
+                },
               }
-            : {},
-        parent_id: null,
-        sequence: nextSequence,
-        created_at: new Date().toISOString(),
-      }
-      return { messages: [...prev.messages, optimistic] }
-    })
+            : msg,
+        ),
+      }))
+    }
     setStagedAttachmentIds([])
     stagedAttachmentIdsRef.current = []
 
@@ -1932,6 +2037,13 @@ export function ChatPage() {
               handle.segmentText = chunk
             } else if (chunk) {
               handle.segmentText += chunk
+            }
+            const leaked = splitAssistantStreamLeak(handle.segmentText)
+            if (leaked.leakedError) {
+              handle.segmentText = leaked.display
+              patchStreamSession({
+                error: formatUserFacingError(leaked.leakedError, 'Model request failed'),
+              })
             }
             patchStreamSession((prev) => ({
               messages: applyStreamText(prev.messages, activeChatId, handle.segmentText),
@@ -2102,73 +2214,58 @@ export function ChatPage() {
         streamRegistryRef.current.delete(activeChatId)
       }
     }
+    } finally {
+      sendInFlightRef.current = false
+      setSendSubmitting(false)
+    }
   }
 
-  const bootstrapChatSession = useCallback(
-    async (
-      agentId: string,
-      options?: { preserveInput?: boolean; background?: boolean },
-    ): Promise<string | null> => {
-      const inFlight = chatBootstrapTaskRef.current.get(agentId)
-      if (inFlight) {
-        return inFlight
-      }
-
-      const task = (async (): Promise<string | null> => {
-        setHistoryOpen(false)
-        proposalFetchKeyRef.current = null
-        fulfillment.resetFetchKey()
-        try {
-          const newChatId = await createAndOpenChat(agentId, options)
-          if (newChatId) {
-            startChatWarmup(agentId, newChatId)
-          }
-          patchSession(agentId, {
-            proposalPanelTab: 'preview',
-            proposalPanelCollapsed: isProposalComposer ? false : true,
-            ...fulfillment.newChatPatch(),
-          })
-          return newChatId ?? getAgentSession(sessionsRef.current, agentId).chatId
-        } catch {
-          /* error patched in createAndOpenChat */
-          return null
-        }
-      })()
-
-      chatBootstrapTaskRef.current.set(agentId, task)
-      try {
-        return await task
-      } finally {
-        if (chatBootstrapTaskRef.current.get(agentId) === task) {
-          chatBootstrapTaskRef.current.delete(agentId)
-        }
-      }
-    },
-    [createAndOpenChat, fulfillment, isProposalComposer, patchSession, startChatWarmup],
-  )
-
-  const startNewChat = useCallback(async () => {
+  const startNewChat = useCallback(() => {
     if (!selectedId || loading || chatSessionLoading) return
-    await bootstrapChatSession(selectedId)
-  }, [bootstrapChatSession, chatSessionLoading, loading, selectedId])
-
-  const beginConversationFromStandby = useCallback(async (): Promise<string | null> => {
-    const agentId = activeAgentId
-    if (!agentId || loading || chatSessionLoading) return null
+    const agentId = selectedId
     const current = getAgentSession(sessionsRef.current, agentId)
-    if (current.chatId) return current.chatId
-    return bootstrapChatSession(agentId, { preserveInput: true, background: true })
-  }, [activeAgentId, bootstrapChatSession, chatSessionLoading, loading])
+    if (current.chatId) {
+      streamRegistryRef.current.abort(current.chatId)
+    }
+    // Empty bootstrapped session: reset composer only, skip duplicate create + MCP warmup.
+    if (current.chatId && current.messages.length === 0 && !loading) {
+      patchSession(agentId, {
+        input: '',
+        error: null,
+        pendingAttachments: [],
+        expandedArtifact: null,
+        ...fulfillment.newChatPatch(),
+      })
+      discardVisibleChatAttachments()
+      setStagedAttachmentIds([])
+      stagedAttachmentIdsRef.current = []
+      if (current.warmupStatus !== 'ready' && current.warmupStatus !== 'connecting') {
+        void startChatWarmup(agentId, current.chatId)
+      }
+      return
+    }
+    invalidateChatBootstrap(agentId)
+    enterStandbyMode(agentId)
+    void bootstrapChatSession(agentId, { preserveInput: false, background: true })
+  }, [
+    bootstrapChatSession,
+    chatSessionLoading,
+    discardVisibleChatAttachments,
+    enterStandbyMode,
+    fulfillment,
+    invalidateChatBootstrap,
+    loading,
+    patchSession,
+    selectedId,
+    startChatWarmup,
+  ])
 
   const handleOpenHubImport = useCallback(async () => {
     const agentId = activeAgentId
     if (!agentId || loading || chatSessionLoading || hubImportBootstrapping) return
     setHubImportBootstrapping(true)
     try {
-      let targetChatId = chatId
-      if (!targetChatId) {
-        targetChatId = await beginConversationFromStandby()
-      }
+      let targetChatId = chatId ?? (await resolveReadyChatId(agentId))
       if (!targetChatId) {
         patchSession(agentId, { error: 'Could not start a conversation. Try again.' })
         return
@@ -2181,12 +2278,12 @@ export function ChatPage() {
     }
   }, [
     activeAgentId,
-    beginConversationFromStandby,
     chatId,
     chatSessionLoading,
     hubImportBootstrapping,
     loading,
     patchSession,
+    resolveReadyChatId,
   ])
 
   const handleHubImported = useCallback(
@@ -2497,11 +2594,16 @@ export function ChatPage() {
                         className="chat-session-loading"
                       />
                     ) : showStandbyPanel ? (
-                      <ChatStandbyPanel
-                        agentSlug={sidebarAgent.slug}
-                        agentName={formatAgentLabel(sidebarAgent)}
-                        agentDescription={sidebarAgent.description}
-                      />
+                      <>
+                        <ChatStandbyPanel
+                          agentSlug={sidebarAgent.slug}
+                          agentName={formatAgentLabel(sidebarAgent)}
+                          agentDescription={sidebarAgent.description}
+                        />
+                        {turnSyncHint ? (
+                          <p className="chat-standby-status">{turnSyncHint}</p>
+                        ) : null}
+                      </>
                     ) : (
                       <>
                         {messages.length === 0 && (
@@ -2656,6 +2758,7 @@ export function ChatPage() {
                             }
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault()
+                              if (sendInFlightRef.current) return
                               if (composerCanSend) void send()
                             }
                           }}

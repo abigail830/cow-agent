@@ -32,6 +32,9 @@ def attachment_metadata(att: Any, *, chat_id: uuid.UUID | None = None) -> dict[s
     if _is_hub_attachment_row(att):
         payload["source"] = "hub_item"
         payload["user_id"] = str(att.user_id)
+        folder_id = getattr(att, "folder_id", None)
+        if folder_id is not None:
+            payload["folder_id"] = str(folder_id)
     content_hash = getattr(att, "content_hash", None)
     if content_hash:
         payload["content_hash"] = content_hash
