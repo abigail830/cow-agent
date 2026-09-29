@@ -23,9 +23,9 @@ export function importsToMentionAttachments(
         size_bytes: 0,
         provider: 'hub',
         provider_file_id: imp.ref_id,
-        parse_status: imp.parse_status ?? 'ready',
-        upload_status: 'ready',
-      } as ChatAttachment)
+        created_at: null,
+        parse_status: 'ready',
+      })
     }
   }
   return out

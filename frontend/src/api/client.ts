@@ -421,7 +421,6 @@ export const api = {
       clientPayload: JSON.stringify({ user_id: prepare.user_id, item_id: prepare.item_id }),
       contentType: file.type || 'application/octet-stream',
       multipart: file.size > 5 * 1024 * 1024,
-      fetch: (url, options) => fetch(url, { ...options, credentials: 'include' }),
     })
 
     return request<HubItem>(`/document-hub/items/${prepare.item_id}/complete-upload`, {

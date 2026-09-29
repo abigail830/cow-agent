@@ -8,7 +8,6 @@ export function hubItemPreviewReady(item: HubItem): boolean {
 }
 
 export function hubItemShowsParseDrawer(item: HubItem): boolean {
-  const status = item.parse_status ?? 'pending'
   return !hubItemPreviewReady(item)
 }
 
