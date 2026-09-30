@@ -56,6 +56,9 @@ const UDOC_MIME_TO_EXT: Record<string, string> = {
   'image/svg+xml': '.svg',
 }
 
+/** Legacy OLE binaries — udoc only supports OOXML (.xlsx etc.), not .xls/.doc/.ppt. */
+const LEGACY_OFFICE_EXTENSIONS = new Set(['.xls', '.doc', '.ppt'])
+
 const UDOC_PREVIEW_ARTIFACT_KINDS = new Set<ArtifactKind>([
   'content_document',
   'proposal_word',
@@ -109,11 +112,19 @@ export function isMarkdownFilenameOrFormat(filename: string, format?: string | n
 }
 
 /** True when the original bytes should render in udoc (WASM viewer). */
+export function isLegacyOfficeBinary(filename: string, mimeType?: string | null): boolean {
+  const ext = fileExtension(filename)
+  if (ext && LEGACY_OFFICE_EXTENSIONS.has(ext)) return true
+  const mime = (mimeType ?? '').trim().toLowerCase()
+  return mime === 'application/vnd.ms-excel' || mime === 'application/msword' || mime === 'application/vnd.ms-powerpoint'
+}
+
 export function isUdocSupportedDocument(
   filename: string,
   mimeType?: string | null,
   format?: string | null,
 ): boolean {
+  if (isLegacyOfficeBinary(filename, mimeType)) return false
   const effective = effectiveFilenameForUdoc(filename, mimeType, format)
   const ext = fileExtension(effective)
   if (ext && UDOC_EXTENSIONS.has(ext)) return true

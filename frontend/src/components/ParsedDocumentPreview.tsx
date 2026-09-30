@@ -9,7 +9,11 @@ import {
   rewriteParsedMarkdown,
   resolveParsedMarkdownFigureSrc,
 } from '../lib/documentArtifacts'
-import { buildUdocArtifactSpec, isOriginalInlinePreviewable } from '../lib/udocPreview'
+import {
+  buildUdocArtifactSpec,
+  isLegacyOfficeBinary,
+  isOriginalInlinePreviewable,
+} from '../lib/udocPreview'
 import { prettyJson } from '../lib/prettyJson'
 import { OriginalDocumentPreviewBody } from './OriginalDocumentPreviewBody'
 import {
@@ -94,9 +98,7 @@ export function ParsedDocumentPreview({
   closeIcon,
 }: Props) {
   const hasPageIndex = artifacts.pageindex_json
-  const [tab, setTab] = useState<ParsedDocumentPreviewTab>(() =>
-    artifacts.content_md ? 'parsed' : 'original',
-  )
+  const [tab, setTab] = useState<ParsedDocumentPreviewTab>('original')
   const [parsedContent, setParsedContent] = useState<string | null>(null)
   const [parsedFigureMeta, setParsedFigureMeta] = useState<ParsedFigureMeta | undefined>(undefined)
   const [metaContent, setMetaContent] = useState<string | null>(null)
@@ -125,7 +127,7 @@ export function ParsedDocumentPreview({
   )
 
   useEffect(() => {
-    setTab(artifacts.content_md ? 'parsed' : 'original')
+    setTab('original')
     setParsedContent(null)
     setParsedFigureMeta(undefined)
     setMetaContent(null)
@@ -270,7 +272,20 @@ export function ParsedDocumentPreview({
           ) : (
             <div className="documents-preview-placeholder">
               <FileText size={28} aria-hidden="true" />
-              <p>Inline preview is not available for this file type.</p>
+              <p>
+                {isLegacyOfficeBinary(title, mimeType)
+                  ? 'Original preview supports Excel .xlsx (not legacy .xls). Try the Parsed tab or download the file.'
+                  : 'Inline preview is not available for this file type.'}
+              </p>
+              {artifacts.content_md && isLegacyOfficeBinary(title, mimeType) ? (
+                <button
+                  type="button"
+                  className="documents-preview-download"
+                  onClick={() => setTab('parsed')}
+                >
+                  Open Parsed view
+                </button>
+              ) : null}
               <a className="documents-preview-download" href={downloadUrl} target="_blank" rel="noreferrer">
                 Download original
               </a>

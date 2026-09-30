@@ -16,6 +16,8 @@ export function warmUdocClient(): Promise<UDocClient> {
     clientPromise = UDocClient.create({
       disableUpdateCheck: true,
       baseUrl: udocAssetsBaseUrl(),
+      // Excel/Office layout can block on font CDN; preview does not need remote fonts.
+      googleFonts: false,
     })
   }
   return clientPromise

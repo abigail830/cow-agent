@@ -20,9 +20,13 @@ async function fetchArtifactBytes(downloadUrl: string): Promise<Uint8Array> {
   return new Uint8Array(await res.arrayBuffer())
 }
 
+function documentLoadUrl(downloadUrl: string): string {
+  return toSameOriginApiUrl(resolveApiPath(downloadUrl))
+}
+
 /**
- * In-browser Office/PDF preview via udoc (WASM). Reuses a shared UDocClient;
- * fetches file bytes in parallel with WASM init.
+ * In-browser Office/PDF preview via udoc (WASM). Reuses a shared UDocClient.
+ * Prefers URL load so udoc can stream; falls back to authenticated byte fetch.
  */
 export function UDocArtifactViewer({ spec, initialPage = null }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -40,20 +44,28 @@ export function UDocArtifactViewer({ spec, initialPage = null }: Props) {
 
     let cancelled = false
     let viewer: UDocViewer | null = null
+    const loadUrl = documentLoadUrl(downloadUrl)
 
     setStatus('loading')
     setError(null)
 
     void (async () => {
       try {
-        const [bytes, client] = await Promise.all([fetchArtifactBytes(downloadUrl), getUdocClient()])
+        const client = await getUdocClient()
         if (cancelled) return
 
         viewer = await client.createViewer({
           container,
           theme: 'light',
         })
-        await viewer.load(bytes)
+
+        try {
+          await viewer.load(loadUrl)
+        } catch {
+          const bytes = await fetchArtifactBytes(downloadUrl)
+          if (cancelled) return
+          await viewer.load(bytes)
+        }
 
         if (initialPage != null && initialPage >= 1) {
           viewer.goToPage(initialPage - 1)
