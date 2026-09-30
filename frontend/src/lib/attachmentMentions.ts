@@ -195,6 +195,26 @@ export function insertMentionIntoText(
   return { nextValue, nextCursor }
 }
 
+/** Append `@filename` tokens for attachments not already present in the composer text. */
+export function appendAttachmentMentionsToInput(
+  input: string,
+  attachments: ChatAttachment[],
+): string {
+  if (!attachments.length) return input
+  let next = input
+  for (const att of attachments) {
+    const label = captureMentionText(att)
+    const token = `@${label}`
+    if (next.includes(token)) continue
+    const altToken =
+      label !== att.filename && att.filename ? `@${att.filename}` : null
+    if (altToken && next.includes(altToken)) continue
+    const needsSpace = next.length > 0 && !/\s$/.test(next)
+    next = `${next}${needsSpace ? ' ' : ''}${token} `
+  }
+  return next
+}
+
 export function formatAttachmentTimestamp(iso: string | null | undefined): string {
   if (!iso) return ''
   const date = new Date(iso)

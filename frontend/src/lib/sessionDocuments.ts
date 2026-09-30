@@ -13,6 +13,22 @@ export function resolveAttachmentForSend(
   return mentionAttachments.find((row) => row.id === attachmentId)
 }
 
+/** Single hub import row → mention chip shape (any parse status). */
+export function hubImportRowToMentionAttachment(row: ChatDocumentImport): ChatAttachment | null {
+  if (row.source !== 'hub_item') return null
+  return {
+    id: row.ref_id,
+    chat_id: '',
+    filename: row.filename ?? 'Hub document',
+    mime_type: 'application/octet-stream',
+    size_bytes: 0,
+    provider: 'hub',
+    provider_file_id: row.ref_id,
+    created_at: null,
+    parse_status: (row.parse_status ?? 'pending') as ChatAttachment['parse_status'],
+  }
+}
+
 /** Map session import rows to mention-compatible attachment rows. */
 export function importsToMentionAttachments(
   imports: ChatDocumentImport[],

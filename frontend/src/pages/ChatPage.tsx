@@ -22,7 +22,11 @@ import { DocumentHubView } from '../components/DocumentHubView'
 import { HubFolderRouteSync } from '../components/HubFolderRouteSync'
 import { HubFoldersProvider } from '../context/HubFoldersContext'
 import type { ChatDocumentImport } from '../types/hub'
-import { importsToMentionAttachments, resolveAttachmentForSend } from '../lib/sessionDocuments'
+import {
+  hubImportRowToMentionAttachment,
+  importsToMentionAttachments,
+  resolveAttachmentForSend,
+} from '../lib/sessionDocuments'
 import { MemoryPanel } from '../components/MemoryPanel'
 import { ProposalLivePanel } from '../components/ProposalLivePanel'
 import { ProposalPanelShell, readProposalPanelWidth, type ProposalPanelTab } from '../components/ProposalPanelShell'
@@ -88,6 +92,7 @@ import { isAttachmentReferenceCompatible } from '../lib/attachmentCompat'
 import {
   detectMentionTrigger,
   filterAttachmentsForMention,
+  appendAttachmentMentionsToInput,
   captureMentionText,
   insertMentionIntoText,
   parseAttachmentMentionIds,
@@ -2298,7 +2303,20 @@ export function ChatPage() {
         return [...byRef.values()]
       })
       void loadSessionImports(importChatId)
-      if (activeAgentId) patchSession(activeAgentId, { error: null })
+      if (!activeAgentId) return
+      const mentionRows = rows
+        .map(hubImportRowToMentionAttachment)
+        .filter((row): row is ChatAttachment => row != null)
+      if (mentionRows.length > 0) {
+        const session = getAgentSession(sessionsRef.current, activeAgentId)
+        const nextInput = appendAttachmentMentionsToInput(session.input, mentionRows)
+        patchSession(activeAgentId, { input: nextInput, error: null })
+        mentionDismissedStartRef.current = null
+        setMentionTrigger(null)
+        requestAnimationFrame(() => textareaRef.current?.focus())
+      } else {
+        patchSession(activeAgentId, { error: null })
+      }
     },
     [activeAgentId, chatId, hubImportTargetChatId, loadSessionImports, patchSession],
   )
