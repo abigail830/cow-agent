@@ -24,6 +24,7 @@ import type {
   FulfillmentFormsResponse,
 } from '../types/fulfillmentForms'
 import type { ChatDocumentImport, HubFolder, HubItem } from '../types/hub'
+import { upload as blobClientUpload } from '@vercel/blob/client'
 import { API_V1 } from '../lib/apiBase'
 
 const API = API_V1
@@ -190,7 +191,6 @@ export const api = {
       return api.submitAudioCaptureMultipart(chatId, files, title)
     }
 
-    const { upload } = await import('@vercel/blob/client')
     const access = config.blob_access === 'public' ? 'public' : 'private'
     const handleUploadUrl = config.blob_upload_url?.startsWith('http')
       ? config.blob_upload_url
@@ -209,7 +209,7 @@ export const api = {
       if (!file) continue
       const attachmentId = crypto.randomUUID()
       const pathname = `chat-attachments/${chatId}/${attachmentId}`
-      await upload(pathname, file, {
+      await blobClientUpload(pathname, file, {
         access,
         handleUploadUrl,
         clientPayload: JSON.stringify({ chat_id: chatId, attachment_id: attachmentId }),
@@ -403,13 +403,12 @@ export const api = {
       }),
     })
 
-    const { upload } = await import('@vercel/blob/client')
     const access = config.blob_access === 'public' ? 'public' : 'private'
     const handleUploadUrl = config.blob_upload_url?.startsWith('http')
       ? config.blob_upload_url
       : `${API}${config.blob_upload_url ?? '/document-hub/blob-upload'}`
 
-    await upload(prepare.pathname, file, {
+    await blobClientUpload(prepare.pathname, file, {
       access,
       handleUploadUrl,
       clientPayload: JSON.stringify({ user_id: prepare.user_id, item_id: prepare.item_id }),
@@ -438,7 +437,16 @@ export const api = {
     } catch (blobErr) {
       try {
         return await api.uploadHubItemMultipart(folderId, file)
-      } catch {
+      } catch (multipartErr) {
+        const blobMsg = blobErr instanceof Error ? blobErr.message : String(blobErr)
+        const multipartMsg = multipartErr instanceof Error ? multipartErr.message : String(multipartErr)
+        if (/dynamically imported module|Loading chunk|Failed to fetch/.test(blobMsg)) {
+          throw new Error(
+            multipartMsg && multipartMsg !== blobMsg
+              ? `Upload failed (${multipartMsg}). If this persists, hard-refresh the page after deploy.`
+              : 'Upload failed after a frontend update — hard-refresh the page (Ctrl+Shift+R) and try again.',
+          )
+        }
         throw blobErr instanceof Error ? blobErr : new Error('Upload failed')
       }
     }
