@@ -1,4 +1,5 @@
 import type { ArtifactKind, ArtifactSpec } from '../types/artifact'
+import { isMarkdownFilenameOrFormat, isUdocPreviewableArtifact as specUsesUdocPreview } from './udocPreview'
 
 export function isDiagramArtifact(spec: ArtifactSpec): boolean {
   return spec.kind === 'diagram_svg'
@@ -21,16 +22,6 @@ export function isInlineDownloadArtifact(spec: ArtifactSpec): boolean {
   return spec.kind === 'proposal_word' || spec.kind === 'proposal_document'
 }
 
-const UDOC_FORMATS = new Set(['pptx', 'docx', 'pdf'])
-
-function contentDocumentFormat(spec: ArtifactSpec): string {
-  return (spec.format || '').toLowerCase()
-}
-
-function contentDocumentFilename(spec: ArtifactSpec): string {
-  return (spec.filename || '').toLowerCase()
-}
-
 /** Markdown content_document that can open as a rendered preview in the side panel. */
 export function isMarkdownPreviewableArtifact(spec: ArtifactSpec): boolean {
   if (isAudioTranscriptArtifact(spec)) {
@@ -40,21 +31,13 @@ export function isMarkdownPreviewableArtifact(spec: ArtifactSpec): boolean {
     )
   }
   if (!isContentDocumentArtifact(spec)) return false
-  const format = contentDocumentFormat(spec)
-  const name = contentDocumentFilename(spec)
-  const isMd = format === 'markdown' || format === 'md' || name.endsWith('.md')
-  if (!isMd) return false
+  if (!isMarkdownFilenameOrFormat(spec.filename, spec.format)) return false
   return Boolean(spec.content?.trim()) || Boolean(spec.download_url?.trim())
 }
 
-/** Office/PDF content_document that can open in the udoc side panel. */
+/** Office/PDF/media artifacts that open in the shared udoc side panel (see udocPreview.ts). */
 export function isUdocPreviewableArtifact(spec: ArtifactSpec): boolean {
-  if (!isContentDocumentArtifact(spec)) return false
-  if (!spec.download_url?.trim()) return false
-  const format = contentDocumentFormat(spec)
-  if (UDOC_FORMATS.has(format)) return true
-  const name = contentDocumentFilename(spec)
-  return name.endsWith('.pptx') || name.endsWith('.docx') || name.endsWith('.pdf')
+  return specUsesUdocPreview(spec)
 }
 
 export function isProposalArtifact(spec: ArtifactSpec): boolean {

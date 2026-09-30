@@ -1,16 +1,16 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArtifactDownloadIcon } from './ArtifactDownloadIcon'
 import { LoadingSpinner } from './LoadingSpinner'
 import { MarkdownContent } from './MarkdownContent'
 import { downloadArtifactFile } from '../lib/artifactDownload'
 import { resolveApiPath, toSameOriginApiUrl } from '../lib/apiBase'
-import { artifactCardSubtitle, isMarkdownPreviewableArtifact } from '../lib/artifactKinds'
+import {
+  artifactCardSubtitle,
+  isMarkdownPreviewableArtifact,
+  isUdocPreviewableArtifact,
+} from '../lib/artifactKinds'
 import type { ArtifactSpec } from '../types/artifact'
-
-const UDocArtifactViewer = lazy(async () => {
-  const mod = await import('./UDocArtifactViewer')
-  return { default: mod.UDocArtifactViewer }
-})
+import { UdocDocumentViewerPane } from './UdocDocumentViewerPane'
 
 type Props = {
   spec: ArtifactSpec
@@ -98,6 +98,7 @@ export function ContentDocumentPanel({ spec, onClose }: Props) {
   const [downloading, setDownloading] = useState(false)
   const canDownload = Boolean(spec.download_url?.trim()) || Boolean(spec.content?.trim())
   const isMarkdown = isMarkdownPreviewableArtifact(spec)
+  const isUdoc = isUdocPreviewableArtifact(spec)
 
   async function handleDownload() {
     if (!canDownload || downloading) return
@@ -159,17 +160,12 @@ export function ContentDocumentPanel({ spec, onClose }: Props) {
       <div className="artifact-side-panel-scroll artifact-side-panel-scroll-document">
         {isMarkdown ? (
           <MarkdownDocumentBody spec={spec} />
+        ) : isUdoc ? (
+          <UdocDocumentViewerPane spec={spec} />
         ) : (
-          <Suspense
-            fallback={
-              <div className="panel-loading-state" role="status">
-                <LoadingSpinner />
-                <span>Loading viewer…</span>
-              </div>
-            }
-          >
-            <UDocArtifactViewer spec={spec} />
-          </Suspense>
+          <div className="panel-loading-state" role="status">
+            <span>Inline preview is not available for this file type.</span>
+          </div>
         )}
       </div>
     </>

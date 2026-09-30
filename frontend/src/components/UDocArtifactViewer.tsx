@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { UDocClient, type UDocViewer } from '@docmentis/udoc-viewer'
+import type { UDocViewer } from '@docmentis/udoc-viewer'
 import type { ArtifactSpec } from '../types/artifact'
 import { resolveApiPath, toSameOriginApiUrl } from '../lib/apiBase'
+import { getUdocClient } from '../lib/udocClient'
 import { LoadingSpinner } from './LoadingSpinner'
 
 type Props = {
@@ -20,8 +21,8 @@ async function fetchArtifactBytes(downloadUrl: string): Promise<Uint8Array> {
 }
 
 /**
- * In-browser Office/PDF preview via udoc (WASM). Loads bytes through the
- * authenticated artifact download URL (same-origin /api rewrite).
+ * In-browser Office/PDF preview via udoc (WASM). Reuses a shared UDocClient;
+ * fetches file bytes in parallel with WASM init.
  */
 export function UDocArtifactViewer({ spec, initialPage = null }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -38,7 +39,6 @@ export function UDocArtifactViewer({ spec, initialPage = null }: Props) {
     }
 
     let cancelled = false
-    let client: UDocClient | null = null
     let viewer: UDocViewer | null = null
 
     setStatus('loading')
@@ -46,18 +46,8 @@ export function UDocArtifactViewer({ spec, initialPage = null }: Props) {
 
     void (async () => {
       try {
-        const bytes = await fetchArtifactBytes(downloadUrl)
+        const [bytes, client] = await Promise.all([fetchArtifactBytes(downloadUrl), getUdocClient()])
         if (cancelled) return
-
-        client = await UDocClient.create({
-          disableUpdateCheck: true,
-          // Self-hosted via vite copy plugin → public/udoc/
-          baseUrl: `${window.location.origin}/udoc/`,
-        })
-        if (cancelled) {
-          client.destroy()
-          return
-        }
 
         viewer = await client.createViewer({
           container,
@@ -71,7 +61,7 @@ export function UDocArtifactViewer({ spec, initialPage = null }: Props) {
 
         if (cancelled) {
           viewer.destroy()
-          client.destroy()
+          viewer = null
           return
         }
         setStatus('ready')
@@ -81,16 +71,13 @@ export function UDocArtifactViewer({ spec, initialPage = null }: Props) {
         setError(message || 'Preview failed')
         setStatus('error')
         viewer?.destroy()
-        client?.destroy()
         viewer = null
-        client = null
       }
     })()
 
     return () => {
       cancelled = true
       viewer?.destroy()
-      client?.destroy()
     }
   }, [spec.artifact_id, spec.download_url, initialPage])
 

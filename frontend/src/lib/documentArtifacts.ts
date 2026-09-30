@@ -1,5 +1,6 @@
 import type { ParsedArtifactsAvailability } from '../types'
 import { resolveApiPath } from './apiBase'
+import { isOriginalInlinePreviewable } from './udocPreview'
 import {
   attachmentOriginalUrl,
   attachmentParsedFigureUrl,
@@ -109,7 +110,7 @@ export function hubItemParsedArtifacts(item: {
   }
 }
 
-export function canPreviewOriginalMime(mimeType: string): boolean {
-  const mime = mimeType.toLowerCase()
-  return mime.startsWith('image/') || mime === 'application/pdf' || mime.startsWith('text/')
+/** @deprecated Prefer isOriginalInlinePreviewable(filename, mimeType, format). */
+export function canPreviewOriginalMime(mimeType: string, filename = '', format?: string | null): boolean {
+  return isOriginalInlinePreviewable(filename, mimeType, format)
 }

@@ -24,6 +24,7 @@ class ArtifactSpec(BaseModel):
     content: str
     filename: str
     artifact_id: str
+    mime_type: str | None = None
     download_url: str | None = None
     png_download_url: str | None = None
     png_filename: str | None = None

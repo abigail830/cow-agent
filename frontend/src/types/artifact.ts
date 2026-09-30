@@ -16,6 +16,8 @@ export type ArtifactSpec = {
   content: string
   filename: string
   artifact_id: string
+  /** Optional; improves preview when filename lacks an extension. */
+  mime_type?: string | null
   download_url?: string | null
   png_download_url?: string | null
   png_filename?: string | null

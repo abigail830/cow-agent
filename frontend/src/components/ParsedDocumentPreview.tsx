@@ -1,16 +1,17 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ExternalLink, FileText, X } from 'lucide-react'
 import type { ParsedArtifactsAvailability } from '../types'
 import type { ArtifactSpec } from '../types/artifact'
 import {
-  canPreviewOriginalMime,
   fetchParsedArtifactText,
   originalDocumentUrl,
   type ParsedDocumentRef,
   rewriteParsedMarkdown,
   resolveParsedMarkdownFigureSrc,
 } from '../lib/documentArtifacts'
+import { buildUdocArtifactSpec, isOriginalInlinePreviewable } from '../lib/udocPreview'
 import { prettyJson } from '../lib/prettyJson'
+import { OriginalDocumentPreviewBody } from './OriginalDocumentPreviewBody'
 import {
   layoutPreviewText,
   layoutTypeLabel,
@@ -20,11 +21,6 @@ import {
 import type { ParsedFigureMeta } from '../lib/parsedFigureRefs'
 import { LoadingSpinner } from './LoadingSpinner'
 import { MarkdownContent } from './MarkdownContent'
-
-const UDocArtifactViewer = lazy(async () => {
-  const mod = await import('./UDocArtifactViewer')
-  return { default: mod.UDocArtifactViewer }
-})
 
 export type ParsedDocumentPreviewTab = 'original' | 'parsed' | 'meta' | 'pageindex'
 
@@ -40,56 +36,19 @@ type Props = {
   closeIcon?: ReactNode
 }
 
-function originalPreviewSpec(ref: ParsedDocumentRef, filename: string): ArtifactSpec {
+function originalUdocSpec(ref: ParsedDocumentRef, filename: string, mimeType: string): ArtifactSpec {
   const documentId = ref.scope === 'chat' ? ref.documentId : ref.itemId
   const downloadPath =
     ref.scope === 'chat'
       ? `/chats/${ref.chatId}/attachments/${ref.documentId}/original`
       : `/document-hub/items/${ref.itemId}/original`
-  return {
-    kind: 'content_document',
+  return buildUdocArtifactSpec({
     title: filename,
-    format: 'pdf',
-    content: '',
     filename,
-    artifact_id: documentId,
-    download_url: downloadPath,
-  }
-}
-
-function OriginalDocumentPreview({
-  documentRef,
-  filename,
-  mimeType,
-}: {
-  documentRef: ParsedDocumentRef
-  filename: string
-  mimeType: string
-}) {
-  const mime = mimeType.toLowerCase()
-  const inlineUrl = originalDocumentUrl(documentRef, { inline: true })
-
-  if (mime.startsWith('image/')) {
-    return <img className="documents-preview-image" src={inlineUrl} alt={filename} />
-  }
-
-  if (mime === 'application/pdf') {
-    return (
-      <div className="documents-preview-udoc">
-        <Suspense
-          fallback={
-            <div className="documents-preview-loading">
-              <LoadingSpinner />
-            </div>
-          }
-        >
-          <UDocArtifactViewer spec={originalPreviewSpec(documentRef, filename)} />
-        </Suspense>
-      </div>
-    )
-  }
-
-  return <iframe className="documents-preview-frame" src={inlineUrl} title={filename} />
+    artifactId: documentId,
+    downloadUrl: downloadPath,
+    mimeType,
+  })
 }
 
 function PageIndexStructuredView({ data }: { data: PageIndexData }) {
@@ -225,7 +184,7 @@ export function ParsedDocumentPreview({
     }
   }, [tab, artifacts.content_md, artifacts.meta_json, documentKey, hasPageIndex])
 
-  const showOriginalPreview = tab === 'original' && canPreviewOriginalMime(mimeType)
+  const showOriginalPreview = tab === 'original' && isOriginalInlinePreviewable(title, mimeType)
 
   return (
     <div className="documents-preview-pane">
@@ -302,7 +261,12 @@ export function ParsedDocumentPreview({
           <p className="documents-preview-error">{error}</p>
         ) : tab === 'original' ? (
           showOriginalPreview ? (
-            <OriginalDocumentPreview documentRef={documentRef} filename={title} mimeType={mimeType} />
+            <OriginalDocumentPreviewBody
+              spec={originalUdocSpec(documentRef, title, mimeType)}
+              filename={title}
+              mimeType={mimeType}
+              inlineTextUrl={originalDocumentUrl(documentRef, { inline: true })}
+            />
           ) : (
             <div className="documents-preview-placeholder">
               <FileText size={28} aria-hidden="true" />

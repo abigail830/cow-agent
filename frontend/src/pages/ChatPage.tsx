@@ -36,6 +36,7 @@ import { ChatHistoryIcon } from '../components/ChatHistoryIcon'
 import { ChatMessageList } from '../components/ChatMessageList'
 import { ArtifactPanelHost } from '../components/ArtifactPanelHost'
 import { useArtifactPanel } from '../hooks/useArtifactPanel'
+import { warmUdocClient } from '../lib/udocClient'
 import { AttachmentMentionPopup } from '../components/AttachmentMentionPopup'
 import { ComposerMentionInput } from '../components/ComposerMentionInput'
 import { AttachmentParseDrawer } from '../components/AttachmentParseDrawer'
@@ -226,6 +227,11 @@ export function ChatPage() {
   const documentsOpen = workspaceView === 'documents'
   const integrationsOpen = workspaceView === 'integrations'
   const hubOpen = workspaceView === 'hub'
+
+  useEffect(() => {
+    void warmUdocClient().catch(() => undefined)
+  }, [])
+
   const [agents, setAgents] = useState<Agent[]>([])
   const [agentsLoading, setAgentsLoading] = useState(true)
   const [agentsError, setAgentsError] = useState<string | null>(null)
