@@ -34,7 +34,7 @@ def test_apply_model_compaction_defaults_keeps_profile_when_catalog_missing():
     entry = ModelEntry(
         id="gpt-test",
         label="GPT Test",
-        provider="azure_openai",
+        provider="dashscope",
         deployment="gpt-test",
     )
     resolved = apply_model_compaction_defaults(base, entry)

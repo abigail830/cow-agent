@@ -23,16 +23,12 @@ def is_openai_tool_call_id(call_id: str) -> bool:
 def call_id_incompatible_with_provider(call_id: str, provider: str) -> bool:
     if not call_id:
         return False
-    if provider == ModelProvider.AZURE_OPENAI.value:
-        return is_anthropic_tool_call_id(call_id)
     if provider in {
         ModelProvider.SILICONFLOW.value,
         ModelProvider.DASHSCOPE.value,
         ModelProvider.DEEPSEEK.value,
     }:
         return is_anthropic_tool_call_id(call_id)
-    if provider == ModelProvider.AZURE_ANTHROPIC.value:
-        return is_openai_tool_call_id(call_id)
     return False
 
 

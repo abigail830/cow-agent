@@ -23,8 +23,8 @@ def test_attachment_materialize_source_from_metadata_dict():
     assert attachment_materialize_source(item) == "hub_item"
 
 
-def test_should_hydrate_hub_pdf_even_when_claude_pdf_file_id(monkeypatch):
-    caps = attachment_capabilities(model_id="claude-sonnet-4-6", provider="azure_anthropic")
+def test_should_hydrate_hub_pdf_even_when_chat_model_uses_file_data(monkeypatch):
+    caps = attachment_capabilities(model_id="qwen3.8-max", provider="dashscope")
     user_id = uuid.uuid4()
     item = {
         "id": str(uuid.uuid4()),
@@ -41,8 +41,8 @@ def test_should_hydrate_hub_pdf_even_when_claude_pdf_file_id(monkeypatch):
     assert should_hydrate_parsed_document(item, caps, chat_id=uuid.uuid4()) is True
 
 
-def test_should_not_hydrate_chat_pdf_for_claude_file_id_without_content_md():
-    caps = attachment_capabilities(model_id="claude-sonnet-4-6", provider="azure_anthropic")
+def test_should_not_hydrate_chat_pdf_without_content_md():
+    caps = attachment_capabilities(model_id="qwen3.8-max", provider="dashscope")
     item = {
         "id": str(uuid.uuid4()),
         "filename": "doc.pdf",

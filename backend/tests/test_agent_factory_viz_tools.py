@@ -21,7 +21,7 @@ def _tool_names(tools: list) -> set[str]:
 async def test_viz_tools_omitted_when_not_in_allowed_tools():
     agent_id = UUID("00000000-0000-0000-0000-000000000002")
     mock_row = MagicMock()
-    mock_row.model_provider = "azure_anthropic"
+    mock_row.model_provider = "dashscope"
     mock_row.model_name = "claude-test"
     mock_row.name = "test-agent"
     mock_row.instructions = "test"
@@ -62,7 +62,7 @@ async def test_viz_tools_omitted_when_not_in_allowed_tools():
 async def test_viz_tools_included_when_allowed_and_sql_viz_hook_present():
     agent_id = UUID("00000000-0000-0000-0000-000000000003")
     mock_row = MagicMock()
-    mock_row.model_provider = "azure_anthropic"
+    mock_row.model_provider = "dashscope"
     mock_row.model_name = "claude-test"
     mock_row.name = "test-agent"
     mock_row.instructions = "test"

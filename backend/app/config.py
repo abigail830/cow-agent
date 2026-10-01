@@ -37,31 +37,11 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Primary chat model (Azure OpenAI)
-    azure_api_key: str = Field(validation_alias="AZURE_API_KEY")
-    azure_openai_base_url: str = Field(validation_alias="AZURE_OPENAI_BASE_URL")
-    azure_openai_api_version: str = Field(validation_alias="AZURE_OPENAI_API_VERSION")
-    azure_openai_files_api_version: str = Field(
-        default="preview",
-        validation_alias="AZURE_OPENAI_FILES_API_VERSION",
-    )
-    azure_openai_deployment: str = Field(validation_alias="AZURE_OPENAI_DEPLOYMENT")
-
-    # Platform utility model (title, compaction)
+    # Platform utility model (title, compaction; defaults to DashScope compatible-mode)
     utility_model_api_key: str | None = Field(default=None, validation_alias="UTILITY_MODEL_API_KEY")
     utility_model_base_url: str | None = Field(default=None, validation_alias="UTILITY_MODEL_BASE_URL")
     utility_model_api_version: str | None = Field(default=None, validation_alias="UTILITY_MODEL_API_VERSION")
     utility_model_deployment: str | None = Field(default=None, validation_alias="UTILITY_MODEL_DEPLOYMENT")
-
-    # Claude (Phase 1c)
-    claude_azure_api_key: str | None = Field(default=None, validation_alias="CLAUDE_AZURE_API_KEY")
-    claude_azure_foundry_endpoint: str | None = Field(
-        default=None, validation_alias="CLAUDE_AZURE_FOUNDRY_ENDPOINT"
-    )
-    claude_azure_foundry_model: str | None = Field(
-        default=None, validation_alias="CLAUDE_AZURE_FOUNDRY_MODEL"
-    )
-    claude_enable_thinking: bool = Field(default=False, validation_alias="CLAUDE_ENABLE_THINKING")
 
     # SiliconFlow (OpenAI-compatible Chat Completions — https://api.siliconflow.cn/v1)
     siliconflow_api_key: str | None = Field(default=None, validation_alias="SILICONFLOW_API_KEY")
@@ -363,8 +343,8 @@ class Settings(BaseSettings):
         return max(1, self.auth_session_ttl_hours) * 3600
 
     @field_validator(
-        "azure_openai_deployment",
         "utility_model_deployment",
+        "dashscope_default_model",
         "redis_url",
         mode="before",
     )
@@ -405,16 +385,23 @@ class Settings(BaseSettings):
         return urlunparse(rebuilt), connect_args
 
     def utility_api_key(self) -> str:
-        return self.utility_model_api_key or self.azure_api_key
+        key = self.utility_model_api_key or self.dashscope_api_key
+        if not key:
+            raise ValueError("Utility model requires UTILITY_MODEL_API_KEY or DASHSCOPE_API_KEY")
+        return key
 
     def utility_base_url(self) -> str:
-        return self.utility_model_base_url or self.azure_openai_base_url
+        return self.utility_model_base_url or self.dashscope_base_url
 
-    def utility_api_version(self) -> str:
-        return self.utility_model_api_version or self.azure_openai_api_version
+    def utility_api_version(self) -> str | None:
+        return self.utility_model_api_version
 
     def utility_deployment(self) -> str:
-        return self.utility_model_deployment or self.azure_openai_deployment
+        return (
+            self.utility_model_deployment
+            or self.dashscope_default_model
+            or "qwen3.7-flash"
+        )
 
     def attachment_gist_api_key(self) -> str | None:
         return self.attachment_gist_model_api_key or self.dashscope_api_key

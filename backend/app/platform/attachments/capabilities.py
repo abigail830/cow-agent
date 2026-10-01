@@ -34,8 +34,6 @@ class AttachmentCapabilities:
 
 
 _BY_MODEL_ID: dict[str, AttachmentCapabilities] = {
-    "gpt-5.4": AttachmentCapabilities(image_via="inline", pdf_via="file_id"),
-    "claude-sonnet-4-6": AttachmentCapabilities(image_via="file_id", pdf_via="file_id"),
     "qwen3.7-plus": AttachmentCapabilities(image_via="inline", pdf_via="file_data"),
     "qwen3.8-max": AttachmentCapabilities(image_via="inline", pdf_via="file_data"),
     "minimax-m3": AttachmentCapabilities(image_via="inline", pdf_via="raster"),
@@ -43,8 +41,6 @@ _BY_MODEL_ID: dict[str, AttachmentCapabilities] = {
 }
 
 _BY_PROVIDER: dict[str, AttachmentCapabilities] = {
-    ModelProvider.AZURE_OPENAI.value: AttachmentCapabilities(image_via="inline", pdf_via="file_id"),
-    ModelProvider.AZURE_ANTHROPIC.value: AttachmentCapabilities(image_via="file_id", pdf_via="file_id"),
     ModelProvider.DASHSCOPE.value: AttachmentCapabilities(image_via="inline", pdf_via="file_data"),
     ModelProvider.DEEPSEEK.value: AttachmentCapabilities(image_via="inline", pdf_via="raster"),
     ModelProvider.SILICONFLOW.value: AttachmentCapabilities(image_via="inline", pdf_via="raster"),
@@ -62,13 +58,9 @@ def attachment_capabilities(*, model_id: str | None = None, provider: str | None
         if key.startswith("minimax"):
             return _BY_MODEL_ID["minimax-m3"]
         if key.startswith("qwen"):
-            return _BY_MODEL_ID["qwen3.8-max"]
+            return _BY_MODEL_ID["qwen3.7-plus"]
         if key.startswith("deepseek"):
             return _BY_MODEL_ID["deepseek-flash"]
-        if key.startswith("claude"):
-            return _BY_MODEL_ID["claude-sonnet-4-6"]
-        if key.startswith("gpt"):
-            return _BY_MODEL_ID["gpt-5.4"]
     if provider:
         found = _BY_PROVIDER.get(str(provider).strip().lower())
         if found is not None:

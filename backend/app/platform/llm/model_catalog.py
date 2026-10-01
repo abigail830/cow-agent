@@ -98,10 +98,8 @@ class ModelCatalog:
 
 
 def _provider_configured(provider: str, settings: Settings) -> bool:
-    if provider == ModelProvider.AZURE_OPENAI.value:
-        return bool(settings.azure_api_key and settings.azure_openai_base_url)
-    if provider == ModelProvider.AZURE_ANTHROPIC.value:
-        return bool(settings.claude_azure_api_key and settings.claude_azure_foundry_endpoint)
+    if provider in ("azure_openai", "azure_anthropic"):
+        return False
     if provider == ModelProvider.SILICONFLOW.value:
         return bool(settings.siliconflow_api_key)
     if provider == ModelProvider.DASHSCOPE.value:

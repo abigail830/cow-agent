@@ -12,13 +12,13 @@ def test_model_catalog_loads_entries(monkeypatch, tmp_path: Path):
     catalog_path.write_text(
         yaml.dump(
             {
-                "providers": {"azure_openai": {"base_url": "https://example.openai.azure.com/openai"}},
+                "providers": {"dashscope": {"base_url": "https://dashscope.example/v1"}},
                 "models": [
                     {
-                        "id": "gpt-test",
-                        "label": "GPT Test",
-                        "provider": "azure_openai",
-                        "deployment": "gpt-test-deployment",
+                        "id": "qwen-test",
+                        "label": "Qwen Test",
+                        "provider": "dashscope",
+                        "deployment": "qwen-test-deployment",
                         "enabled": True,
                     }
                 ],
@@ -28,10 +28,10 @@ def test_model_catalog_loads_entries(monkeypatch, tmp_path: Path):
     )
     monkeypatch.setattr("app.platform.llm.model_catalog._CATALOG_PATH", catalog_path)
     catalog = reload_model_catalog()
-    entry = catalog.get("gpt-test")
+    entry = catalog.get("qwen-test")
     assert entry is not None
-    assert entry.deployment == "gpt-test-deployment"
-    assert catalog.find_by_provider_deployment("azure_openai", "gpt-test-deployment") == entry
+    assert entry.deployment == "qwen-test-deployment"
+    assert catalog.find_by_provider_deployment("dashscope", "qwen-test-deployment") == entry
 
 
 def test_model_roles_default_to_chat(monkeypatch, tmp_path: Path):
@@ -113,18 +113,18 @@ def test_list_for_role_excludes_other_roles(monkeypatch, tmp_path: Path):
 def test_resolve_default_model_id_prefers_explicit_default():
     catalog = ModelCatalog(
         models={
-            "claude-sonnet-4-6": ModelEntry(
-                id="claude-sonnet-4-6",
-                label="Claude",
-                provider="azure_anthropic",
-                deployment="claude-sonnet-4-6",
+            "qwen3.8-max": ModelEntry(
+                id="qwen3.8-max",
+                label="Qwen",
+                provider="dashscope",
+                deployment="qwen3.8-max",
             )
         },
         providers={},
     )
     resolved = catalog.resolve_default_model_id(
-        default_model="claude-sonnet-4-6",
-        model_provider="azure_anthropic",
+        default_model="qwen3.8-max",
+        model_provider="dashscope",
         model_name="other-name",
     )
-    assert resolved == "claude-sonnet-4-6"
+    assert resolved == "qwen3.8-max"

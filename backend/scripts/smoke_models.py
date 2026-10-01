@@ -14,11 +14,11 @@ from app.platform.llm.utility_models import UtilityModelRegistry
 
 async def main() -> None:
     settings = get_settings()
-    print(f"Primary deployment: {settings.azure_openai_deployment}")
+    print(f"DashScope default: {settings.dashscope_default_model}")
     print(f"Utility deployment: {settings.utility_deployment()}")
 
-    primary = await ModelProviderRegistry().smoke_test_primary()
-    print(f"Primary response: {primary!r}")
+    primary = await ModelProviderRegistry().smoke_test_dashscope()
+    print(f"DashScope response: {primary!r}")
 
     utility = await UtilityModelRegistry().smoke_test()
     print(f"Utility response: {utility!r}")

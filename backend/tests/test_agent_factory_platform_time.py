@@ -24,7 +24,7 @@ def _tool_names(tools: list) -> set[str]:
 async def test_agent_factory_injects_platform_time():
     agent_id = UUID("00000000-0000-0000-0000-000000000099")
     mock_row = MagicMock()
-    mock_row.model_provider = "azure_anthropic"
+    mock_row.model_provider = "dashscope"
     mock_row.model_name = "claude-test"
     mock_row.name = "test-agent"
     mock_row.slug = "content-studio"

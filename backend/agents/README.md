@@ -22,8 +22,8 @@ agents/
 |-------|----------|-------------|
 | `id` | yes | Slug，与目录名一致 |
 | `name` | yes | 显示名 |
-| `model_provider` | yes | `azure_openai` / `azure_anthropic` / `siliconflow` / `dashscope` / `deepseek` |
-| `default_model` | recommended | Catalog id in `backend/config/models.yaml`（如 `claude-sonnet-4-6`、`minimax-m3`） |
+| `model_provider` | yes | `siliconflow` / `dashscope` / `deepseek` |
+| `default_model` | recommended | Catalog id in `backend/config/models.yaml`（如 `qwen3.7-plus`、`minimax-m3`） |
 | `model` | no | 可选 override；deployment 字符串，支持 `${ENV_VAR}`。未写时从 `default_model` 查 catalog |
 | `mcp_servers` | no | 引用 `mcp_servers.yaml` 中的 key；可在 profile 内联 `env`（见下） |
 | `allowed_tools` | no | MAF 工具名，如 `postgres_query_data`（对应 mcp-postgres 的 `query_data`） |
@@ -62,8 +62,8 @@ hooks:
 ```yaml
 id: yl-worker1
 name: "YL-Worker-001"
-model_provider: azure_anthropic
-default_model: claude-sonnet-4-6
+model_provider: dashscope
+default_model: qwen3.7-plus
 
 # 推荐：在 profile 配置各 agent 的 MCP 环境变量（支持 ${ENV_VAR}）
 mcp_servers:
@@ -96,9 +96,9 @@ hooks:
 
 ### 模型目录（`backend/config/models.yaml`）
 
-所有可选模型的 **deployment 名称** 统一维护在 `config/models.yaml`（如 `gpt-5.4`、`claude-sonnet-4-6`、`MiniMax/MiniMax-M3`）。`.env` 只放 **API Key 和 base URL**，不再用 `*_DEFAULT_MODEL` 指定聊天模型。
+所有可选模型的 **deployment 名称** 统一维护在 `config/models.yaml`（如 `qwen3.7-plus`、`MiniMax/MiniMax-M3`）。`.env` 放各 provider 的 **API Key 和 base URL**（见 `DASHSCOPE_*` 等）。
 
-Agent profile 写 `default_model: <catalog-id>` 即可；若某环境的 Azure deployment 名与 catalog 不同，可在 profile 加 `model: your-custom-deployment` 覆盖。
+Agent profile 写 `default_model: <catalog-id>` 即可；若 deployment 名与 catalog 不同，可在 profile 加 `model: your-custom-deployment` 覆盖。
 
 ### DashScope（阿里云百炼）
 

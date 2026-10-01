@@ -11,10 +11,9 @@ from app.platform.integrations.registry import get_integration_provider, integra
 
 def _feishu_settings(**overrides: object) -> Settings:
     base = {
-        "azure_api_key": "k",
-        "azure_openai_base_url": "https://example.com",
-        "azure_openai_api_version": "2024-01-01",
-        "azure_openai_deployment": "gpt",
+        "dashscope_api_key": "k",
+        "dashscope_base_url": "https://dashscope.example/v1",
+        "dashscope_default_model": "qwen3.8-max",
         "database_url": "postgresql://example",
     }
     base.update(overrides)

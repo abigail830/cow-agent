@@ -12,10 +12,8 @@ import pytest
 
 
 def test_capabilities_by_model_id():
-    assert attachment_capabilities(model_id="gpt-5.4").pdf_via == "file_id"
-    assert attachment_capabilities(model_id="gpt-5.4").image_via == "inline"
-    assert attachment_capabilities(model_id="claude-sonnet-4-6").image_via == "file_id"
     assert attachment_capabilities(model_id="qwen3.8-max").pdf_via == "file_data"
+    assert attachment_capabilities(model_id="qwen3.8-max").image_via == "inline"
     assert attachment_capabilities(model_id="minimax-m3").pdf_via == "raster"
     assert attachment_capabilities(model_id="deepseek-flash").image_via == "inline"
     assert attachment_capabilities(model_id="deepseek-flash").pdf_via == "raster"

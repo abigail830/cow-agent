@@ -85,9 +85,9 @@ async def lifespan(app: FastAPI):
             " (synced)" if should_sync else "",
         )
         logger.info(
-            "Models: primary=%s utility=%s",
-            settings.azure_openai_deployment,
+            "Models: utility=%s (dashscope_default=%s)",
             settings.utility_deployment(),
+            settings.dashscope_default_model,
         )
     except Exception:
         logger.exception("Startup seed/profile sync failed")
@@ -132,7 +132,6 @@ def create_app() -> FastAPI:
             "status": "ok" if db_ok else "degraded",
             "database": db_ok,
             "redis": redis_ok,
-            "primary_deployment": settings.azure_openai_deployment,
             "utility_deployment": settings.utility_deployment(),
             "agent_profiles_disk": disk_slugs,
         }
@@ -142,24 +141,17 @@ def create_app() -> FastAPI:
 
     @app.get("/health/models")
     async def health_models():
-        """Smoke test primary + utility models (may incur API cost)."""
+        """Smoke test DashScope chat + utility models (may incur API cost)."""
         registry = ModelProviderRegistry()
-        primary = await registry.smoke_test_primary()
+        dashscope = await registry.smoke_test_dashscope()
         utility = await UtilityModelRegistry().smoke_test()
-        payload = {
-            "primary": {"deployment": settings.azure_openai_deployment, "response": primary[:200]},
+        return {
+            "dashscope": {
+                "deployment": settings.dashscope_default_model or settings.utility_deployment(),
+                "response": dashscope[:200],
+            },
             "utility": {"deployment": settings.utility_deployment(), "response": utility[:200]},
         }
-        if settings.claude_azure_api_key:
-            try:
-                claude = await registry.smoke_test_claude()
-                payload["claude"] = {
-                    "model": settings.claude_azure_foundry_model,
-                    "response": claude[:200],
-                }
-            except Exception as exc:
-                payload["claude"] = {"error": str(exc)}
-        return payload
 
     return app
 

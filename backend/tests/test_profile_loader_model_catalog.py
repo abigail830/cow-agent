@@ -9,9 +9,9 @@ from app.platform.agent.profile_loader import AGENTS_ROOT, load_agent_profile
 
 def test_profile_uses_catalog_deployment_when_model_omitted():
     profile = load_agent_profile(AGENTS_ROOT / "content-studio")
-    assert profile.default_model_id == "claude-sonnet-4-6"
-    assert profile.model_name == "claude-sonnet-4-6"
-    assert profile.model_provider == "azure_anthropic"
+    assert profile.default_model_id == "qwen3.7-plus"
+    assert profile.model_name == "qwen3.7-plus"
+    assert profile.model_provider == "dashscope"
 
 
 def test_profile_catalog_deployment_for_dashscope_minimax(tmp_path: Path, monkeypatch):

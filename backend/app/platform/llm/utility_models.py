@@ -11,7 +11,17 @@ from httpx import ConnectError as HttpxConnectError
 from openai import APIConnectionError
 
 from app.config import Settings, get_settings
-from app.platform.llm.model_registry import _azure_responses_base_url, _openai_compatible_base_url
+from app.platform.llm.model_registry import _openai_compatible_base_url
+
+
+def _azure_responses_base_url(base_url: str) -> str:
+    """Build Azure OpenAI Responses API base URL (.../openai/v1/) — optional utility override only."""
+    url = base_url.rstrip("/")
+    if url.endswith("/openai/v1"):
+        return f"{url}/"
+    if url.endswith("/openai"):
+        return f"{url}/v1/"
+    return url if url.endswith("/") else f"{url}/"
 
 logger = logging.getLogger(__name__)
 

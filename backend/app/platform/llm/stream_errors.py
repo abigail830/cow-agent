@@ -24,21 +24,14 @@ def user_facing_stream_error(exc: Exception | str) -> str:
     name = type(exc).__name__ if isinstance(exc, Exception) else ""
 
     if "overloaded" in lower or "overloaded_error" in lower:
-        return (
-            "Claude model service is overloaded. "
-            "Please retry later; if it persists, confirm the model is deployed on Azure with enough capacity."
-        )
+        return "Model service is overloaded. Please retry later."
     if "rate_limit" in lower or "rate limit" in lower:
         return "Rate limit exceeded. Please retry later."
     if "internal server error" in lower or "api_error" in lower:
-        return (
-            "Claude model service error (500). "
-            "Confirm CLAUDE_AZURE_FOUNDRY_MODEL matches your Azure deployment name and retry later."
-        )
+        return "Model service error (500). Please retry later or try a shorter prompt."
     if "AuthenticationError" in name or "401" in text or "Unauthorized" in text:
         return (
-            "Claude authentication failed (401). Check CLAUDE_AZURE_API_KEY and "
-            "CLAUDE_AZURE_FOUNDRY_ENDPOINT in backend/.env match your Azure resource region."
+            "Model authentication failed (401). Check the provider API key and base URL in backend/.env."
         )
     if "redis" in lower and ("connect" in lower or "connection" in lower or "nodename" in lower):
         return (

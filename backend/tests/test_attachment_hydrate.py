@@ -23,15 +23,20 @@ def test_should_hydrate_deepseek_pdf_when_parse_ready(monkeypatch):
     assert should_hydrate_parsed_document(item, caps, chat_id=chat_id) is True
 
 
-def test_should_not_hydrate_claude_pdf_file_id():
-    caps = attachment_capabilities(model_id="claude-sonnet-4-6", provider="azure_anthropic")
+def test_should_hydrate_qwen_pdf_file_data_when_parse_ready(monkeypatch):
+    caps = attachment_capabilities(model_id="qwen3.8-max", provider="dashscope")
+    chat_id = uuid.uuid4()
     item = {
         "id": str(uuid.uuid4()),
         "filename": "doc.pdf",
         "mime_type": "application/pdf",
         "parse_status": "ready",
     }
-    assert should_hydrate_parsed_document(item, caps) is False
+    monkeypatch.setattr(
+        "app.platform.attachments.source.parsed_artifact_exists",
+        lambda *_args, **_kwargs: True,
+    )
+    assert should_hydrate_parsed_document(item, caps, chat_id=chat_id) is True
 
 
 def test_materialize_hydrate_emits_manifest_not_raster(monkeypatch):

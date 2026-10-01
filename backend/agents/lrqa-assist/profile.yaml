@@ -2,8 +2,8 @@ id: lrqa-assist
 name: "AQRL"
 description: "System migration and delivery assistant — knowledge synthesis, solution and architecture design, project docs, and content output (Word, PPT, HTML slides)."
 
-model_provider: azure_anthropic
-default_model: claude-sonnet-4-6
+model_provider: dashscope
+default_model: qwen3.7-plus
 
 prompt_file: system_prompt.md
 skills_dir: skills

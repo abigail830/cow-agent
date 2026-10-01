@@ -194,13 +194,7 @@ def load_agent_profile(agent_dir: Path) -> AgentProfile:
         raise ValueError(f"Prompt file not found: {prompt_path}")
     instructions = prompt_path.read_text(encoding="utf-8").strip()
 
-    model_provider = raw.get("model_provider")
-    if not model_provider:
-        model_val = _resolve_env(str(raw.get("model") or ""))
-        if "claude" in model_val.lower():
-            model_provider = ModelProvider.AZURE_ANTHROPIC.value
-        else:
-            model_provider = ModelProvider.AZURE_OPENAI.value
+    model_provider = raw.get("model_provider") or ModelProvider.DASHSCOPE.value
     model_name = _resolve_env(str(raw.get("model") or ""))
 
     default_model_id = raw.get("default_model")
@@ -216,16 +210,14 @@ def load_agent_profile(agent_dir: Path) -> AgentProfile:
 
     if not model_name:
         settings = get_settings()
-        if model_provider == ModelProvider.AZURE_ANTHROPIC.value:
-            model_name = settings.claude_azure_foundry_model or "claude-sonnet-4-6"
-        elif model_provider == ModelProvider.SILICONFLOW.value:
+        if model_provider == ModelProvider.SILICONFLOW.value:
             model_name = settings.siliconflow_default_model or ""
         elif model_provider == ModelProvider.DASHSCOPE.value:
             model_name = settings.dashscope_default_model or ""
         elif model_provider == ModelProvider.DEEPSEEK.value:
             model_name = settings.deepseek_default_model or ""
         else:
-            model_name = settings.azure_openai_deployment
+            model_name = settings.dashscope_default_model or ""
 
     skills_dir = raw.get("skills_dir") or "skills"
     enabled_skills = raw.get("skills")

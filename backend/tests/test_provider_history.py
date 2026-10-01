@@ -37,7 +37,7 @@ def _tool_result_row(call_id: str, *, seq: int = 3) -> dict:
     }
 
 
-def test_openai_drops_anthropic_toolu_history() -> None:
+def test_dashscope_drops_anthropic_toolu_history() -> None:
     rows = [
         {
             "id": "u1",
@@ -53,7 +53,7 @@ def test_openai_drops_anthropic_toolu_history() -> None:
         _tool_result_row("toolu_01K99JDrKRK4tHTlWTMeWFSS"),
     ]
 
-    sanitized = sanitize_rows_for_provider(rows, provider=ModelProvider.AZURE_OPENAI.value)
+    sanitized = sanitize_rows_for_provider(rows, provider=ModelProvider.DASHSCOPE.value)
     assert len(sanitized) == 1
     assert sanitized[0]["message_type"] == "text"
 
@@ -62,7 +62,7 @@ def test_openai_drops_anthropic_toolu_history() -> None:
     assert messages[0].role == "user"
 
 
-def test_anthropic_drops_openai_call_history() -> None:
+def test_openai_style_call_ids_kept_on_dashscope() -> None:
     rows = [
         {
             "id": "u1",
@@ -78,10 +78,7 @@ def test_anthropic_drops_openai_call_history() -> None:
         _tool_result_row("call_abc123"),
     ]
 
-    sanitized = sanitize_rows_for_provider(rows, provider=ModelProvider.AZURE_ANTHROPIC.value)
-    assert len(sanitized) == 1
-
-    kept = sanitize_rows_for_provider(rows, provider=ModelProvider.AZURE_OPENAI.value)
+    kept = sanitize_rows_for_provider(rows, provider=ModelProvider.DASHSCOPE.value)
     assert len(kept) == 3
 
 
@@ -89,8 +86,6 @@ def test_neutral_call_ids_kept_for_both_providers() -> None:
     rows = [_tool_call_row("call-1", seq=1), _tool_result_row("call-1", seq=2)]
 
     for provider in (
-        ModelProvider.AZURE_OPENAI.value,
-        ModelProvider.AZURE_ANTHROPIC.value,
         ModelProvider.SILICONFLOW.value,
         ModelProvider.DASHSCOPE.value,
         ModelProvider.DEEPSEEK.value,

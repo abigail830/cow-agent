@@ -93,52 +93,67 @@ def test_qwen_pdf_uses_file_data(monkeypatch):
     assert parts[0].media_type == "application/pdf"
 
 
-def test_claude_pdf_uses_hosted_file():
+def test_qwen_pdf_uses_inline_file_data(tmp_path, monkeypatch):
+    import app.platform.attachments.storage as attachment_storage
+
+    monkeypatch.setattr(attachment_storage, "blob_storage_enabled", lambda: False)
+    monkeypatch.setattr(attachment_storage, "INLINE_ATTACHMENTS_ROOT", tmp_path)
+
     chat_id = uuid.uuid4()
+    attachment_id = uuid.uuid4()
+    pdf_bytes = b"%PDF-1.4 minimal"
+    attachment_storage.save_inline_attachment(chat_id, attachment_id, pdf_bytes)
+
     item = {
-        "id": str(uuid.uuid4()),
+        "id": str(attachment_id),
         "filename": "brief.pdf",
         "mime_type": "application/pdf",
-        "size_bytes": 100,
-        "provider": "azure_anthropic",
-        "provider_file_id": "file_abc123",
+        "size_bytes": len(pdf_bytes),
     }
     parts = materialize_attachments(
         [item],
         chat_id=chat_id,
-        model_id="claude-sonnet-4-6",
-        provider="azure_anthropic",
+        model_id="qwen3.8-max",
+        provider="dashscope",
     )
-    assert parts[0].type == "hosted_file"
-    assert parts[0].file_id == "file_abc123"
+    assert parts[0].type == "data"
+    assert parts[0].media_type == "application/pdf"
 
 
-def test_to_maf_messages_rebuilds_hosted_pdf_without_model_id():
-    chat_id = str(uuid.uuid4())
+def test_to_maf_messages_rebuilds_pdf_as_file_data(tmp_path, monkeypatch):
+    import app.platform.attachments.storage as attachment_storage
+
+    monkeypatch.setattr(attachment_storage, "blob_storage_enabled", lambda: False)
+    monkeypatch.setattr(attachment_storage, "INLINE_ATTACHMENTS_ROOT", tmp_path)
+
+    chat_id = uuid.uuid4()
+    att_id = uuid.uuid4()
+    pdf_bytes = b"%PDF-1.4 minimal"
+    attachment_storage.save_inline_attachment(chat_id, att_id, pdf_bytes)
+
     rows = [
         {
-            "chat_id": chat_id,
+            "chat_id": str(chat_id),
             "role": "user",
             "message_type": "text",
             "content": "Summarize this",
             "metadata": {
                 "attachments": [
                     {
-                        "id": str(uuid.uuid4()),
+                        "id": str(att_id),
                         "filename": "report.pdf",
                         "mime_type": "application/pdf",
-                        "size_bytes": 100,
-                        "provider": "azure_anthropic",
-                        "provider_file_id": "file_abc123",
+                        "size_bytes": len(pdf_bytes),
+                        "provider": "dashscope",
                     }
                 ]
             },
             "sequence": 1,
         }
     ]
-    messages = to_maf_messages(rows)
-    assert messages[0].contents[1].type == "hosted_file"
-    assert messages[0].contents[1].file_id == "file_abc123"
+    messages = to_maf_messages(rows, model_provider="dashscope", model_id="qwen3.8-max")
+    assert messages[0].contents[1].type == "data"
+    assert messages[0].contents[1].media_type == "application/pdf"
 
 
 def test_materialize_attachments_second_occurrence_is_reference():
@@ -162,20 +177,26 @@ def test_materialize_attachments_second_occurrence_is_reference():
     assert att_id in parts[0].text
 
 
-def test_to_maf_messages_second_attachment_mention_is_reference():
-    chat_id = str(uuid.uuid4())
-    att_id = str(uuid.uuid4())
+def test_to_maf_messages_second_attachment_mention_is_reference(tmp_path, monkeypatch):
+    import app.platform.attachments.storage as attachment_storage
+
+    monkeypatch.setattr(attachment_storage, "blob_storage_enabled", lambda: False)
+    monkeypatch.setattr(attachment_storage, "INLINE_ATTACHMENTS_ROOT", tmp_path)
+
+    chat_id = uuid.uuid4()
+    att_id = uuid.uuid4()
+    pdf_bytes = b"%PDF-1.4 minimal"
+    attachment_storage.save_inline_attachment(chat_id, att_id, pdf_bytes)
     attachment = {
-        "id": att_id,
+        "id": str(att_id),
         "filename": "report.pdf",
         "mime_type": "application/pdf",
-        "size_bytes": 100,
-        "provider": "azure_anthropic",
-        "provider_file_id": "file_abc123",
+        "size_bytes": len(pdf_bytes),
+        "provider": "dashscope",
     }
     rows = [
         {
-            "chat_id": chat_id,
+            "chat_id": str(chat_id),
             "role": "user",
             "message_type": "text",
             "content": "First look",
@@ -183,7 +204,7 @@ def test_to_maf_messages_second_attachment_mention_is_reference():
             "sequence": 1,
         },
         {
-            "chat_id": chat_id,
+            "chat_id": str(chat_id),
             "role": "user",
             "message_type": "text",
             "content": "Same file again",
@@ -191,8 +212,8 @@ def test_to_maf_messages_second_attachment_mention_is_reference():
             "sequence": 2,
         },
     ]
-    messages = to_maf_messages(rows)
-    assert messages[0].contents[1].type == "hosted_file"
+    messages = to_maf_messages(rows, model_provider="dashscope", model_id="qwen3.8-max")
+    assert messages[0].contents[1].type == "data"
     assert messages[1].contents[1].type == "text"
     assert is_attachment_reference_text(messages[1].contents[1].text)
 
